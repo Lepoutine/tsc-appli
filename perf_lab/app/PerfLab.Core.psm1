@@ -10,6 +10,20 @@ $script:PresentMonVersion = '2.6.0'
 $script:PresentMonUrl     = 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe'
 $script:PresentMonSha256  = 'B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF'
 
+# ---------------------------------------------------------------- WMI
+function Get-PLWmi {
+  # Get-CimInstance, ou Get-WmiObject si CIM ne repond pas (constate sur certains PC sous Windows 10)
+  param([Parameter(Mandatory)][string]$Class, [string]$Filter)
+  $p = @{ ClassName = $Class; ErrorAction = 'Stop' }; if ($Filter) { $p.Filter = $Filter }
+  try { Get-CimInstance @p }
+  catch {
+    if (Get-Command Get-WmiObject -ErrorAction SilentlyContinue) {
+      $q = @{ Class = $Class; ErrorAction = 'SilentlyContinue' }; if ($Filter) { $q.Filter = $Filter }
+      Get-WmiObject @q
+    }
+  }
+}
+
 # ---------------------------------------------------------------- chemins
 
 function Get-PLDataRoot {
@@ -169,11 +183,11 @@ function Get-PLGraphics {
 # ---------------------------------------------------------------- machine
 
 function Get-PLMachine {
-  $cs  = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
-  $os  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
-  $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
-  $gpus = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'QXL|Basic Display|Remote' })
-  $disk = foreach ($d in @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue)) {
+  $cs  = Get-PLWmi Win32_ComputerSystem
+  $os  = Get-PLWmi Win32_OperatingSystem
+  $cpu = Get-PLWmi Win32_Processor | Select-Object -First 1
+  $gpus = @(Get-PLWmi Win32_VideoController | Where-Object { $_.Name -notmatch 'QXL|Basic Display|Remote' })
+  $disk = foreach ($d in @(Get-PLWmi Win32_LogicalDisk -Filter 'DriveType=3')) {
     [pscustomobject]@{ Lecteur = $d.DeviceID; TailleGo = [math]::Round($d.Size / 1GB, 1); LibreGo = [math]::Round($d.FreeSpace / 1GB, 1) }
   }
   $reg = { param($p, $n) $x = Get-ItemProperty -Path $p -Name $n -ErrorAction SilentlyContinue; if ($x) { $x.$n } else { $null } }
@@ -630,21 +644,34 @@ function Start-PLCapture {
   $run
 }
 
+function Get-PLCpuCounterPath {
+  # Nom du compteur processeur dans la langue de Windows (238 = objet Processeur, 6 = % temps processeur)
+  $perf = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib\CurrentLanguage' -ErrorAction SilentlyContinue).Counter
+  $pn = @{}; if ($perf) { for ($k = 0; $k -lt $perf.Count - 1; $k += 2) { $pn[$perf[$k]] = $perf[$k + 1] } }
+  if ($pn['238'] -and $pn['6']) { "\$($pn['238'])(_Total)\$($pn['6'])" } else { '\Processor(_Total)\% Processor Time' }
+}
+
 function Measure-PLLoad {
   # Charge processeur (compteurs bruts : independant de la langue), carte graphique et memoire, une fois par seconde
   param([int]$Seconds = 30)
   $out = New-Object System.Collections.Generic.List[object]
-  $prev = Get-CimInstance Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue
+  $prev = Get-PLWmi Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'"
   for ($i = 0; $i -lt $Seconds; $i++) {
     $g = Get-Counter -Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
     if (-not $g) { Start-Sleep -Seconds 1 }
-    $cur = Get-CimInstance Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue
+    $cur = Get-PLWmi Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'"
     $cpu = $null
     if ($prev -and $cur) {
       $dt = [double]($cur.Timestamp_Sys100NS - $prev.Timestamp_Sys100NS)
       if ($dt -gt 0) { $cpu = [math]::Round(100 * (1 - ([double]($cur.PercentProcessorTime - $prev.PercentProcessorTime) / $dt)), 1) }
     }
     $prev = $cur
+    if ($null -eq $cpu) {
+      # WMI indisponible sur ce PC : compteur Windows dans la langue du systeme
+      if (-not $script:CpuPath) { $script:CpuPath = Get-PLCpuCounterPath }
+      $pc = Get-Counter -Counter $script:CpuPath -MaxSamples 1 -ErrorAction SilentlyContinue
+      if ($pc) { $cpu = [math]::Round($pc.CounterSamples[0].CookedValue, 1) }
+    }
     $g3d = 0.0; $dec = 0.0; $enc = 0.0
     if ($g) {
       foreach ($c in $g.CounterSamples) {
@@ -653,7 +680,8 @@ function Measure-PLLoad {
         elseif ($c.InstanceName -match 'engtype_videoencode') { $enc += $c.CookedValue }
       }
     }
-    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $os = Get-PLWmi Win32_OperatingSystem
+    if (-not $os) { Add-Type -AssemblyName Microsoft.VisualBasic; $os = [pscustomobject]@{ FreePhysicalMemory = (New-Object Microsoft.VisualBasic.Devices.ComputerInfo).AvailablePhysicalMemory / 1KB } }
     $out.Add([pscustomobject]@{ T = $i; Cpu = $cpu; Gpu3D = [math]::Round([math]::Min(100, $g3d), 1); Decodage = [math]::Round($dec, 1); Encodage = [math]::Round($enc, 1); RamLibreMo = $(if ($os) { [math]::Round($os.FreePhysicalMemory / 1KB) } else { $null }) })
   }
   $out.ToArray()
