@@ -1,0 +1,25 @@
+************ : log created on : Friday October 23 2026 @ 19:38:11
+00:00:00.000 : [sys] running on x86_64 / Windows 11 x64 (version 10.0.26300)
+00:00:00.338 : [ufs] Loaded pack set version 1.61.1.9 created at 1791884906
+00:00:09.193 : <WARNING> [mods] Unknown category '' defined for AddOn - TM REAL RAIN PARTICLES_locked. Ignoring.
+00:00:10.742 : <WARNING> [package] Package with name 'promods-cap-v161' seen more than once. Maybe there are both a SCS file and source directory. SCS file will be used.
+00:00:11.944 : <WARNING> [mods] Incompatible mod - RPM_1_2_4_x_Real_Poland_Compatibility___40_1_56__41_
+00:00:12.114 : <ERROR> [fs] Failed to open file '/manifest.sii' in the read_only mode.
+00:00:12.114 : <ERROR> [fs] Failed to open file '/manifest.sii' in the read_only mode.
+00:00:12.114 : <ERROR> [unit] The unit name '_nameless.tsc_benne_transport' is in wrong format.
+00:00:12.514 : [gfx] Selected rendering device 'dx11'.
+00:00:13.171 : [dxgi] Using adapter: NVIDIA Quadro RTX 6000 (32.0.15.9672) [24255 MB]
+00:00:24.093 : [mod_package_manager] Received list of the steam workshop subscribed mods. (received 22 mods total, 22 loaded, 0 scheduled for download)
+00:01:21.238 : [fs] device C:/Program Files (x86)/Steam/steamapps/workshop/content/227300/713338424/latest.scs mounted to mod pool.
+00:01:21.239 : [mod_package_manager] Mod "Air Ride Ultimate" has been mounted. (package_name: mod_workshop_package.000000005AFE1AB6, version: 1.0, source: Steam Workshop)
+00:01:21.242 : [fs] device C:/Users/Shadow/Documents/Euro Truck Simulator 2/mod/TM Realistic Rain with Coating Glass V1.3_locked.scs mounted to mod pool.
+00:01:21.242 : [mod_package_manager] Mod "TM Realistic Rain with Coating Glass V1.3" has been mounted. (package_name: TM Realistic Rain with Coating Glass V1.3_locked, version: , source: User mods)
+00:01:21.246 : [fs] device C:/Users/Shadow/Documents/Euro Truck Simulator 2/mod/[1.43-1.44] BlackedOut V8_NextGenS&R_KC.zip mounted to mod pool.
+00:01:21.246 : [mod_package_manager] Mod "[1.43]BlackedOut V8_NextGen_KC" has been mounted. (package_name: [1.43-1.44] BlackedOut V8_NextGenS&R_KC, version: 1.0, source: User mods)
+00:05:46.100 : [fs] device C:/Users/Shadow/Documents/Euro Truck Simulator 2/mod/TM Realistic Rain with Coating Glass V1.3_locked.scs mounted to mod pool.
+00:05:46.101 : [mod_package_manager] Mod "TM Realistic Rain with Coating Glass V1.3" has been mounted. (package_name: TM Realistic Rain with Coating Glass V1.3_locked, version: , source: User mods)
+00:05:46.102 : [fs] device C:/Program Files (x86)/Steam/steamapps/workshop/content/227300/713338424/latest.scs mounted to mod pool.
+00:05:46.103 : [mod_package_manager] Mod "Air Ride Ultimate" has been mounted. (package_name: mod_workshop_package.000000005AFE1AB6, version: 1.0, source: Steam Workshop)
+00:07:21.722 : Map loaded
+00:07:22.642 : Loading save. Type: 0, slot: 0, path: <MEMFILE><UFS>/home/profiles/4C6520506F7574696E65/save/autosave/game.sii
+00:07:29.819 : [TMRealWalk] [d3d_hook] Present hooked on the game's own swap chain
