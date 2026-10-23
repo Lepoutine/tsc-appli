@@ -17,14 +17,13 @@ Write-Host "Dossier : $out"
 
 # 1. Machine
 Write-Host "[1/7] Machine..."
-Save '01_machine.txt' @(
-  (Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, TotalPhysicalMemory),
-  (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, FreePhysicalMemory),
-  (Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, CurrentClockSpeed),
-  (Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, DriverDate, AdapterRAM, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate),
-  (Get-CimInstance Win32_Battery | Select-Object Name, BatteryStatus, EstimatedChargeRemaining),
-  (Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object DeviceID, @{n='TailleGo';e={[math]::Round($_.Size/1GB,1)}}, @{n='LibreGo';e={[math]::Round($_.FreeSpace/1GB,1)}})
-)
+$m = @()
+$m += (Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, TotalPhysicalMemory | Format-List | Out-String)
+$m += (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, FreePhysicalMemory | Format-List | Out-String)
+$m += (Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, CurrentClockSpeed | Format-List | Out-String)
+$m += (Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, DriverDate, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate | Format-List | Out-String)
+$m += (Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object DeviceID, @{n='TailleGo';e={[math]::Round($_.Size/1GB,1)}}, @{n='LibreGo';e={[math]::Round($_.FreeSpace/1GB,1)}} | Format-Table -AutoSize | Out-String)
+$m -join "`r`n" | Set-Content -Path (Join-Path $out '01_machine.txt') -Encoding UTF8
 
 # 2. Ecrans : definition et frequence de chaque ecran
 Write-Host "[2/7] Ecrans..."
@@ -76,18 +75,22 @@ Save '05_reseau.txt' @(
 # 6. Charge pendant le flux Shadow : decodage video, 3D, processeur (30 s)
 Write-Host "[6/7] Charge pendant 30 s : roule dans ETS2 pendant ce temps..."
 $rows = @()
+$prev = Get-CimInstance Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'"
 for ($i = 0; $i -lt 30; $i++) {
-  $cpu = (Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
-  $ram = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB)
+  $g = Get-Counter -Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 1 -MaxSamples 1
+  $cur = Get-CimInstance Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'"
+  $dt = [double]($cur.Timestamp_Sys100NS - $prev.Timestamp_Sys100NS)
+  $cpu = if ($dt -gt 0) { [math]::Round(100 * (1 - ([double]($cur.PercentProcessorTime - $prev.PercentProcessorTime) / $dt)), 1) } else { 0 }
+  $prev = $cur
   $dec = 0; $g3d = 0
-  foreach ($c in (Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine)) {
-    if ($c.Name -match 'engtype_VideoDecode') { $dec += $c.UtilizationPercentage } elseif ($c.Name -match 'engtype_3D') { $g3d += $c.UtilizationPercentage } }
-  $rows += [pscustomobject]@{ 'Processeur %' = $cpu; 'Decodage video %' = $dec; 'GPU 3D %' = $g3d; 'RAM libre Mo' = $ram }
-  Start-Sleep -Seconds 1
+  foreach ($c in $g.CounterSamples) { if ($c.InstanceName -match 'engtype_videodecode') { $dec += $c.CookedValue } elseif ($c.InstanceName -match 'engtype_3d') { $g3d += $c.CookedValue } }
+  $ram = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB)
+  $rows += [pscustomobject]@{ 'Processeur %' = $cpu; 'Decodage video %' = [math]::Round($dec,1); 'GPU 3D %' = [math]::Round($g3d,1); 'RAM libre Mo' = $ram }
 }
 $agg = foreach ($k in 'Processeur %', 'Decodage video %', 'GPU 3D %', 'RAM libre Mo') {
   [pscustomobject]@{ Mesure = $k; Moyenne = [math]::Round(($rows | Measure-Object $k -Average).Average,1); Max = ($rows | Measure-Object $k -Maximum).Maximum } }
-Save '06_charge_30s.txt' @(,$agg)
+$noteGpu = if (-not (Get-Counter -ListSet 'GPU Engine' -ErrorAction SilentlyContinue)) { 'Compteurs GPU non disponibles sur ce pilote : decodage et 3D non mesures (0 = absence de donnees).' } else { '' }
+Save '06_charge_30s.txt' (@(,$agg) + @($noteGpu))
 
 # 7. Processus et overlays
 Write-Host "[7/7] Processus..."
