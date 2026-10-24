@@ -27,8 +27,8 @@ function Get-PLWmi {
 # ---------------------------------------------------------------- chemins
 
 function Get-PLDataRoot {
-  $docs = [Environment]::GetFolderPath('MyDocuments')
-  $root = Join-Path $docs 'TSC Driver\TSC Performance Lab'
+  if ($env:TSC_PERFLAB_ROOT) { $root = $env:TSC_PERFLAB_ROOT }  # dossier de donnees isole (tests)
+  else { $root = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'TSC Driver\TSC Performance Lab' }
   foreach ($d in @($root, (Join-Path $root 'mesures'), (Join-Path $root 'profils'), (Join-Path $root 'sauvegardes'), (Join-Path $root 'outils'), (Join-Path $root 'rapports'))) {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
   }
