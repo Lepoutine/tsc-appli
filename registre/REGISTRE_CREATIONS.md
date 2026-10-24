@@ -163,7 +163,7 @@
 - Autorisations : Sans objet si original
 - Modifications : Sans objet
 - Redistribution : TSCF, à harmoniser
-- Crédits à afficher : Shaders TSC © Truck So Clean France.
+- Crédits à afficher : Shaders TSC (aucune mention de droits TSCF tant que l'origine n'est pas confirmée).
 - Projets : Appli TSC (Rendu TSC)
 - Statut : Distribution à suspendre jusqu'à la preuve (règle 1.4)
 - À faire : Mendy : confirmer qu'aucune partie de TSC_Photoreal ne vient d'un shader tiers (avant le 16/10) ; Harmoniser la mention de licence des deux en-têtes
@@ -180,7 +180,7 @@
 - Autorisations : Sans objet si synthèse ; si enregistrement Suno : conditions Suno à vérifier
 - Modifications : Sans objet
 - Redistribution : À confirmer
-- Crédits à afficher : Composition originale TSCF (à confirmer).
+- Crédits à afficher : À définir (composition TSCF seulement si le fichier vient du script).
 - Projets : Appli TSC 2.14.27 (intro)
 - Statut : Distribution à suspendre jusqu'à la preuve (règle 1.4)
 - À faire : Mendy : le mp3 de l'appli est-il le rendu du script ou un enregistrement Suno ? Si Suno : retirer de la diffusion ou vérifier l'abonnement et les droits
@@ -367,7 +367,7 @@
 - Autorisations : Licence MIT
 - Modifications : Portage en Python
 - Redistribution : Avec la notice MIT si un jour distribué
-- Crédits à afficher : CityHash © 2011 Google, Inc., licence MIT.
+- Crédits à afficher : Portage Python par TSCF. Algorithme CityHash © 2011 Google, Inc., licence MIT.
 - Projets : Outils de modding (lecture HashFS)
 - Statut : Peut être distribué avec les crédits indiqués
 - À faire : Ajouter la notice MIT de Google en tête du fichier
