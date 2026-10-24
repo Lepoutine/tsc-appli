@@ -5,6 +5,16 @@ l'appli ou dans la release GitHub. Les crédits de détail viennent de `registre
 
 Contact pour tous les produits : Discord Truck So Clean France, https://discord.gg/trucksocleanfrance
 
+## Règle : le copyright TSCF seulement sur ce que TSCF a créé
+
+Consigne de Poutine du 24/10/2026. Le « © Truck So Clean France » et « Tous droits réservés » ne se mettent que sur les
+parties créées par TSCF (livrée, fresque, lettrage, textures cuir, points de feux, code, sons synthétisés, logo).
+Les modèles, photos, polices et logiciels des autres ne portent jamais de © TSCF : on y met seulement le nom de leur
+auteur et leur licence. `generer.py --verifier` refuse un © TSCF sur une ressource qui n'est pas une création TSCF établie.
+
+Exemple pour la citerne : « Peintures et noms © Truck So Clean France. Modèle : AkirixDesign3D. » et non
+« Citerne © Truck So Clean France ».
+
 ## Modèle de mention
 
 À utiliser seulement pour ce que TSCF a réellement créé :
@@ -30,6 +40,8 @@ Une mention de copyright informe ; elle ne prouve pas à elle seule la propriét
   polices Google Fonts (OFL), services Discord, Trucky, TruckersMP, YouTube, Twitch, Spotify.
 - **À clarifier avant la prochaine version** : visuels d'accueil « Spartan / Le 300 », musique d'intro, `TSC_Photoreal.fx`,
   données « Grand Utopia ».
+- `LICENCE.txt` §1 revendique « les sons, visuels, logos » de l'appli en bloc : à restreindre aux éléments créés par
+  TSCF (les visuels d'accueil « Spartan / Le 300 » et la musique d'intro en sont exclus tant qu'ils ne sont pas clarifiés).
 - Ajout conseillé au `LICENCE.txt` §4 : runtime Go (BSD) ; CityHash (MIT) si les outils de modding sont un jour distribués.
 
 ## TSC Bétaillère Normandie - Poutine 1.5
@@ -53,19 +65,25 @@ Une mention de copyright informe ; elle ne prouve pas à elle seule la propriét
 - Création TSCF réalisée sur l'intérieur Scania R/S 2016 de SCS Software : textures cuir, broderies, logo et noms par
   Poutine / TSCF ; modèles et matériaux SCS modifiés (UV, matières).
 - Crédit catalogue actuel : « Créations de Poutine – propriété de Truck So Clean France. » → **incomplet**.
-- Crédit proposé : « Création TSCF sur l'intérieur Scania R/S 2016 de SCS Software. Cuir, broderies et noms : Poutine /
-  TSCF. Scania est une marque de Scania AB. »
+- Crédit proposé : « Cuir, broderies et noms © Truck So Clean France (Poutine). Intérieur d'origine : SCS Software.
+  Scania est une marque de Scania AB. »
 
 ## Citerne TSC by AkirixDesign3D 1.6.1 et compat MDT Ekeri 1.0
 
-- Modèle : AkirixDesign3D, base Gaming ModdinG. Peintures, noms, effet irisé et 328 points de feux : Poutine / TSCF.
+- Modèle : AkirixDesign3D, base Gaming ModdinG (pas de © TSCF sur le modèle). Peintures, noms, effet irisé et 328 points
+  de feux © Truck So Clean France, conception Poutine / TSCF.
+- Crédit catalogue actuel : « … Peintures : Poutine, propriété Truck So Clean France » → correct si la propriété ne vise
+  que les peintures ; formulation proposée : « Modèle : AkirixDesign3D, base Gaming ModdinG. Peintures et noms ©
+  Truck So Clean France (Poutine). »
 - **Statut : à clarifier.** Aucune preuve d'autorisation archivée. À conserver dans `registre/preuves/` : capture de
   l'accord, date, et ce qui est permis (modifier, redistribuer, publier sur GitHub).
 - Compat MDT Ekeri : aucun fichier MDT inclus ; le joueur installe le mod MDT à part.
 
 ## Madame Afro TSC 1.0.0
 
-- Modèle de la passagère : auteur à confirmer (SergioSomf d'après le catalogue). Écusson : TSCF.
+- Modèle de la passagère : auteur à confirmer (SergioSomf d'après le catalogue), sans © TSCF. Écusson © Truck So Clean France.
+- Crédit catalogue actuel : « … Propriété Truck So Clean France. » → **trop large** (laisse croire que la passagère est à
+  TSCF). Proposé : « Modèle : SergioSomf (avec autorisation). Écusson © Truck So Clean France. »
 - **Statut : à clarifier**, mêmes preuves à archiver que pour la citerne.
 
 ## Mods GPS TSC

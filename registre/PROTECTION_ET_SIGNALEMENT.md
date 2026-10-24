@@ -12,7 +12,8 @@ s'en servir face à un tiers. Il ne garantit aucun résultat.
 3. Origine ou licence incertaine → statut `a_clarifier` → pas de distribution jusqu'à la preuve.
    `python3 generer.py --verifier` refuse une ressource « origine à clarifier » marquée distribuable.
 4. Ne jamais retirer les crédits d'origine, ne jamais présenter une ressource tierce comme une création TSCF.
-5. Aucun droit exclusif n'est revendiqué sur un composant sous licence tierce.
+5. Aucun droit exclusif n'est revendiqué sur un composant sous licence tierce : le © TSCF ne se met que sur ce que TSCF
+   a créé (consigne de Poutine du 24/10/2026), vérifié par `generer.py`.
 
 ## 2. Ce que TSCF peut faire pour protéger ses créations
 
