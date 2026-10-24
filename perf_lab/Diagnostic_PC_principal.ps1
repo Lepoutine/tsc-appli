@@ -62,7 +62,7 @@ Save '04_shadow_client.txt' (@(,$shadowApps) + @(,$shadowProc))
 $logs = Join-Path $out 'shadow_logs'; New-Item -ItemType Directory $logs -Force | Out-Null
 foreach ($base in @($env:APPDATA, $env:LOCALAPPDATA)) {
   Get-ChildItem $base -Directory | Where-Object { $_.Name -match 'shadow' } | ForEach-Object {
-    Get-ChildItem $_.FullName -Recurse -File -Include *.log, *.txt | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-2) -and $_.Length -lt 20MB } |
+    Get-ChildItem $_.FullName -Recurse -File -Include *.log, *.txt | Where-Object { $_.FullName -notmatch '\\(leveldb|Local Storage|Session Storage|IndexedDB|Cookies|Network|Cache[^\\]*)\\' -and $_.LastWriteTime -gt (Get-Date).AddDays(-2) -and $_.Length -lt 20MB } |
       Select-Object -First 30 | ForEach-Object { Copy-Item $_.FullName (Join-Path $logs ($_.Directory.Name + '_' + $_.Name)) }
   }
 }
