@@ -25,16 +25,23 @@
       "nom": "Code de l'Appli TSC (lanceur Go, scripts PowerShell, tablette HTML/JS, overlays, pilote de tête, tachygraphe, tickets)",
       "categorie": "code source",
       "origine": "originale_tscf",
-      "auteurs": ["Poutine / TSCF (écrit avec l'assistance de Claude, Anthropic)"],
+      "auteurs": [
+        "Poutine / TSCF (écrit avec l'assistance de Claude, Anthropic)"
+      ],
       "source": "Dépôt privé (Reprise_Code\\TSC_code_*.bundle), lanceur/, Tete_Pilote_TSC/",
       "licence": "Licence propriétaire TSCF (Tete_Pilote_TSC/LICENCE.txt)",
       "autorisations": "Sans objet (création TSCF)",
       "modifications": "Sans objet",
       "redistribution": "Uniquement par TSCF aux membres et testeurs autorisés (LICENCE.txt §2-3)",
       "credits": "© 2026 Truck So Clean France. Conception et réalisation : Poutine / TSCF.",
-      "projets": ["Appli TSC 2.14.27", "TSC Driver"],
+      "projets": [
+        "Appli TSC 2.14.27",
+        "TSC Driver"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Faire vérifier par un juriste la protection d'un code écrit avec une assistance IA (voir PROTECTION_ET_SIGNALEMENT.md §3)"],
+      "a_faire": [
+        "Faire vérifier par un juriste la protection d'un code écrit avec une assistance IA (voir PROTECTION_ET_SIGNALEMENT.md §3)"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -42,14 +49,18 @@
       "nom": "tsc-commandes.dll (plugin d'entrée SCS SDK)",
       "categorie": "bibliothèque / plugin",
       "origine": "tscf_sur_ressource_autorisee",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "Tete_Pilote_TSC/plugin/",
       "licence": "Propriétaire TSCF (LICENSE_tsc-commandes.txt) ; construit sur le SCS SDK (MIT)",
       "autorisations": "Licence MIT du SCS SDK",
       "modifications": "Code TSCF utilisant les en-têtes du SCS SDK",
       "redistribution": "Avec LICENSE_SCS_SDK.txt",
       "credits": "Construit sur le SCS SDK © 2016 SCS Software (MIT).",
-      "projets": ["Appli TSC 2.14.27"],
+      "projets": [
+        "Appli TSC 2.14.27"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -59,14 +70,18 @@
       "nom": "SCS SDK (télémétrie et entrées)",
       "categorie": "bibliothèque",
       "origine": "externe",
-      "auteurs": ["SCS Software"],
+      "auteurs": [
+        "SCS Software"
+      ],
       "source": "SCS Software (fourni avec la licence dans Tete_Pilote_TSC/plugin/LICENSE_SCS_SDK.txt)",
       "licence": "MIT",
       "autorisations": "Licence MIT",
       "modifications": "Aucune",
       "redistribution": "Libre avec la notice MIT",
       "credits": "SCS SDK © 2016 SCS Software, licence MIT.",
-      "projets": ["Appli TSC 2.14.27"],
+      "projets": [
+        "Appli TSC 2.14.27"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -76,16 +91,23 @@
       "nom": "scs-telemetry.dll",
       "categorie": "bibliothèque / plugin",
       "origine": "externe",
-      "auteurs": ["Hans (scs-sdk-plugin)"],
+      "auteurs": [
+        "Hans (scs-sdk-plugin)"
+      ],
       "source": "scs-sdk-plugin (notice dans Tete_Pilote_TSC/plugin/LICENSE_scs-sdk-plugin.txt)",
       "licence": "MIT",
       "autorisations": "Licence MIT",
       "modifications": "À confirmer : binaire d'origine ou recompilé",
       "redistribution": "Libre avec la notice MIT",
       "credits": "Plugin de télémétrie d'après scs-sdk-plugin © 2014 Hans, licence MIT.",
-      "projets": ["Appli TSC 2.14.27"],
+      "projets": [
+        "Appli TSC 2.14.27"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Noter la version exacte et l'URL du binaire", "Lien avec 60 plantages ETS2 relevés par Performance Lab : à traiter dans la prochaine version"],
+      "a_faire": [
+        "Noter la version exacte et l'URL du binaire",
+        "Lien avec 60 plantages ETS2 relevés par Performance Lab : à traiter dans la prochaine version"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -93,14 +115,18 @@
       "nom": "Microsoft WebView2 (Core, WinForms, Loader)",
       "categorie": "bibliothèque",
       "origine": "externe",
-      "auteurs": ["Microsoft Corporation"],
+      "auteurs": [
+        "Microsoft Corporation"
+      ],
       "source": "SDK Microsoft WebView2 (Tete_Pilote_TSC/webview2/)",
       "licence": "Licence BSD de Microsoft (LICENSE_WebView2.md)",
       "autorisations": "Redistribution des DLL du SDK permise avec la notice",
       "modifications": "Aucune",
       "redistribution": "Avec LICENSE_WebView2.md",
       "credits": "Microsoft WebView2 © Microsoft Corporation.",
-      "projets": ["Appli TSC 2.14.27"],
+      "projets": [
+        "Appli TSC 2.14.27"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -110,14 +136,18 @@
       "nom": "QR Code Generator for JavaScript (ui/qrcode.js)",
       "categorie": "bibliothèque",
       "origine": "externe",
-      "auteurs": ["Kazuhiko Arase"],
+      "auteurs": [
+        "Kazuhiko Arase"
+      ],
       "source": "Tete_Pilote_TSC/ui/qrcode.js",
       "licence": "MIT (ui/LICENSE_qrcode.txt)",
       "autorisations": "Licence MIT",
       "modifications": "Aucune connue",
       "redistribution": "Libre avec la notice MIT",
       "credits": "Générateur de QR code © 2009 Kazuhiko Arase, licence MIT.",
-      "projets": ["Appli TSC 2.14.27 (tablette mobile)"],
+      "projets": [
+        "Appli TSC 2.14.27 (tablette mobile)"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -127,16 +157,24 @@
       "nom": "Polices Montserrat, Inter, Kaushan Script (tablette)",
       "categorie": "police",
       "origine": "externe",
-      "auteurs": ["Julieta Ulanovsky et al. (Montserrat)", "Rasmus Andersson (Inter)", "Impallari Type (Kaushan Script)"],
+      "auteurs": [
+        "Julieta Ulanovsky et al. (Montserrat)",
+        "Rasmus Andersson (Inter)",
+        "Impallari Type (Kaushan Script)"
+      ],
       "source": "Google Fonts, chargées en ligne (ui/index.html ligne 4)",
       "licence": "SIL Open Font License 1.1",
       "autorisations": "OFL",
       "modifications": "Aucune (fichiers non embarqués)",
       "redistribution": "Non embarquées ; si un jour embarquées, joindre OFL.txt",
       "credits": "Polices Montserrat, Inter et Kaushan Script, SIL Open Font License 1.1.",
-      "projets": ["Appli TSC 2.14.27"],
+      "projets": [
+        "Appli TSC 2.14.27"
+      ],
       "statut": "non_distribue",
-      "a_faire": ["Chargement en ligne : la tablette envoie l'IP du joueur à Google. À mentionner ou embarquer les polices"],
+      "a_faire": [
+        "Chargement en ligne : la tablette envoie l'IP du joueur à Google. À mentionner ou embarquer les polices"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -144,14 +182,22 @@
       "nom": "Police Great Vibes",
       "categorie": "police",
       "origine": "externe",
-      "auteurs": ["Robert Leuschke (TypeSETit)"],
+      "auteurs": [
+        "Robert Leuschke (TypeSETit)"
+      ],
       "source": "project-files/tsc_2.14.27/GreatVibes-Regular.ttf + OFL_greatvibes.txt",
       "licence": "SIL Open Font License 1.1",
       "autorisations": "OFL",
       "modifications": "Aucune sur la police ; texte rendu en image dans les textures",
       "redistribution": "Le fichier de police n'est pas distribué ; les textures qui l'utilisent sont libres de droits côté police",
       "credits": "Police Great Vibes © Robert Leuschke (TypeSETit), SIL Open Font License 1.1.",
-      "projets": ["Bétaillère Normandie", "Benne Normandie Show", "Citerne TSC v1.6 (noms)", "Vidéo bêta", "Vignettes"],
+      "projets": [
+        "Bétaillère Normandie",
+        "Benne Normandie Show",
+        "Citerne TSC v1.6 (noms)",
+        "Vidéo bêta",
+        "Vignettes"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -161,14 +207,19 @@
       "nom": "Police DejaVu Sans",
       "categorie": "police",
       "origine": "externe",
-      "auteurs": ["Projet DejaVu (d'après Bitstream Vera)"],
+      "auteurs": [
+        "Projet DejaVu (d'après Bitstream Vera)"
+      ],
       "source": "Police système du conteneur de build",
       "licence": "Licence Bitstream Vera + domaine public (modifications DejaVu)",
       "autorisations": "Licence libre",
       "modifications": "Aucune ; texte rendu en image",
       "redistribution": "Rendu en image seulement",
       "credits": "Police DejaVu Sans (licence Bitstream Vera).",
-      "projets": ["Vidéo bêta (sous-titres)", "Kit templates (légendes)"],
+      "projets": [
+        "Vidéo bêta (sous-titres)",
+        "Kit templates (légendes)"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -178,50 +229,69 @@
       "nom": "Logo Truck So Clean France (logo_tsc.png, m_icon.png, TSC_App.ico, logo_tsc_officiel.svg, logo 2025)",
       "categorie": "logo / icône",
       "origine": "originale_tscf",
-      "auteurs": ["TSCF (auteur du dessin d'origine à confirmer)"],
+      "auteurs": [
+        "TSCF (auteur du dessin d'origine à confirmer)"
+      ],
       "source": "Tete_Pilote_TSC/ui/, tests_pilote/logo/",
       "licence": "Propriétaire TSCF",
       "autorisations": "Sans objet si dessin TSCF",
       "modifications": "Version sans ailes (2.14.26)",
       "redistribution": "TSCF uniquement",
       "credits": "Logo © Truck So Clean France.",
-      "projets": ["Appli TSC", "Mods (écussons, broderies)", "Vidéo bêta"],
+      "projets": [
+        "Appli TSC",
+        "Mods (écussons, broderies)",
+        "Vidéo bêta"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Confirmer qui a dessiné le logo d'origine (si un graphiste : obtenir la cession écrite)", "Envisager un dépôt de marque INPI (voir PROTECTION_ET_SIGNALEMENT.md)"],
+      "a_faire": [
+        "Confirmer qui a dessiné le logo d'origine (si un graphiste : obtenir la cession écrite)",
+        "Envisager un dépôt de marque INPI (voir PROTECTION_ET_SIGNALEMENT.md)"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
       "id": "ui_hero_spartan",
       "nom": "Visuels d'accueil de la tablette : hero.mp4, hero.jpg, camion.jpg (livrée « Spartan / Le 300 »)",
       "categorie": "vidéo / image",
-      "origine": "a_clarifier",
-      "auteurs": ["Inconnu"],
-      "source": "Présents dès l'« État avant audit » du 16/10/2026 (commit cc8f03b), origine non notée",
-      "licence": "Inconnue",
-      "autorisations": "Aucune trace",
-      "modifications": "Inconnues ; incrustations « Les frigorifiques – Édition Spartan – Le 300 »",
-      "redistribution": "À suspendre : peut reprendre des éléments du film 300 (Warner Bros.)",
-      "credits": "À définir",
-      "projets": ["Appli TSC 2.14.27 (écran d'accueil)"],
-      "statut": "a_clarifier",
-      "a_faire": ["Mendy : dire qui a fait cette vidéo et ces images, et si elles contiennent des images du film 300", "Sinon : les remplacer par une capture TSCF (sans retirer l'écran d'accueil)"],
+      "origine": "originale_tscf",
+      "auteurs": [
+        "Poutine / TSCF (avec Claude et ChatGPT)"
+      ],
+      "source": "Créés par Poutine avec Claude et ChatGPT (confirmé par Poutine le 24/10/2026)",
+      "licence": "Propriétaire TSCF",
+      "autorisations": "Sans objet",
+      "modifications": "Sans objet ; aucune image du film 300 (confirmé par Poutine)",
+      "redistribution": "TSCF",
+      "credits": "Visuels © Truck So Clean France.",
+      "projets": [
+        "Appli TSC 2.14.27 (écran d'accueil)"
+      ],
+      "statut": "distribuable",
+      "a_faire": [
+        "Question pour le juriste : protection des visuels générés avec une IA"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
       "id": "ui_apercus_jeu",
       "nom": "Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png",
       "categorie": "image",
-      "origine": "a_clarifier",
-      "auteurs": ["Probablement captures d'écran TSCF du jeu"],
-      "source": "Tete_Pilote_TSC/ui/ (état du 16/10/2026)",
+      "origine": "modification_tierce",
+      "auteurs": [
+        "Captures d'écran de Poutine / TSCF (contenu du jeu © SCS Software)"
+      ],
+      "source": "Captures faites par Poutine dans ETS2 (confirmé le 24/10/2026)",
       "licence": "Captures d'ETS2 : contenu du jeu © SCS Software",
-      "autorisations": "Usage communautaire toléré des captures (à confirmer)",
-      "modifications": "Inconnues",
-      "redistribution": "Dans l'appli seulement",
+      "autorisations": "Usage communautaire des captures d'écran du jeu",
+      "modifications": "Captures du jeu avec les mods TSC",
+      "redistribution": "Dans l'appli TSC uniquement",
       "credits": "Captures d'Euro Truck Simulator 2 © SCS Software.",
-      "projets": ["Appli TSC 2.14.27"],
-      "statut": "a_clarifier",
-      "a_faire": ["Mendy : confirmer que ce sont ses captures du jeu"],
+      "projets": [
+        "Appli TSC 2.14.27"
+      ],
+      "statut": "distribuable_sous_conditions",
+      "a_faire": [],
       "verifie_le": "2026-10-24"
     },
     {
@@ -229,14 +299,18 @@
       "nom": "Sons de portière (porte_ouvre.mp3, porte_ferme.mp3)",
       "categorie": "son",
       "origine": "originale_tscf",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "Synthèse modale, tests_pilote/sons_portiere.py (aucun son préenregistré)",
       "licence": "Propriétaire TSCF",
       "autorisations": "Sans objet",
       "modifications": "Sans objet",
       "redistribution": "TSCF",
       "credits": "Sons synthétisés par TSCF.",
-      "projets": ["Appli TSC (mode à pied)"],
+      "projets": [
+        "Appli TSC (mode à pied)"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -246,14 +320,19 @@
       "nom": "Échappement V8, turbo et air comprimé (echap.js, echap_dsp.js, echap_worklet.js)",
       "categorie": "son / code",
       "origine": "originale_tscf",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "Synthèse en direct dans la tablette",
       "licence": "Propriétaire TSCF",
       "autorisations": "Sans objet",
       "modifications": "Sans objet",
       "redistribution": "TSCF",
       "credits": "Son moteur synthétisé par TSCF.",
-      "projets": ["Appli TSC", "Musique d'intro"],
+      "projets": [
+        "Appli TSC",
+        "Musique d'intro"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -262,17 +341,21 @@
       "id": "musique_intro",
       "nom": "Musique d'intro « TSC Run in My Way » (ui/intro_tsc.mp3)",
       "categorie": "son / musique",
-      "origine": "a_clarifier",
-      "auteurs": ["TSCF (selon le commit 76dfc03)"],
-      "source": "tests_pilote/musique/intro_tsc.py (synthèse, aucun échantillon tiers d'après le script)",
-      "licence": "Propriétaire TSCF si le fichier vient bien du script",
-      "autorisations": "Sans objet si synthèse ; si enregistrement Suno : conditions Suno à vérifier",
+      "origine": "originale_tscf",
+      "auteurs": [
+        "Poutine / TSCF (composée par Claude dans le code TSCF)"
+      ],
+      "source": "tests_pilote/musique/intro_tsc.py (synthèse, aucun échantillon tiers), ajouté avec le mp3 dans le même commit 76dfc03",
+      "licence": "Propriétaire TSCF",
+      "autorisations": "Sans objet",
       "modifications": "Sans objet",
-      "redistribution": "À confirmer",
-      "credits": "Composition originale TSCF (à confirmer).",
-      "projets": ["Appli TSC 2.14.27 (intro)"],
-      "statut": "a_clarifier",
-      "a_faire": ["Mendy : le mp3 de l'appli est-il le rendu du script ou un enregistrement Suno ? Si Suno : retirer de la diffusion ou vérifier l'abonnement et les droits"],
+      "redistribution": "TSCF",
+      "credits": "Musique « TSC Run in My Way » © Truck So Clean France.",
+      "projets": [
+        "Appli TSC 2.14.27 (intro)"
+      ],
+      "statut": "distribuable",
+      "a_faire": [],
       "verifie_le": "2026-10-24"
     },
     {
@@ -280,14 +363,18 @@
       "nom": "Bande-son de la vidéo bêta TSC Driver",
       "categorie": "son / musique",
       "origine": "originale_tscf",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "tests_pilote/video/video_beta.py (synthèse)",
       "licence": "Propriétaire TSCF",
       "autorisations": "Sans objet",
       "modifications": "Sans objet",
       "redistribution": "TSCF",
       "credits": "Musique originale TSCF.",
-      "projets": ["Vidéo bêta officielle"],
+      "projets": [
+        "Vidéo bêta officielle"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -296,17 +383,23 @@
       "id": "shaders_tsc",
       "nom": "Shaders ReShade TSC_Photoreal.fx et TSC_Realisme.fx + presets « Rendu TSC »",
       "categorie": "script / shader",
-      "origine": "a_clarifier",
-      "auteurs": ["TSCF (en-têtes « code original, sans dépendance »)"],
+      "origine": "originale_tscf",
+      "auteurs": [
+        "Poutine / TSCF (écrits par Claude)"
+      ],
       "source": "Tete_Pilote_TSC/reshade/ ; TSC_Photoreal présent dès l'état du 16/10, TSC_Realisme ajouté le 17/10 (2.14.13)",
-      "licence": "Incohérente : Photoreal « libre d'utilisation pour les membres TSC », Realisme « Tous droits réservés »",
+      "licence": "Propriétaire TSCF (en-têtes à harmoniser)",
       "autorisations": "Sans objet si original",
       "modifications": "Sans objet",
       "redistribution": "TSCF, à harmoniser",
-      "credits": "Shaders TSC © Truck So Clean France.",
-      "projets": ["Appli TSC (Rendu TSC)"],
-      "statut": "a_clarifier",
-      "a_faire": ["Mendy : confirmer qu'aucune partie de TSC_Photoreal ne vient d'un shader tiers (avant le 16/10)", "Harmoniser la mention de licence des deux en-têtes"],
+      "credits": "Shaders TSC Photoreal et TSC Réalisme © Truck So Clean France.",
+      "projets": [
+        "Appli TSC (Rendu TSC)"
+      ],
+      "statut": "distribuable",
+      "a_faire": [
+        "Harmoniser l'en-tête de TSC_Photoreal.fx (« libre pour les membres TSC ») avec celui de TSC_Realisme.fx"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -314,16 +407,22 @@
       "nom": "Presets TSC pour TM MasterGrade (reshade/tm/)",
       "categorie": "configuration",
       "origine": "tscf_sur_ressource_autorisee",
-      "auteurs": ["TSCF (réglages)"],
+      "auteurs": [
+        "TSCF (réglages)"
+      ],
       "source": "Tete_Pilote_TSC/reshade/tm/",
       "licence": "Réglages TSCF ; le shader TM_MasterGrade.fx n'est PAS fourni",
       "autorisations": "Le joueur télécharge le shader chez l'auteur",
       "modifications": "Valeurs de réglage seulement",
       "redistribution": "Presets seuls",
       "credits": "Utilise TM MasterGrade d'Izuan Bakar (à télécharger chez l'auteur).",
-      "projets": ["Appli TSC (Rendu TSC)"],
+      "projets": [
+        "Appli TSC (Rendu TSC)"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Vérifier qu'aucun preset n'est une copie d'un preset livré par Izuan Bakar"],
+      "a_faire": [
+        "Vérifier qu'aucun preset n'est une copie d'un preset livré par Izuan Bakar"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -331,16 +430,22 @@
       "nom": "TM Real Walk (TMRealWalk.dll)",
       "categorie": "logiciel / plugin",
       "origine": "externe",
-      "auteurs": ["Izuan Bakar (TM Modding)"],
+      "auteurs": [
+        "Izuan Bakar (TM Modding)"
+      ],
       "source": "https://izuanbakar.gumroad.com/l/tmrealwalk",
       "licence": "Conditions de l'auteur sur Gumroad (gratuit) — texte exact à archiver",
       "autorisations": "Aucune redistribution : l'appli copie le fichier que le joueur a téléchargé lui-même, avec sauvegarde",
       "modifications": "Aucune. Règle TSCF : ni copie de son code ou de ses ressources, ni patch, ni rebrand de la DLL",
       "redistribution": "Interdite par TSCF",
       "credits": "TM Real Walk est le travail d'Izuan Bakar (TM Modding, izuanbakar.gumroad.com).",
-      "projets": ["Appli TSC (mode à pied)"],
+      "projets": [
+        "Appli TSC (mode à pied)"
+      ],
       "statut": "non_distribue",
-      "a_faire": ["Archiver la page Gumroad et ses conditions (version et date)"],
+      "a_faire": [
+        "Archiver la page Gumroad et ses conditions (version et date)"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -348,16 +453,22 @@
       "nom": "TM MasterGrade (TM_MasterGrade.fx)",
       "categorie": "shader",
       "origine": "externe",
-      "auteurs": ["Izuan Bakar (TM Modding)"],
+      "auteurs": [
+        "Izuan Bakar (TM Modding)"
+      ],
       "source": "https://izuanbakar.gumroad.com/",
       "licence": "Conditions de l'auteur — à archiver",
       "autorisations": "Le joueur le télécharge chez l'auteur ; l'appli l'importe",
       "modifications": "Aucune",
       "redistribution": "Interdite par TSCF",
       "credits": "TM MasterGrade © Izuan Bakar.",
-      "projets": ["Appli TSC (Rendu TSC)"],
+      "projets": [
+        "Appli TSC (Rendu TSC)"
+      ],
       "statut": "non_distribue",
-      "a_faire": ["Archiver les conditions"],
+      "a_faire": [
+        "Archiver les conditions"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -365,14 +476,22 @@
       "nom": "OpenTrack, cloudflared, ReShade, PresentMon 2.6.0",
       "categorie": "logiciel",
       "origine": "externe",
-      "auteurs": ["Projet opentrack", "Cloudflare", "crosire (ReShade)", "Intel / GameTechDev (PresentMon)"],
+      "auteurs": [
+        "Projet opentrack",
+        "Cloudflare",
+        "crosire (ReShade)",
+        "Intel / GameTechDev (PresentMon)"
+      ],
       "source": "GitHub officiels et reshade.me, téléchargés à la demande du joueur",
       "licence": "OpenTrack : ISC (à confirmer par version) ; cloudflared : Apache 2.0 ; ReShade : BSD 3 clauses (code) + conditions de reshade.me ; PresentMon : MIT",
       "autorisations": "Téléchargement depuis la source officielle (signature vérifiée pour cloudflared)",
       "modifications": "Aucune",
       "redistribution": "Non redistribués par TSCF",
       "credits": "OpenTrack, cloudflared (Cloudflare), ReShade (crosire), PresentMon (Intel) appartiennent à leurs auteurs.",
-      "projets": ["Appli TSC", "TSC Performance Lab"],
+      "projets": [
+        "Appli TSC",
+        "TSC Performance Lab"
+      ],
       "statut": "non_distribue",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -382,14 +501,18 @@
       "nom": "Services en ligne : Discord, Trucky, TruckersMP, YouTube, Twitch, Spotify",
       "categorie": "service externe",
       "origine": "externe",
-      "auteurs": ["Leurs éditeurs"],
+      "auteurs": [
+        "Leurs éditeurs"
+      ],
       "source": "API et lecteurs intégrés de la tablette",
       "licence": "Conditions d'utilisation de chaque service",
       "autorisations": "Usage via API publiques / lecteurs officiels",
       "modifications": "Aucune",
       "redistribution": "Sans objet",
       "credits": "Discord, Trucky, TruckersMP, YouTube, Twitch et Spotify sont des marques de leurs propriétaires. TSCF n'y est pas affilié.",
-      "projets": ["Appli TSC"],
+      "projets": [
+        "Appli TSC"
+      ],
       "statut": "non_distribue",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -398,17 +521,24 @@
       "id": "carte_grand_utopia",
       "nom": "Données de carte roads.json / junctions.json (« Grand Utopia »)",
       "categorie": "données",
-      "origine": "a_clarifier",
-      "auteurs": ["Inconnu"],
-      "source": "Tete_Pilote_TSC/carte/ (état du 16/10)",
-      "licence": "Inconnue (extrait du jeu ? d'une carte moddée ?)",
+      "origine": "modification_tierce",
+      "auteurs": [
+        "MyGodness (carte Grand Utopia)"
+      ],
+      "source": "Réseau routier extrait de la carte Grand Utopia de MyGodness",
+      "licence": "Conditions de MyGodness (inconnues)",
       "autorisations": "Aucune trace",
-      "modifications": "Inconnues",
-      "redistribution": "À confirmer",
-      "credits": "À définir",
-      "projets": ["Pilote de tête (tests et mode carte)"],
+      "modifications": "Routes et carrefours convertis en roads.json / junctions.json",
+      "redistribution": "À suspendre : le fichier est livré avec l'appli",
+      "credits": "Données de carte d'après Grand Utopia de MyGodness (le pilote de tête qui les lit est une création TSCF).",
+      "projets": [
+        "Pilote de tête (tests et mode carte)"
+      ],
       "statut": "a_clarifier",
-      "a_faire": ["Mendy : d'où vient le réseau Grand Utopia ? Si c'est une carte moddée : demander l'accord de son auteur"],
+      "a_faire": [
+        "Demander à MyGodness son accord pour livrer ces données avec l'appli",
+        "Sinon : ne plus livrer roads.json (le pilote de tête marche sans carte et apprend les carrefours seul) et le garder pour les tests internes"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -416,14 +546,18 @@
       "nom": "Mods GPS TSC (7 .scs : carbone, nuit, rouge, carte, couleurs)",
       "categorie": "texture / interface",
       "origine": "modification_tierce",
-      "auteurs": ["Poutine / TSCF sur fichiers SCS Software"],
+      "auteurs": [
+        "Poutine / TSCF sur fichiers SCS Software"
+      ],
       "source": "Tete_Pilote_TSC/mods/ ; map_data.sii 1.61 (couleurs seules)",
       "licence": "Contenu du jeu © SCS Software ; modifications TSCF",
       "autorisations": "Pratique du modding ETS2 (à confirmer : voir modding_scs)",
       "modifications": "Couleurs de la carte et habillage du GPS",
       "redistribution": "Comme mod ETS2 uniquement",
       "credits": "Basé sur Euro Truck Simulator 2 © SCS Software. Habillage TSCF.",
-      "projets": ["Appli TSC (mod GPS)"],
+      "projets": [
+        "Appli TSC (mod GPS)"
+      ],
       "statut": "distribuable_sous_conditions",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -433,16 +567,26 @@
       "nom": "Modèles, matériaux et textures SCS Software modifiés (bétaillère scs_livestock et coffres, intérieur Scania R/S 2016, défs benne scs_dumper, kit Wielton)",
       "categorie": "modèle 3D / texture",
       "origine": "modification_tierce",
-      "auteurs": ["SCS Software (et constructeurs sous licence : Scania, Wielton)"],
+      "auteurs": [
+        "SCS Software (et constructeurs sous licence : Scania, Wielton)"
+      ],
       "source": "Fichiers du jeu de Mendy (base.scs, DLC)",
       "licence": "Contenu propriétaire SCS Software",
       "autorisations": "Conditions SCS pour la redistribution de modèles modifiés : NON VÉRIFIÉES",
       "modifications": "Bétaillère : pièces décal ajoutées ; Scania : UV et matières ; benne : aucun modèle redistribué (masque + défs) ; Wielton : aucun modèle redistribué",
       "redistribution": "Comme mod ETS2 gratuit, pour les possesseurs du jeu (à confirmer)",
       "credits": "Modèles d'origine © SCS Software. Scania, Volvo, Wielton : marques de leurs propriétaires. TSCF n'est affilié à aucun d'eux.",
-      "projets": ["Bétaillère Normandie", "Cuir Scania 2016", "Benne Normandie Show", "Kit templates"],
+      "projets": [
+        "Bétaillère Normandie",
+        "Cuir Scania 2016",
+        "Benne Normandie Show",
+        "Kit templates"
+      ],
       "statut": "distribuable_sous_conditions",
-      "a_faire": ["Lire et archiver les conditions SCS (EULA du jeu, règles du modding) pour les modèles modifiés", "Corriger les crédits du catalogue (voir MENTIONS_PRODUITS.md)"],
+      "a_faire": [
+        "Lire et archiver les conditions SCS (EULA du jeu, règles du modding) pour les modèles modifiés",
+        "Corriger les crédits du catalogue (voir MENTIONS_PRODUITS.md)"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -450,16 +594,24 @@
       "nom": "Photo du Mont-Saint-Michel au coucher de soleil",
       "categorie": "photo",
       "origine": "externe",
-      "auteurs": ["Burcin Sahin"],
+      "auteurs": [
+        "Burcin Sahin"
+      ],
       "source": "Pexels (URL exacte à retrouver) ; project-files/photos_poutine/mont_saint_michel_pexels_burcin_sahin.jpg",
       "licence": "Licence Pexels",
       "autorisations": "Licence Pexels : usage et modification permis ; interdit de revendre la photo telle quelle ou de la rediffuser comme photo de stock",
       "modifications": "Recadrage, étalonnage (ombres relevées, tons chauds, saturation), fondus vers le rouge TSC, bords prolongés en miroir",
       "redistribution": "Intégrée et modifiée dans les textures : permis",
       "credits": "Photo : Burcin Sahin (Pexels).",
-      "projets": ["Bétaillère Normandie 1.3-1.5", "Benne Normandie Show 1.1", "Vidéo bêta"],
+      "projets": [
+        "Bétaillère Normandie 1.3-1.5",
+        "Benne Normandie Show 1.1",
+        "Vidéo bêta"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Retrouver l'URL Pexels et archiver une capture de la page (date)"],
+      "a_faire": [
+        "Retrouver l'URL Pexels et archiver une capture de la page (date)"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -467,7 +619,9 @@
       "nom": "4 images du film 300 (photos_poutine/film_300_*.jpg)",
       "categorie": "image",
       "origine": "externe",
-      "auteurs": ["Warner Bros. / Legendary"],
+      "auteurs": [
+        "Warner Bros. / Legendary"
+      ],
       "source": "Envoyées par Mendy le 23/10/2026",
       "licence": "Œuvre protégée, aucune licence",
       "autorisations": "Aucune",
@@ -481,36 +635,50 @@
     },
     {
       "id": "citerne_akirix",
-      "nom": "Modèle de citerne AkirixDesign3D (base Gaming ModdinG)",
+      "nom": "Modèle 3D de citerne AkirixDesign3D (acheté par Poutine)",
       "categorie": "modèle 3D",
-      "origine": "modification_tierce",
-      "auteurs": ["AkirixDesign3D", "Gaming ModdinG"],
-      "source": "Mod tiers",
-      "licence": "Inconnue",
-      "autorisations": "Le catalogue dit « avec autorisation » mais aucune preuve n'est archivée",
+      "origine": "tscf_sur_ressource_autorisee",
+      "auteurs": [
+        "AkirixDesign3D (modèle 3D)",
+        "base Gaming ModdinG (selon l'ancien crédit, à confirmer)"
+      ],
+      "source": "Modèle 3D acheté par Poutine (confirmé par Poutine le 24/10/2026)",
+      "licence": "Licence d'achat du modèle (conditions du vendeur à archiver)",
+      "autorisations": "Achat du modèle par Poutine. Le mod (peintures, noms, points de feux, définitions) appartient à TSCF ; le modèle 3D reste l'œuvre d'AkirixDesign3D, utilisé sous sa licence d'achat",
       "modifications": "Peintures TSCF, 4 noms en Great Vibes, effet irisé, 328 points de feux, roues standard SCS",
-      "redistribution": "À suspendre jusqu'à la preuve d'autorisation",
-      "credits": "Modèle : AkirixDesign3D, base Gaming ModdinG. Peintures : Poutine / TSCF.",
-      "projets": ["Citerne TSC by AkirixDesign3D 1.6.1"],
-      "statut": "a_clarifier",
-      "a_faire": ["Mendy : archiver dans registre/preuves/ la capture de l'accord d'AkirixDesign3D (et de Gaming ModdinG) avec sa date et ce qui est permis (modifier ? redistribuer ? sur GitHub ?)", "L'aperçu des noms v1.6 montre la livrée « 300 » : vérifier qu'aucune image du film n'est dans les textures"],
+      "redistribution": "Dans le mod TSCF gratuit, selon les conditions de la licence d'achat",
+      "credits": "Modèle 3D : AkirixDesign3D. Peintures, noms et points de feux © Truck So Clean France (Poutine).",
+      "projets": [
+        "Citerne TSC (pack remorques)"
+      ],
+      "statut": "distribuable_sous_conditions",
+      "a_faire": [
+        "Archiver dans registre/preuves/ la facture et les conditions de la licence d'achat (vérifier qu'elles permettent de diffuser le modèle dans un mod gratuit)"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
       "id": "afro_sergiosomf",
-      "nom": "Modèle de passagère (mod afro.scs)",
+      "nom": "Modèle de passagère (mod afro.scs, gratuit)",
       "categorie": "modèle 3D",
       "origine": "modification_tierce",
-      "auteurs": ["SergioSomf (selon le catalogue, à confirmer)"],
+      "auteurs": [
+        "Inconnu"
+      ],
       "source": "Downloads\\afro.scs (mod tiers)",
-      "licence": "Inconnue",
-      "autorisations": "Le catalogue dit « avec autorisation » mais aucune preuve n'est archivée et l'auteur n'est pas confirmé côté code",
-      "modifications": "Texture TSC (écusson) et repackaging autonome",
-      "redistribution": "À suspendre jusqu'à la preuve d'autorisation",
-      "credits": "Modèle : SergioSomf (à confirmer). Écusson : TSCF.",
-      "projets": ["Madame Afro TSC 1.0.0"],
-      "statut": "a_clarifier",
-      "a_faire": ["Mendy : confirmer l'auteur et archiver son accord dans registre/preuves/"],
+      "licence": "Déclaré libre de droits par Poutine (24/10/2026), sans page source",
+      "autorisations": "Déclaration de Poutine ; aucune page ni licence écrite retrouvée",
+      "modifications": "Écusson TSC (création TSCF, déjà couverte par le logo) et repackaging autonome",
+      "redistribution": "Dans Madame Afro TSC, tant qu'aucun auteur ne se manifeste",
+      "credits": "Modèle de passagère : auteur inconnu (modèle libre de droits).",
+      "projets": [
+        "Madame Afro TSC 1.0.0"
+      ],
+      "statut": "distribuable_sous_conditions",
+      "a_faire": [
+        "Retirer « SergioSomf (avec autorisation) » du catalogue",
+        "Si un auteur se manifeste : suspendre le mod et appliquer la procédure de PROTECTION_ET_SIGNALEMENT.md"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -518,14 +686,18 @@
       "nom": "MDT Ekeri Full Trailer Addon (pare-chocs, bavettes)",
       "categorie": "modèle 3D",
       "origine": "externe",
-      "auteurs": ["MDT"],
+      "auteurs": [
+        "MDT"
+      ],
       "source": "Mod MDT, installé à part par le joueur",
       "licence": "Licence MDT : vente, modification et échange interdits",
       "autorisations": "Aucun fichier MDT n'est inclus ni modifié : le mod TSCF ne fait que référencer les pièces",
       "modifications": "Aucune",
       "redistribution": "Non redistribué",
       "credits": "Pièces : MDT (à installer à part).",
-      "projets": ["Citerne TSC - compatibilité MDT Ekeri 1.0"],
+      "projets": [
+        "Citerne TSC - compatibilité MDT Ekeri 1.0"
+      ],
       "statut": "non_distribue",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -535,14 +707,23 @@
       "nom": "Livrées, fresques, liserés, cuir capitonné, broderies, noms de chauffeurs, points de feux, kit templates",
       "categorie": "texture / création graphique",
       "origine": "tscf_sur_ressource_autorisee",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "Générées par le code TSCF (tests_pilote/benne, betaillere, cuir, citerne, kit)",
       "licence": "Propriétaire TSCF, sous réserve des composants tiers (photo Pexels, Great Vibes, modèles SCS)",
       "autorisations": "Voir photo_mont_saint_michel, great_vibes, modding_scs",
       "modifications": "Sans objet",
       "redistribution": "Comme mods ETS2 gratuits via le catalogue TSC",
       "credits": "Création Truck So Clean France. Conception et réalisation : Poutine / TSCF.",
-      "projets": ["Bétaillère Normandie 1.5", "Benne Normandie Show 1.1", "Cuir Scania 2016 1.1", "4 mods noms", "Citerne 1.6.1 (peintures)", "Kit templates"],
+      "projets": [
+        "Bétaillère Normandie 1.5",
+        "Benne Normandie Show 1.1",
+        "Cuir Scania 2016 1.1",
+        "4 mods noms",
+        "Citerne 1.6.1 (peintures)",
+        "Kit templates"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -552,14 +733,19 @@
       "nom": "Outils de modding TSCF (scs_model.py, pmg.py, dds.py, hashfs2.py, générateurs de mods)",
       "categorie": "code source / script",
       "origine": "originale_tscf",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "tests_pilote/",
       "licence": "Propriétaire TSCF",
       "autorisations": "Sans objet",
       "modifications": "Sans objet",
       "redistribution": "Non distribués (outils internes)",
       "credits": "Outils TSCF.",
-      "projets": ["Chaîne de production des mods", "futur TSCF Creation Studio"],
+      "projets": [
+        "Chaîne de production des mods",
+        "futur TSCF Creation Studio"
+      ],
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
@@ -569,16 +755,23 @@
       "nom": "CityHash64 1.0.3 (réimplémentation Python, tests_pilote/hashfs/cityhash.py)",
       "categorie": "code source",
       "origine": "tscf_sur_ressource_autorisee",
-      "auteurs": ["Google (algorithme, Geoff Pike et Jyrki Alakuijala)", "TSCF (portage Python)"],
+      "auteurs": [
+        "Google (algorithme, Geoff Pike et Jyrki Alakuijala)",
+        "TSCF (portage Python)"
+      ],
       "source": "Algorithme CityHash de Google",
       "licence": "MIT",
       "autorisations": "Licence MIT",
       "modifications": "Portage en Python",
       "redistribution": "Avec la notice MIT si un jour distribué",
-      "credits": "CityHash © 2011 Google, Inc., licence MIT.",
-      "projets": ["Outils de modding (lecture HashFS)"],
+      "credits": "Portage Python par TSCF. Algorithme CityHash © 2011 Google, Inc., licence MIT.",
+      "projets": [
+        "Outils de modding (lecture HashFS)"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Ajouter la notice MIT de Google en tête du fichier"],
+      "a_faire": [
+        "Ajouter la notice MIT de Google en tête du fichier"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -586,16 +779,22 @@
       "nom": "Bibliothèques de construction : numpy, scipy, Pillow, goversioninfo, Go",
       "categorie": "bibliothèque",
       "origine": "externe",
-      "auteurs": ["Projets NumPy, SciPy, Pillow ; josephspurrier (goversioninfo) ; The Go Authors"],
+      "auteurs": [
+        "Projets NumPy, SciPy, Pillow ; josephspurrier (goversioninfo) ; The Go Authors"
+      ],
       "source": "Installées dans l'environnement de build",
       "licence": "numpy, scipy : BSD 3 clauses ; Pillow : MIT-CMU (HPND) ; goversioninfo : MIT ; Go : BSD 3 clauses",
       "autorisations": "Licences libres",
       "modifications": "Aucune",
       "redistribution": "Seul le runtime Go est compilé dans le lanceur (notice BSD à joindre)",
       "credits": "Lanceur compilé avec Go © The Go Authors (BSD).",
-      "projets": ["Build de l'appli et des mods"],
+      "projets": [
+        "Build de l'appli et des mods"
+      ],
       "statut": "distribuable",
-      "a_faire": ["Joindre la notice BSD de Go au dossier de l'appli"],
+      "a_faire": [
+        "Joindre la notice BSD de Go au dossier de l'appli"
+      ],
       "verifie_le": "2026-10-24"
     },
     {
@@ -603,16 +802,68 @@
       "nom": "TSC Performance Lab (scripts de diagnostic PowerShell)",
       "categorie": "code source / script",
       "origine": "originale_tscf",
-      "auteurs": ["Poutine / TSCF"],
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
       "source": "perf_lab/ (ce dépôt)",
       "licence": "Propriétaire TSCF",
       "autorisations": "Sans objet",
       "modifications": "Sans objet",
       "redistribution": "TSCF",
       "credits": "© 2026 Truck So Clean France.",
-      "projets": ["TSC Performance Lab"],
+      "projets": [
+        "TSC Performance Lab"
+      ],
       "statut": "distribuable",
       "a_faire": [],
+      "verifie_le": "2026-10-24"
+    },
+    {
+      "id": "templates_mdt",
+      "nom": "Templates de peinture MDT (Scania S open mod, Volvo Aero, FlatCab, Custom Ekeri 3.4, Trux Pack...)",
+      "categorie": "texture / gabarit",
+      "origine": "externe",
+      "auteurs": [
+        "MDT"
+      ],
+      "source": "Mods MDT fournis par Poutine (project-files/EXTRACT_*MDT*.zip)",
+      "licence": "Licence MDT ; templates modifiables avec l'accord du créateur (selon Poutine, 24/10/2026)",
+      "autorisations": "Accord du créateur annoncé par Poutine : preuve à archiver",
+      "modifications": "Peintures TSCF dessinées sur les gabarits UV ; aucun fichier MDT redistribué tel quel",
+      "redistribution": "Peintures TSCF seules ; les mods MDT restent à installer à part",
+      "credits": "Gabarits et pièces : MDT (à installer à part).",
+      "projets": [
+        "Livrées Lion noir et TSCF Spartan (Scania S, Volvo FH, Ekeri)",
+        "Compat MDT des remorques"
+      ],
+      "statut": "distribuable_sous_conditions",
+      "a_faire": [
+        "Archiver le texte de licence MDT qui autorise la modification des templates"
+      ],
+      "verifie_le": "2026-10-24"
+    },
+    {
+      "id": "livrees_lion_noir_spartan",
+      "nom": "Livrées Lion noir et TSCF Spartan (lion couronné, rayures rouges, or, slogan)",
+      "categorie": "texture / création graphique",
+      "origine": "originale_tscf",
+      "auteurs": [
+        "Poutine / TSCF"
+      ],
+      "source": "Planches de référence de Poutine (dont une générée avec ChatGPT), redessinées par TSCF",
+      "licence": "Propriétaire TSCF",
+      "autorisations": "Sans objet",
+      "modifications": "Sans objet",
+      "redistribution": "Comme mods ETS2 gratuits (packs TSCF)",
+      "credits": "Livrée © Truck So Clean France. Conception : Poutine / TSCF.",
+      "projets": [
+        "TSCF - Pack Camions",
+        "TSCF - Pack Remorques"
+      ],
+      "statut": "distribuable",
+      "a_faire": [
+        "Question pour le juriste : protection d'un dessin issu d'une image générée par IA (voir PROTECTION_ET_SIGNALEMENT.md §3)"
+      ],
       "verifie_le": "2026-10-24"
     }
   ]

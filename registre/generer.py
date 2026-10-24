@@ -3,12 +3,14 @@
 #   python3 generer.py            vérifie et régénère
 #   python3 generer.py --verifier vérifie seulement (code de sortie 1 en cas d'erreur)
 # On ne modifie que le JSON : les deux autres fichiers sont régénérés.
-import json, os, sys
+import json, os, re, sys
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 CHAMPS = ['id', 'nom', 'categorie', 'origine', 'auteurs', 'source', 'licence', 'autorisations', 'modifications',
           'redistribution', 'credits', 'projets', 'statut', 'a_faire', 'verifie_le']
 LISTES = {'auteurs', 'projets', 'a_faire'}
+ORIGINES_TSCF = ('originale_tscf', 'tscf_sur_ressource_autorisee')
+COPYRIGHT_TSCF = re.compile(r'©[^.]*(Truck So Clean|TSCF)|(Truck So Clean France|TSCF)[^.]*(Tous droits|propriété)', re.I)
 ORDRE_STATUT = ['bloque', 'a_clarifier', 'distribuable_sous_conditions', 'distribuable', 'non_distribue']
 
 
@@ -40,6 +42,9 @@ def verifier(reg):
         # une origine non établie ne peut pas être déclarée distribuable (règle 1.4)
         if r.get('origine') == 'a_clarifier' and r.get('statut') in ('distribuable', 'distribuable_sous_conditions'):
             err.append('%s : origine à clarifier mais statut « %s »' % (nom, r.get('statut')))
+        # le copyright TSCF ne se met que sur ce que TSCF a créé (consigne de Poutine du 24/10/2026)
+        if COPYRIGHT_TSCF.search(r.get('credits', '')) and (r.get('origine') not in ORIGINES_TSCF or r.get('statut') == 'a_clarifier'):
+            err.append('%s : © TSCF sur une ressource qui n\'est pas une création TSCF établie' % nom)
         if r.get('statut') == 'a_clarifier' and not r.get('a_faire'):
             err.append('%s : à clarifier sans action « a_faire »' % nom)
     return err
@@ -96,13 +101,18 @@ def markdown(reg):
 
 
 def credits(reg):
-    L = ['CRÉDITS ET COMPOSANTS TIERS - TRUCK SO CLEAN FRANCE (TSCF)',
+    L = ['CRÉDITS - TRUCK SO CLEAN FRANCE (TSCF)',
          'Registre %s du %s' % (reg['version_registre'], reg['date']), '',
-         'Les composants ci-dessous restent la propriété de leurs auteurs, sous leur propre licence.', '']
-    for r in sorted(reg['ressources'], key=lambda r: r['nom'].lower()):
-        if r['statut'] == 'bloque' or r['credits'].startswith('À définir'):
-            continue
-        L.append('- %s : %s' % (r['nom'], r['credits']))
+         'Le copyright TSCF ne porte que sur les créations TSCF de la première liste.', '',
+         '1. CRÉATIONS TSCF', '']
+    garde = [r for r in sorted(reg['ressources'], key=lambda r: r['nom'].lower())
+             if r['statut'] != 'bloque' and not r['credits'].startswith('À définir')]
+    L += ['- %s : %s' % (r['nom'], r['credits']) for r in garde
+          if r['origine'] in ORIGINES_TSCF and r['statut'] != 'a_clarifier']
+    L += ['', '2. COMPOSANTS DE TIERS (ce ne sont pas des créations TSCF ; ils restent la propriété de leurs auteurs,',
+          '   sous leur propre licence)', '']
+    L += ['- %s : %s' % (r['nom'], r['credits']) for r in garde
+          if r['origine'] not in ORIGINES_TSCF or r['statut'] == 'a_clarifier']
     return '\n'.join(L) + '\n'
 
 

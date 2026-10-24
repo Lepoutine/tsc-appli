@@ -12,7 +12,8 @@ s'en servir face à un tiers. Il ne garantit aucun résultat.
 3. Origine ou licence incertaine → statut `a_clarifier` → pas de distribution jusqu'à la preuve.
    `python3 generer.py --verifier` refuse une ressource « origine à clarifier » marquée distribuable.
 4. Ne jamais retirer les crédits d'origine, ne jamais présenter une ressource tierce comme une création TSCF.
-5. Aucun droit exclusif n'est revendiqué sur un composant sous licence tierce.
+5. Aucun droit exclusif n'est revendiqué sur un composant sous licence tierce : le © TSCF ne se met que sur ce que TSCF
+   a créé (consigne de Poutine du 24/10/2026), vérifié par `generer.py`.
 
 ## 2. Ce que TSCF peut faire pour protéger ses créations
 
@@ -31,10 +32,12 @@ s'en servir face à un tiers. Il ne garantit aucun résultat.
 
 1. Une grande partie du code et des textures a été produite avec l'assistance d'une IA (Claude) sous la direction de
    Poutine. Dans quelle mesure ces éléments sont-ils protégés par le droit d'auteur, et comment documenter l'apport
-   créatif humain (consignes, choix, corrections) ?
+   créatif humain (consignes, choix, corrections) ? Même question pour les livrées redessinées à partir d'une image générée
+   avec ChatGPT.
 2. Mods qui modifient des modèles SCS : les conditions de SCS Software permettent-elles de les distribuer gratuitement
    sur GitHub, et TSCF peut-il revendiquer des droits sur ses ajouts ?
-3. Accords d'AkirixDesign3D et de l'auteur de Madame Afro : quelle forme suffit (message Discord, courriel) ?
+3. Modèle de citerne acheté à AkirixDesign3D : la licence d'achat permet-elle de diffuser le modèle dans un mod gratuit ?
+   Accord de l'auteur de Madame Afro et des templates MDT : quelle forme suffit (message Discord, courriel) ?
 4. « Truck So Clean France » est-il une association, une entreprise ou un groupe informel ? Qui est titulaire des droits
    (Poutine en personne ou TSCF) ? Les mentions doivent suivre la réponse.
 5. Le `LICENCE.txt` de l'appli cite des articles du Code de la propriété intellectuelle : relecture de leur bon usage.
