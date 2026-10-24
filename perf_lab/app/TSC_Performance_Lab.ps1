@@ -323,7 +323,7 @@ $ui.BtnMeasure.Add_Click({
   $sec = [int](($ui.InDur.SelectedItem.Content) -replace '\D', '')
   $zone = $ui.InZone.SelectedItem.Content
   $ui.Tabs.SelectedIndex = 4
-  Start-Background "Mesure de $sec s (roule normalement)" { param($s, $l, $z, $p) Start-PLCapture -Seconds $s -Label $l -Zone $z -Profil $p } @($sec, $ui.InLabel.Text, $zone, $ui.InProfil.Text) { param($run) Refresh-Runs; Set-Status "Mesure '$($run.Libelle)' : $($run.Stats.FpsMoyen) images/s en moyenne, $($run.Stats.Fps1PctBas) pour les 1 % les plus lents, $($run.Stats.SaccadesParMin) saccades/min." }
+  Start-Background "Mesure de $sec s (roule normalement)" { param($s, $l, $z, $p) Start-PLCapture -Seconds $s -Label $l -Zone $z -Profil $p } @($sec, $ui.InLabel.Text, $zone, $ui.InProfil.Text) { param($run) Refresh-Runs; if ($run.Douteuse) { Set-Status $run.Avertissement } else { Set-Status "Mesure '$($run.Libelle)' : $($run.Stats.FpsMoyen) images/s en moyenne, $($run.Stats.Fps1PctBas) pour les 1 % les plus lents, $($run.Stats.SaccadesParMin) saccades/min." } }
 })
 
 $ui.BtnImport.Add_Click({

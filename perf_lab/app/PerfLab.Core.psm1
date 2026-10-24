@@ -544,7 +544,16 @@ function Get-PLFrameStats {
   $dispCol = @('DisplayedTime', 'MsBetweenDisplayChange', 'msBetweenDisplayChange') | Where-Object { $cols -contains $_ } | Select-Object -First 1
   $inv = [Globalization.CultureInfo]::InvariantCulture
   $num = { param($s) $v = 0.0; if ([double]::TryParse([string]$s, [Globalization.NumberStyles]::Float, $inv, [ref]$v)) { $v } else { [double]::NaN } }
+  # resume de toutes les chaines d'affichage vues, pour verifier que la mesure a suivi la bonne
+  $chaines = @()
+  if ($cols -contains 'Application' -and $cols -contains 'SwapChainAddress') {
+    $modeCol = @('PresentMode') | Where-Object { $cols -contains $_ } | Select-Object -First 1
+    $chaines = @($rows | Group-Object Application, SwapChainAddress | Sort-Object Count -Descending | Select-Object -First 10 | ForEach-Object {
+      [pscustomobject]@{ Application = $_.Group[0].Application; Chaine = $_.Group[0].SwapChainAddress; Images = $_.Count; Mode = $(if ($modeCol) { $_.Group[0].$modeCol } else { '' }) }
+    })
+  }
   if ($cols -contains 'Application') { $rows = @($rows | Where-Object { $_.Application -eq $Process -or -not $Process }) }
+  if (-not $rows.Count) { throw "Aucune image de $Process dans l'enregistrement." }
   # le processus peut avoir plusieurs chaines d'affichage : garder la principale (la plus d'images)
   if ($cols -contains 'SwapChainAddress') {
     $main = $rows | Group-Object SwapChainAddress | Sort-Object Count -Descending | Select-Object -First 1
@@ -612,6 +621,7 @@ function Get-PLFrameStats {
     Limite         = $limit
     AffichageMedianMs = $(if ($disp.Count) { [math]::Round((& $med $disp), 2) } else { $null })
     ColonneTrame   = $ftCol
+    Chaines        = $chaines
   }
 }
 
@@ -625,20 +635,27 @@ function Start-PLCapture {
   $dir = Join-Path (Join-Path (Get-PLDataRoot) 'mesures') $id
   New-Item -ItemType Directory -Path $dir -Force | Out-Null
   $csv = Join-Path $dir 'presentmon.csv'
-  $args = @('--process_name', 'eurotrucks2.exe', '--output_file', "`"$csv`"", '--timed', $Seconds, '--terminate_after_timed', '--no_console_stats', '--stop_existing_session', '--session_name', 'TSCPerfLab')
+  # pas de filtre par processus : avec des couches DXGI (ReShade...), la chaine du jeu peut etre mal attribuee ;
+  # le tri par processus et par chaine se fait ensuite dans Get-PLFrameStats
+  $args = @('--output_file', "`"$csv`"", '--timed', $Seconds, '--terminate_after_timed', '--no_console_stats', '--stop_existing_session', '--session_name', 'TSCPerfLab')
   $p = Start-Process -FilePath $pm -ArgumentList $args -Verb RunAs -WindowStyle Hidden -PassThru
   $samples = Measure-PLLoad -Seconds $Seconds
   $p.WaitForExit(($Seconds + 30) * 1000) | Out-Null
   $samples | Export-Csv -LiteralPath (Join-Path $dir 'charge.csv') -NoTypeInformation -Encoding UTF8
   if (-not (Test-Path -LiteralPath $csv)) { throw 'PresentMon n''a rien enregistre (droits administrateur refuses ?).' }
   $stats = Get-PLFrameStats -CsvPath $csv
+  $gpuMoy = [math]::Round(($samples | Measure-Object Gpu3D -Average).Average, 1)
+  # peu d'images alors que la carte graphique travaille : PresentMon n'a pas suivi la vraie chaine d'affichage
+  $douteuse = ($stats.FpsMoyen -lt 15 -and $gpuMoy -ge 30)
   $run = [pscustomobject]@{
     Id = $id; Date = (Get-Date).ToString('dd/MM/yyyy HH:mm'); Libelle = $Label; Zone = $Zone; Profil = $Profil
     Machine = $env:COMPUTERNAME; Stats = $stats
+    Douteuse = $douteuse
+    Avertissement = $(if ($douteuse) { "Mesure douteuse : $($stats.FpsMoyen) images/s vues alors que la carte graphique etait a $gpuMoy %. Voir Stats.Chaines." } else { '' })
     Charge = [pscustomobject]@{
       CpuMoy = [math]::Round(($samples | Measure-Object Cpu -Average).Average, 1)
       CpuMax = ($samples | Measure-Object Cpu -Maximum).Maximum
-      GpuMoy = [math]::Round(($samples | Measure-Object Gpu3D -Average).Average, 1)
+      GpuMoy = $gpuMoy
       GpuMax = ($samples | Measure-Object Gpu3D -Maximum).Maximum
       RamLibreMinMo = ($samples | Measure-Object RamLibreMo -Minimum).Minimum
     }
@@ -659,7 +676,9 @@ function Measure-PLLoad {
   param([int]$Seconds = 30)
   $out = New-Object System.Collections.Generic.List[object]
   $prev = Get-PLWmi Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'"
-  for ($i = 0; $i -lt $Seconds; $i++) {
+  # borne par le temps reel : sur certaines machines un echantillon prend plus d'une seconde
+  $clock = [Diagnostics.Stopwatch]::StartNew()
+  for ($i = 0; $clock.Elapsed.TotalSeconds -lt $Seconds; $i++) {
     $g = Get-Counter -Counter '\GPU Engine(*)\Utilization Percentage' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
     if (-not $g) { Start-Sleep -Seconds 1 }
     $cur = Get-PLWmi Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'"
@@ -685,7 +704,7 @@ function Measure-PLLoad {
     }
     $os = Get-PLWmi Win32_OperatingSystem
     if (-not $os) { Add-Type -AssemblyName Microsoft.VisualBasic; $os = [pscustomobject]@{ FreePhysicalMemory = (New-Object Microsoft.VisualBasic.Devices.ComputerInfo).AvailablePhysicalMemory / 1KB } }
-    $out.Add([pscustomobject]@{ T = $i; Cpu = $cpu; Gpu3D = [math]::Round([math]::Min(100, $g3d), 1); Decodage = [math]::Round($dec, 1); Encodage = [math]::Round($enc, 1); RamLibreMo = $(if ($os) { [math]::Round($os.FreePhysicalMemory / 1KB) } else { $null }) })
+    $out.Add([pscustomobject]@{ T = [math]::Round($clock.Elapsed.TotalSeconds); Cpu = $cpu; Gpu3D = [math]::Round([math]::Min(100, $g3d), 1); Decodage = [math]::Round($dec, 1); Encodage = [math]::Round($enc, 1); RamLibreMo = $(if ($os) { [math]::Round($os.FreePhysicalMemory / 1KB) } else { $null }) })
   }
   $out.ToArray()
 }

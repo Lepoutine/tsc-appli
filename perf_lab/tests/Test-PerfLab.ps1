@@ -62,6 +62,15 @@ Check '99e centile 10 ms (60 saccades = 1 %)' ($st.TrameP99Ms -eq 10)
 Check '60 saccades detectees' ($st.Saccades -eq 60)
 Check 'limite : carte graphique' ($st.Limite -eq 'Carte graphique')
 Check 'colonne v2 utilisee' ($st.ColonneTrame -eq 'FrameTime')
+Check 'resume des chaines vues (principale en tete)' (@($st.Chaines).Count -eq 2 -and $st.Chaines[0].Chaine -eq '0x1' -and $st.Chaines[0].Images -eq 6000 -and $st.Chaines[1].Mode -eq 'Composed')
+# enregistrement sans aucune image du jeu (autre processus seulement) : erreur claire
+$csv0 = Join-Path $tmp 'pm0.csv'
+$sb0 = New-Object Text.StringBuilder
+[void]$sb0.AppendLine('Application,ProcessID,SwapChainAddress,PresentMode,FrameTime')
+for ($i = 0; $i -lt 100; $i++) { [void]$sb0.AppendLine("dwm.exe,1,0x9,Composed,16.7") }
+[IO.File]::WriteAllText($csv0, $sb0.ToString())
+$err = $null; try { Get-PLFrameStats -CsvPath $csv0 -SkipSeconds 0 | Out-Null } catch { $err = $_.Exception.Message }
+Check 'aucune image du jeu : erreur claire' ($err -match 'Aucune image de eurotrucks2.exe')
 
 # format v1 (MsBetweenPresents) et rythme regulier sans saccade
 $csv1 = Join-Path $tmp 'pm1.csv'
