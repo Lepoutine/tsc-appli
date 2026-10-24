@@ -1,0 +1,6 @@
+{
+  "camions": [],
+  "remorques": [
+    { "id": "citerne_tsc", "nom": "Citerne TSC (modèle réel du mod)", "fichier": "citerne_tsc.glb" }
+  ]
+}

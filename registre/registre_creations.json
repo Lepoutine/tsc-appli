@@ -614,6 +614,57 @@
       "statut": "distribuable",
       "a_faire": [],
       "verifie_le": "2026-10-24"
+    },
+    {
+      "id": "spartan_studio",
+      "nom": "TSCF Spartan Studio (atelier 3D de livrées : interface, projection de livrée, convertisseur de modèles SCS)",
+      "categorie": "code source",
+      "origine": "originale_tscf",
+      "auteurs": ["Poutine / TSCF (écrit avec l'assistance de Claude, Anthropic)"],
+      "source": "studio/ (ce dépôt)",
+      "licence": "Propriétaire TSCF",
+      "autorisations": "Sans objet",
+      "modifications": "Sans objet",
+      "redistribution": "TSCF",
+      "credits": "© 2026 Truck So Clean France.",
+      "projets": ["TSCF Spartan Studio"],
+      "statut": "distribuable",
+      "a_faire": ["Les modèles .glb convertis depuis le jeu ou des mods (SCS, AkirixDesign3D...) restent sur le PC : jamais publiés ni distribués", "Emblème de l'en-tête (studio/css/embleme.png) découpé dans la planche TSCF du 24/10/2026 : confirmer que la planche est une création TSCF"],
+      "verifie_le": "2026-10-24"
+    },
+    {
+      "id": "threejs",
+      "nom": "Three.js 0.170 (moteur 3D du Spartan Studio)",
+      "categorie": "bibliothèque",
+      "origine": "externe",
+      "auteurs": ["three.js authors"],
+      "source": "npm three@0.170.0, copié dans studio/vendor/three",
+      "licence": "MIT (studio/vendor/three/LICENSE)",
+      "autorisations": "Licence libre",
+      "modifications": "Aucune",
+      "redistribution": "Autorisée avec la notice MIT",
+      "credits": "Three.js © 2010-2024 three.js authors, licence MIT.",
+      "projets": ["TSCF Spartan Studio"],
+      "statut": "distribuable",
+      "a_faire": [],
+      "verifie_le": "2026-10-24"
+    },
+    {
+      "id": "polices_spartan_studio",
+      "nom": "Polices Saira, Rajdhani, Kaushan Script (Spartan Studio)",
+      "categorie": "police",
+      "origine": "externe",
+      "auteurs": ["Omnibus-Type (Saira)", "Indian Type Foundry (Rajdhani)", "Impallari Type (Kaushan Script)"],
+      "source": "npm @fontsource 5.1.0, copiées dans studio/vendor/polices",
+      "licence": "SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt)",
+      "autorisations": "Licence libre",
+      "modifications": "Aucune",
+      "redistribution": "Autorisée avec la licence OFL, pas de vente des polices seules",
+      "credits": "Polices Saira, Rajdhani et Kaushan Script, SIL Open Font License 1.1.",
+      "projets": ["TSCF Spartan Studio"],
+      "statut": "distribuable",
+      "a_faire": [],
+      "verifie_le": "2026-10-24"
     }
   ]
 }
