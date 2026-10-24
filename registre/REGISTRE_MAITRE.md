@@ -28,7 +28,7 @@ Règle : un niveau n'est attribué que s'il est prouvé (commit, test, capture e
 | Benne Normandie Show | 1.1 | `publication_mods/` | 3 | Non testée en jeu |
 | Cuir capitonné Scania R/S 2016 | 1.1 | `publication_mods/` | 3 | Non testé en jeu |
 | 4 mods noms (Normand, Turque, Corse, Cobra) | 1.0.1 | `publication_mods/` | 3 | Non testés en jeu |
-| Citerne TSC by AkirixDesign3D | 1.6.1 | `publication_mods/` | 3 | Non testée en jeu. **Autorisation à prouver** |
+| Citerne TSC (modèle AkirixDesign3D acheté) | 1.7 | pack remorques | 3 | Non testée en jeu. Garder la facture du modèle |
 | Citerne compat MDT Ekeri | 1.0 | release `mods` | 3 | Non testée en jeu |
 | Madame Afro TSC | 1.0.0 | release `mods` | 3 | **Autorisation à prouver** |
 | Mods GPS TSC (7) | 2.x | `Tete_Pilote_TSC/mods/` | 3 | Livrés avec l'appli |
@@ -68,7 +68,7 @@ renommer sa DLL.
    `intro_tsc.mp3`, `TSC_Photoreal.fx`, données « Grand Utopia ». Voir `REGISTRE_CREATIONS.md`.
 3. **Crédits du catalogue** : plusieurs mods portent « Créations de Poutine – propriété de Truck So Clean France » alors
    qu'ils contiennent des modèles SCS modifiés. Correction proposée dans `MENTIONS_PRODUITS.md`.
-4. **Autorisations non archivées** : Citerne (AkirixDesign3D, Gaming ModdinG) et Madame Afro (SergioSomf ?).
+4. **Autorisations non archivées** : Madame Afro (SergioSomf ?) et templates MDT. Citerne : modèle acheté (facture à garder).
    Le catalogue dit « avec autorisation » mais aucune preuve n'est conservée.
 5. **Polices chargées depuis Google** : la tablette contacte fonts.googleapis.com (adresse IP du joueur transmise).
 6. **Mentions de licence incohérentes** entre `TSC_Photoreal.fx` (« libre d'utilisation pour les membres TSC ») et le
