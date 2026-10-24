@@ -68,15 +68,13 @@ Une mention de copyright informe ; elle ne prouve pas à elle seule la propriét
 - Crédit proposé : « Cuir, broderies et noms © Truck So Clean France (Poutine). Intérieur d'origine : SCS Software.
   Scania est une marque de Scania AB. »
 
-## Citerne TSC by AkirixDesign3D 1.6.1 et compat MDT Ekeri 1.0
+## Citerne TSC et compat MDT Ekeri
 
-- Modèle : AkirixDesign3D, base Gaming ModdinG (pas de © TSCF sur le modèle). Peintures, noms, effet irisé et 328 points
-  de feux © Truck So Clean France, conception Poutine / TSCF.
-- Crédit catalogue actuel : « … Peintures : Poutine, propriété Truck So Clean France » → correct si la propriété ne vise
-  que les peintures ; formulation proposée : « Modèle : AkirixDesign3D, base Gaming ModdinG. Peintures et noms ©
-  Truck So Clean France (Poutine). »
-- **Statut : à clarifier.** Aucune preuve d'autorisation archivée. À conserver dans `registre/preuves/` : capture de
-  l'accord, date, et ce qui est permis (modifier, redistribuer, publier sur GitHub).
+- Le mod appartient à TSCF (Poutine) : peintures, noms, effet irisé, 328 points de feux et définitions.
+- Le modèle 3D est l'œuvre d'AkirixDesign3D, acheté par Poutine (confirmé le 24/10/2026). Acheter un modèle donne une
+  licence d'utilisation, pas ses droits d'auteur : on crédite AkirixDesign3D et on ne met pas de © TSCF sur le modèle.
+- À garder dans `registre/preuves/` : la facture et les conditions de la licence d'achat.
+- Crédit proposé : « Modèle 3D : AkirixDesign3D. Peintures, noms et points de feux © Truck So Clean France (Poutine). »
 - Compat MDT Ekeri : aucun fichier MDT inclus ; le joueur installe le mod MDT à part.
 
 ## Madame Afro TSC 1.0.0
