@@ -80,11 +80,11 @@ Une mention de copyright informe ; elle ne prouve pas à elle seule la propriét
 
 ## Madame Afro TSC 1.0.0
 
-- Modèle de la passagère : modèle gratuit récupéré, **auteur inconnu** (confirmé par Poutine le 24/10/2026). Gratuit ne
-  veut pas dire libre : sans auteur ni licence, on ne peut ni créditer ni prouver le droit de diffuser.
-- Écusson : © Truck So Clean France.
-- **Statut : à clarifier.** Retrouver l'auteur et son accord, ou remplacer le modèle. Le crédit actuel du catalogue
-  (« SergioSomf, avec autorisation ») est à retirer s'il n'est pas exact.
+- Modèle de la passagère : modèle gratuit, déclaré libre de droits par Poutine (24/10/2026), auteur et page source
+  inconnus. Pas de © TSCF sur le modèle. Écusson : © Truck So Clean France.
+- Crédit proposé pour le catalogue : « Modèle de passagère : auteur inconnu (libre de droits). Écusson © Truck So Clean
+  France. » (remplace « SergioSomf, avec autorisation »).
+- Si un auteur se manifeste : suspendre le mod et suivre la procédure de signalement.
 
 ## Mods GPS TSC
 

@@ -27,10 +27,11 @@ Le copyright TSCF ne porte que sur les créations TSCF de la première liste.
 
 - Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png : Captures d'Euro Truck Simulator 2 © SCS Software.
 - Bibliothèques de construction : numpy, scipy, Pillow, goversioninfo, Go : Lanceur compilé avec Go © The Go Authors (BSD).
-- Données de carte roads.json / junctions.json (« Grand Utopia ») : Données de carte d'après Grand Utopia de MyGodness.
+- Données de carte roads.json / junctions.json (« Grand Utopia ») : Données de carte d'après Grand Utopia de MyGodness (le pilote de tête qui les lit est une création TSCF).
 - MDT Ekeri Full Trailer Addon (pare-chocs, bavettes) : Pièces : MDT (à installer à part).
 - Microsoft WebView2 (Core, WinForms, Loader) : Microsoft WebView2 © Microsoft Corporation.
 - Mods GPS TSC (7 .scs : carbone, nuit, rouge, carte, couleurs) : Basé sur Euro Truck Simulator 2 © SCS Software. Habillage TSCF.
+- Modèle de passagère (mod afro.scs, gratuit) : Modèle de passagère : auteur inconnu (modèle libre de droits).
 - Modèles, matériaux et textures SCS Software modifiés (bétaillère scs_livestock et coffres, intérieur Scania R/S 2016, défs benne scs_dumper, kit Wielton) : Modèles d'origine © SCS Software. Scania, Volvo, Wielton : marques de leurs propriétaires. TSCF n'est affilié à aucun d'eux.
 - OpenTrack, cloudflared, ReShade, PresentMon 2.6.0 : OpenTrack, cloudflared (Cloudflare), ReShade (crosire), PresentMon (Intel) appartiennent à leurs auteurs.
 - Photo du Mont-Saint-Michel au coucher de soleil : Photo : Burcin Sahin (Pexels).

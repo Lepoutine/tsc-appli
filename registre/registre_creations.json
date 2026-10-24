@@ -532,7 +532,7 @@
       "autorisations": "Aucune trace",
       "modifications": "Routes et carrefours convertis en roads.json / junctions.json",
       "redistribution": "À suspendre : le fichier est livré avec l'appli",
-      "credits": "Données de carte d'après Grand Utopia de MyGodness.",
+      "credits": "Données de carte d'après Grand Utopia de MyGodness (le pilote de tête qui les lit est une création TSCF).",
       "projets": [
         "Pilote de tête (tests et mode carte)"
       ],
@@ -661,26 +661,25 @@
     },
     {
       "id": "afro_sergiosomf",
-      "nom": "Modèle de passagère (mod afro.scs, gratuit, auteur inconnu)",
+      "nom": "Modèle de passagère (mod afro.scs, gratuit)",
       "categorie": "modèle 3D",
       "origine": "modification_tierce",
       "auteurs": [
-        "Inconnu (modèle gratuit récupéré par Poutine ; l'ancien crédit « SergioSomf » n'est pas confirmé)"
+        "Inconnu"
       ],
       "source": "Downloads\\afro.scs (mod tiers)",
-      "licence": "Inconnue : gratuit ne veut pas dire libre de droits",
-      "autorisations": "Aucune (auteur inconnu, confirmé par Poutine le 24/10/2026)",
+      "licence": "Déclaré libre de droits par Poutine (24/10/2026), sans page source",
+      "autorisations": "Déclaration de Poutine ; aucune page ni licence écrite retrouvée",
       "modifications": "Écusson TSC (création TSCF, déjà couverte par le logo) et repackaging autonome",
-      "redistribution": "À suspendre jusqu'à la preuve d'autorisation",
-      "credits": "À définir (auteur du modèle inconnu).",
+      "redistribution": "Dans Madame Afro TSC, tant qu'aucun auteur ne se manifeste",
+      "credits": "Modèle de passagère : auteur inconnu (modèle libre de droits).",
       "projets": [
         "Madame Afro TSC 1.0.0"
       ],
-      "statut": "a_clarifier",
+      "statut": "distribuable_sous_conditions",
       "a_faire": [
-        "Retrouver l'auteur (page de téléchargement d'origine, manifest du mod) et lui demander son accord",
-        "Sinon : remplacer le modèle par un modèle sous licence claire avant la prochaine diffusion",
-        "Retirer « SergioSomf (avec autorisation) » du catalogue s'il n'est pas l'auteur"
+        "Retirer « SergioSomf (avec autorisation) » du catalogue",
+        "Si un auteur se manifeste : suspendre le mod et appliquer la procédure de PROTECTION_ET_SIGNALEMENT.md"
       ],
       "verifie_le": "2026-10-24"
     },

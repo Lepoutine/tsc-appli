@@ -68,7 +68,7 @@ renommer sa DLL.
    Reste : `carte/roads.json` (« Grand Utopia ») vient de la carte de MyGodness et est livré avec l'appli sans accord connu.
 3. **Crédits du catalogue** : plusieurs mods portent « Créations de Poutine – propriété de Truck So Clean France » alors
    qu'ils contiennent des modèles SCS modifiés. Correction proposée dans `MENTIONS_PRODUITS.md`.
-4. **Autorisations non archivées** : Madame Afro (modèle gratuit, auteur inconnu) et templates MDT. Citerne : modèle acheté (facture à garder).
+4. **Autorisations non archivées** : templates MDT. Madame Afro : modèle déclaré libre de droits, sans source. Citerne : modèle acheté (facture à garder).
    Le catalogue dit « avec autorisation » mais aucune preuve n'est conservée.
 5. **Polices chargées depuis Google** : la tablette contacte fonts.googleapis.com (adresse IP du joueur transmise).
 6. **Mentions de licence incohérentes** entre `TSC_Photoreal.fx` (« libre d'utilisation pour les membres TSC ») et le
