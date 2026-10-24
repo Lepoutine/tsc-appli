@@ -1,0 +1,2 @@
+Captures datées des pages de licence et des accords d'auteurs.
+Nom : <id_du_registre>_<AAAA-MM-JJ>.png (ex. citerne_akirix_2026-10-24.png).
