@@ -1,0 +1,8 @@
+{
+  "camions": [
+    { "id": "scania_r_2016", "nom": "Scania R 2016 (modèle réel du jeu)", "fichier": "scania_r_2016.glb" }
+  ],
+  "remorques": [
+    { "id": "citerne_tsc", "nom": "Citerne TSC (modèle réel du mod)", "fichier": "citerne_tsc.glb" }
+  ]
+}
