@@ -11,7 +11,7 @@
 | Interdit d'utilisation ou de distribution | 1 |
 | Distribution à suspendre jusqu'à la preuve (règle 1.4) | 7 |
 | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | 2 |
-| Peut être distribué avec les crédits indiqués | 19 |
+| Peut être distribué avec les crédits indiqués | 22 |
 | Utilisé ou téléchargé par le joueur, jamais redistribué par TSCF | 6 |
 
 ## À clarifier ou bloqué
@@ -42,11 +42,13 @@
 | Bibliothèques de construction : numpy, scipy, Pillow, goversioninfo, Go | bibliothèque | Logiciel, bibliothèque, police ou service externe (non TSCF) | Projets NumPy, SciPy, Pillow ; josephspurrier (goversioninfo) ; The Go Authors | numpy, scipy : BSD 3 clauses ; Pillow : MIT-CMU (HPND) ; goversioninfo : MIT ; Go : BSD 3 clauses | Peut être distribué avec les crédits indiqués | Build de l'appli et des mods |
 | QR Code Generator for JavaScript (ui/qrcode.js) | bibliothèque | Logiciel, bibliothèque, police ou service externe (non TSCF) | Kazuhiko Arase | MIT (ui/LICENSE_qrcode.txt) | Peut être distribué avec les crédits indiqués | Appli TSC 2.14.27 (tablette mobile) |
 | SCS SDK (télémétrie et entrées) | bibliothèque | Logiciel, bibliothèque, police ou service externe (non TSCF) | SCS Software | MIT | Peut être distribué avec les crédits indiqués | Appli TSC 2.14.27 |
+| Three.js 0.170 (moteur 3D du Spartan Studio) | bibliothèque | Logiciel, bibliothèque, police ou service externe (non TSCF) | three.js authors | MIT (studio/vendor/three/LICENSE) | Peut être distribué avec les crédits indiqués | TSCF Spartan Studio |
 | Microsoft WebView2 (Core, WinForms, Loader) | bibliothèque | Logiciel, bibliothèque, police ou service externe (non TSCF) | Microsoft Corporation | Licence BSD de Microsoft (LICENSE_WebView2.md) | Peut être distribué avec les crédits indiqués | Appli TSC 2.14.27 |
 | scs-telemetry.dll | bibliothèque / plugin | Logiciel, bibliothèque, police ou service externe (non TSCF) | Hans (scs-sdk-plugin) | MIT | Peut être distribué avec les crédits indiqués | Appli TSC 2.14.27 |
 | tsc-commandes.dll (plugin d'entrée SCS SDK) | bibliothèque / plugin | Création TSCF réalisée à partir d'une ressource tierce autorisée | Poutine / TSCF | Propriétaire TSCF (LICENSE_tsc-commandes.txt) ; construit sur le SCS SDK (MIT) | Peut être distribué avec les crédits indiqués | Appli TSC 2.14.27 |
 | Code de l'Appli TSC (lanceur Go, scripts PowerShell, tablette HTML/JS, overlays, pilote de tête, tachygraphe, tickets) | code source | Création intégralement originale de TSCF | Poutine / TSCF (écrit avec l'assistance de Claude, Anthropic) | Licence propriétaire TSCF (Tete_Pilote_TSC/LICENCE.txt) | Peut être distribué avec les crédits indiqués | Appli TSC 2.14.27 ; TSC Driver |
 | CityHash64 1.0.3 (réimplémentation Python, tests_pilote/hashfs/cityhash.py) | code source | Création TSCF réalisée à partir d'une ressource tierce autorisée | Google (algorithme, Geoff Pike et Jyrki Alakuijala) ; TSCF (portage Python) | MIT | Peut être distribué avec les crédits indiqués | Outils de modding (lecture HashFS) |
+| TSCF Spartan Studio (atelier 3D de livrées : interface, projection de livrée, convertisseur de modèles SCS) | code source | Création intégralement originale de TSCF | Poutine / TSCF (écrit avec l'assistance de Claude, Anthropic) | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | TSCF Spartan Studio |
 | Outils de modding TSCF (scs_model.py, pmg.py, dds.py, hashfs2.py, générateurs de mods) | code source / script | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Chaîne de production des mods ; futur TSCF Creation Studio |
 | TSC Performance Lab (scripts de diagnostic PowerShell) | code source / script | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | TSC Performance Lab |
 | Presets TSC pour TM MasterGrade (reshade/tm/) | configuration | Création TSCF réalisée à partir d'une ressource tierce autorisée | TSCF (réglages) | Réglages TSCF ; le shader TM_MasterGrade.fx n'est PAS fourni | Peut être distribué avec les crédits indiqués | Appli TSC (Rendu TSC) |
@@ -54,6 +56,7 @@
 | Photo du Mont-Saint-Michel au coucher de soleil | photo | Logiciel, bibliothèque, police ou service externe (non TSCF) | Burcin Sahin | Licence Pexels | Peut être distribué avec les crédits indiqués | Bétaillère Normandie 1.3-1.5 ; Benne Normandie Show 1.1 ; Vidéo bêta |
 | Police DejaVu Sans | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Projet DejaVu (d'après Bitstream Vera) | Licence Bitstream Vera + domaine public (modifications DejaVu) | Peut être distribué avec les crédits indiqués | Vidéo bêta (sous-titres) ; Kit templates (légendes) |
 | Police Great Vibes | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Robert Leuschke (TypeSETit) | SIL Open Font License 1.1 | Peut être distribué avec les crédits indiqués | Bétaillère Normandie ; Benne Normandie Show ; Citerne TSC v1.6 (noms) ; Vidéo bêta ; Vignettes |
+| Polices Saira, Rajdhani, Kaushan Script, Great Vibes (Spartan Studio) | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Omnibus-Type (Saira) ; Indian Type Foundry (Rajdhani) ; Impallari Type (Kaushan Script) ; TypeSETit (Great Vibes) | SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt) | Peut être distribué avec les crédits indiqués | TSCF Spartan Studio |
 | Sons de portière (porte_ouvre.mp3, porte_ferme.mp3) | son | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Appli TSC (mode à pied) |
 | Échappement V8, turbo et air comprimé (echap.js, echap_dsp.js, echap_worklet.js) | son / code | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Appli TSC ; Musique d'intro |
 | Bande-son de la vidéo bêta TSC Driver | son / musique | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Vidéo bêta officielle |
@@ -288,6 +291,23 @@
 - À faire : —
 - Vérifié le : 2026-10-24
 
+### Three.js 0.170 (moteur 3D du Spartan Studio)
+
+- Identifiant : `threejs`
+- Catégorie : bibliothèque
+- Origine : Logiciel, bibliothèque, police ou service externe (non TSCF)
+- Auteurs : three.js authors
+- Source : npm three@0.170.0, copié dans studio/vendor/three
+- Licence : MIT (studio/vendor/three/LICENSE)
+- Autorisations : Licence libre
+- Modifications : Aucune
+- Redistribution : Autorisée avec la notice MIT
+- Crédits à afficher : Three.js © 2010-2024 three.js authors, licence MIT.
+- Projets : TSCF Spartan Studio
+- Statut : Peut être distribué avec les crédits indiqués
+- À faire : —
+- Vérifié le : 2026-10-24
+
 ### Microsoft WebView2 (Core, WinForms, Loader)
 
 - Identifiant : `webview2`
@@ -371,6 +391,23 @@
 - Projets : Outils de modding (lecture HashFS)
 - Statut : Peut être distribué avec les crédits indiqués
 - À faire : Ajouter la notice MIT de Google en tête du fichier
+- Vérifié le : 2026-10-24
+
+### TSCF Spartan Studio (atelier 3D de livrées : interface, projection de livrée, convertisseur de modèles SCS)
+
+- Identifiant : `spartan_studio`
+- Catégorie : code source
+- Origine : Création intégralement originale de TSCF
+- Auteurs : Poutine / TSCF (écrit avec l'assistance de Claude, Anthropic)
+- Source : studio/ (ce dépôt)
+- Licence : Propriétaire TSCF
+- Autorisations : Sans objet
+- Modifications : Sans objet
+- Redistribution : TSCF
+- Crédits à afficher : © 2026 Truck So Clean France.
+- Projets : TSCF Spartan Studio
+- Statut : Peut être distribué avec les crédits indiqués
+- À faire : Les modèles .glb convertis depuis le jeu ou des mods (SCS, AkirixDesign3D...) restent sur le PC : jamais publiés ni distribués ; Emblème de l'en-tête (studio/css/embleme.png) découpé dans la planche TSCF du 24/10/2026 : confirmer que la planche est une création TSCF
 - Vérifié le : 2026-10-24
 
 ### Outils de modding TSCF (scs_model.py, pmg.py, dds.py, hashfs2.py, générateurs de mods)
@@ -488,6 +525,23 @@
 - Redistribution : Le fichier de police n'est pas distribué ; les textures qui l'utilisent sont libres de droits côté police
 - Crédits à afficher : Police Great Vibes © Robert Leuschke (TypeSETit), SIL Open Font License 1.1.
 - Projets : Bétaillère Normandie ; Benne Normandie Show ; Citerne TSC v1.6 (noms) ; Vidéo bêta ; Vignettes
+- Statut : Peut être distribué avec les crédits indiqués
+- À faire : —
+- Vérifié le : 2026-10-24
+
+### Polices Saira, Rajdhani, Kaushan Script, Great Vibes (Spartan Studio)
+
+- Identifiant : `polices_spartan_studio`
+- Catégorie : police
+- Origine : Logiciel, bibliothèque, police ou service externe (non TSCF)
+- Auteurs : Omnibus-Type (Saira) ; Indian Type Foundry (Rajdhani) ; Impallari Type (Kaushan Script) ; TypeSETit (Great Vibes)
+- Source : npm @fontsource 5.1.0, copiées dans studio/vendor/polices
+- Licence : SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt)
+- Autorisations : Licence libre
+- Modifications : Aucune
+- Redistribution : Autorisée avec la licence OFL, pas de vente des polices seules
+- Crédits à afficher : Polices Saira, Rajdhani et Kaushan Script, SIL Open Font License 1.1.
+- Projets : TSCF Spartan Studio
 - Statut : Peut être distribué avec les crédits indiqués
 - À faire : —
 - Vérifié le : 2026-10-24
