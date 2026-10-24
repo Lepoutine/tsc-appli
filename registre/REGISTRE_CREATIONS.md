@@ -9,8 +9,8 @@
 | Statut | Nombre |
 |---|---|
 | Interdit d'utilisation ou de distribution | 1 |
-| Distribution à suspendre jusqu'à la preuve (règle 1.4) | 2 |
-| Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | 5 |
+| Distribution à suspendre jusqu'à la preuve (règle 1.4) | 1 |
+| Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | 6 |
 | Peut être distribué avec les crédits indiqués | 23 |
 | Utilisé ou téléchargé par le joueur, jamais redistribué par TSCF | 6 |
 
@@ -18,7 +18,6 @@
 
 - **4 images du film 300 (photos_poutine/film_300_*.jpg)** (Interdit d'utilisation ou de distribution) : ne pas utiliser
 - **Données de carte roads.json / junctions.json (« Grand Utopia »)** (Distribution à suspendre jusqu'à la preuve) : Demander à MyGodness son accord pour livrer ces données avec l'appli ; Sinon : ne plus livrer roads.json (le pilote de tête marche sans carte et apprend les carrefours seul) et le garder pour les tests internes
-- **Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png** (Distribution à suspendre jusqu'à la preuve) : Mendy : confirmer que ce sont ses captures du jeu
 
 ## Toutes les ressources
 
@@ -26,7 +25,7 @@
 |---|---|---|---|---|---|---|
 | 4 images du film 300 (photos_poutine/film_300_*.jpg) | image | Logiciel, bibliothèque, police ou service externe (non TSCF) | Warner Bros. / Legendary | Œuvre protégée, aucune licence | Interdit d'utilisation ou de distribution | — |
 | Données de carte roads.json / junctions.json (« Grand Utopia ») | données | Modification d'une ressource appartenant à un tiers | MyGodness (carte Grand Utopia) | Conditions de MyGodness (inconnues) | Distribution à suspendre jusqu'à la preuve (règle 1.4) | Pilote de tête (tests et mode carte) |
-| Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png | image | Origine ou droits non établis | Probablement captures d'écran TSCF du jeu | Captures d'ETS2 : contenu du jeu © SCS Software | Distribution à suspendre jusqu'à la preuve (règle 1.4) | Appli TSC 2.14.27 |
+| Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png | image | Modification d'une ressource appartenant à un tiers | Captures d'écran de Poutine / TSCF (contenu du jeu © SCS Software) | Captures d'ETS2 : contenu du jeu © SCS Software | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Appli TSC 2.14.27 |
 | Modèle de passagère (mod afro.scs, gratuit) | modèle 3D | Modification d'une ressource appartenant à un tiers | Inconnu | Déclaré libre de droits par Poutine (24/10/2026), sans page source | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Madame Afro TSC 1.0.0 |
 | Modèle 3D de citerne AkirixDesign3D (acheté par Poutine) | modèle 3D | Création TSCF réalisée à partir d'une ressource tierce autorisée | AkirixDesign3D (modèle 3D) ; base Gaming ModdinG (selon l'ancien crédit, à confirmer) | Licence d'achat du modèle (conditions du vendeur à archiver) | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Citerne TSC (pack remorques) |
 | Modèles, matériaux et textures SCS Software modifiés (bétaillère scs_livestock et coffres, intérieur Scania R/S 2016, défs benne scs_dumper, kit Wielton) | modèle 3D / texture | Modification d'une ressource appartenant à un tiers | SCS Software (et constructeurs sous licence : Scania, Wielton) | Contenu propriétaire SCS Software | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Bétaillère Normandie ; Cuir Scania 2016 ; Benne Normandie Show ; Kit templates |
@@ -102,17 +101,17 @@
 
 - Identifiant : `ui_apercus_jeu`
 - Catégorie : image
-- Origine : Origine ou droits non établis
-- Auteurs : Probablement captures d'écran TSCF du jeu
-- Source : Tete_Pilote_TSC/ui/ (état du 16/10/2026)
+- Origine : Modification d'une ressource appartenant à un tiers
+- Auteurs : Captures d'écran de Poutine / TSCF (contenu du jeu © SCS Software)
+- Source : Captures faites par Poutine dans ETS2 (confirmé le 24/10/2026)
 - Licence : Captures d'ETS2 : contenu du jeu © SCS Software
-- Autorisations : Usage communautaire toléré des captures (à confirmer)
-- Modifications : Inconnues
-- Redistribution : Dans l'appli seulement
+- Autorisations : Usage communautaire des captures d'écran du jeu
+- Modifications : Captures du jeu avec les mods TSC
+- Redistribution : Dans l'appli TSC uniquement
 - Crédits à afficher : Captures d'Euro Truck Simulator 2 © SCS Software.
 - Projets : Appli TSC 2.14.27
-- Statut : Distribution à suspendre jusqu'à la preuve (règle 1.4)
-- À faire : Mendy : confirmer que ce sont ses captures du jeu
+- Statut : Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires)
+- À faire : —
 - Vérifié le : 2026-10-24
 
 ### Modèle de passagère (mod afro.scs, gratuit)

@@ -277,23 +277,21 @@
       "id": "ui_apercus_jeu",
       "nom": "Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png",
       "categorie": "image",
-      "origine": "a_clarifier",
+      "origine": "modification_tierce",
       "auteurs": [
-        "Probablement captures d'écran TSCF du jeu"
+        "Captures d'écran de Poutine / TSCF (contenu du jeu © SCS Software)"
       ],
-      "source": "Tete_Pilote_TSC/ui/ (état du 16/10/2026)",
+      "source": "Captures faites par Poutine dans ETS2 (confirmé le 24/10/2026)",
       "licence": "Captures d'ETS2 : contenu du jeu © SCS Software",
-      "autorisations": "Usage communautaire toléré des captures (à confirmer)",
-      "modifications": "Inconnues",
-      "redistribution": "Dans l'appli seulement",
+      "autorisations": "Usage communautaire des captures d'écran du jeu",
+      "modifications": "Captures du jeu avec les mods TSC",
+      "redistribution": "Dans l'appli TSC uniquement",
       "credits": "Captures d'Euro Truck Simulator 2 © SCS Software.",
       "projets": [
         "Appli TSC 2.14.27"
       ],
-      "statut": "a_clarifier",
-      "a_faire": [
-        "Mendy : confirmer que ce sont ses captures du jeu"
-      ],
+      "statut": "distribuable_sous_conditions",
+      "a_faire": [],
       "verifie_le": "2026-10-24"
     },
     {
