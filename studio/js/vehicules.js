@@ -97,7 +97,7 @@ export function citerneProvisoire() {
 }
 
 // Modèle réel converti : les matières sont reprises d'après la catégorie écrite par le convertisseur
-const CATEGORIE = { peinture: 'peinture', chrome: 'chrome', verre: 'verre', feu: 'feu', noir: 'noir', pneu: 'pneu' };
+const CATEGORIE = { peinture: 'peinture', chrome: 'chrome', alu: 'alu', verre: 'verre', feu: 'feu', noir: 'noir', pneu: 'pneu' };
 export async function chargerGlb(url, nom, type) {
   const gltf = await new GLTFLoader().loadAsync(url);
   const g = gltf.scene, locs = {};

@@ -16,22 +16,33 @@ def lire_mat(racine, chemin):
     t = open(p, encoding='utf-8', errors='replace').read()
     e = re.search(r'effect\s*:\s*"([^"]+)"', t); d = re.search(r'diffuse\s*:\s*\{\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)', t)
     f = re.search(r'env_factor\s*:\s*\{\s*([\d.]+)', t)
-    return {'effet': e.group(1) if e else '', 'diffuse': [float(x) for x in d.groups()] if d else [1, 1, 1], 'env': float(f.group(1)) if f else (1.0 if 'env' in (e.group(1) if e else '') else 0)}
+    # la teinte reelle vient de la texture de base : son nom (plastic_hard, galvanized_steel...) suffit a choisir la matiere
+    b = re.search(r'"texture_base"\s*\{\s*source\s*:\s*"([^"]+)"', t)
+    return {'texture': b.group(1).lower() if b else '', 'effet': e.group(1) if e else '', 'diffuse': [float(x) for x in d.groups()] if d else [1, 1, 1], 'env': float(f.group(1)) if f else (1.0 if 'env' in (e.group(1) if e else '') else 0)}
 
 def classer(nom, m):
-    n = nom.split('/')[-1].lower(); e = m['effet']; lum = sum(m['diffuse']) / 3
-    if n.startswith(('golge', 'fakeshadow')) or 'shadow_only' in e or 'fakeshadow' in e: return None
+    n = nom.split('/')[-1].lower(); e = m['effet']; lum = sum(m['diffuse']) / 3; tx = m.get('texture', '')
+    if n.startswith(('golge', 'fakeshadow')) or 'shadowonly' in e or 'shadow_only' in e or 'fakeshadow' in e: return None
     if 'truckpaint' in e: return 'peinture'
     if 'glass' in e: return 'feu' if any(k in n for k in ('stob', 'stop', 'lamp', 'feu')) else 'verre'
     if 'stob' in n or 'stopl' in n: return 'feu'
+    if 'lamp' in e or 'lamp' in tx: return 'chrome'
+    if any(k in tx for k in ('tire', 'tyre', 'rubber')): return 'pneu'
+    if 'chrome' in tx: return 'chrome'
+    if any(k in tx for k in ('steel', 'alu', 'metal')): return 'alu'
+    if 'white' in tx: return 'couleur'
+    if any(k in tx for k in ('plastic', 'black', 'dark', 'gray', 'grey', 'carbon')): return 'noir'
     if 'env' in e and m['env'] >= 0.4 and lum > 0.25: return 'chrome'
     if lum < 0.12: return 'noir'
     return 'couleur'
 
-def lire_modele(S, racine, pmg, look):
+def lire_modele(S, racine, pmg, look, parties=None):
     g = S.PMG(os.path.join(racine, pmg)); d = S.PMD(os.path.join(racine, pmg[:-4] + '.pmd')); mats = d.look(look)
-    lots = {}
-    for p in g.pieces:
+    # parties gardees (ex. defaultpart + eu_part : jamais la version UK) ; sans filtre, toutes
+    gardees = [i for i, q in enumerate(g.parts) if not parties or S.untoken(q[0]) in parties]
+    proprio = g.piece_part(); lots = {}
+    for i, p in enumerate(g.pieces):
+        if proprio.get(i, 0) not in gardees: continue
         nom = mats[p.mat]; m = lire_mat(racine, nom); k = classer(nom, m)
         if k == 'couleur' and 'tire' in os.path.basename(pmg): k = 'pneu'
         if not k: continue
@@ -46,7 +57,7 @@ def lire_modele(S, racine, pmg, look):
         cle = (k, tuple(round(c, 3) for c in m['diffuse'])) if k != 'peinture' else (k, ())
         lots.setdefault(cle, []).append((pos, nrm, uv, t))
     locs = []
-    for i in range(len(g.locs) // 44):
+    for i in sorted(k for j in gardees for k in range(g.parts[j][4], g.parts[j][4] + g.parts[j][3])):
         h, x, y, z, sc, qw, qx, qy, qz, _ = struct.unpack('<Q8fi', g.locs[44 * i:44 * i + 44])
         locs.append((S.untoken(h), [x, y, z], [qx, qy, qz, qw]))
     return lots, locs
@@ -87,28 +98,50 @@ class GLB:
         out = struct.pack('<III', 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(s.bin)) + struct.pack('<II', len(js), 0x4E4F534A) + js + struct.pack('<II', len(s.bin), 0x004E4942) + bytes(s.bin)
         open(chemin, 'wb').write(out)
 
+def poser_roues(G, S, racine, chemins, locs, prefixe, enfants):
+    rl = {}
+    for r in chemins:
+        l2, _ = lire_modele(S, racine, r, 0)
+        for k, v in l2.items(): rl.setdefault(k, []).extend(v)
+    mr = G.maillage('roue_' + prefixe, rl)
+    for nom, p, q in locs:
+        if nom.startswith(prefixe):
+            # les roues SCS sont modelisees pour le cote gauche : on les retourne de 180 degres a droite
+            d = {'name': 'roue_' + nom, 'mesh': mr, 'translation': p}
+            if p[0] > 0: d['rotation'] = [0, 1, 0, 0]
+            enfants.append(G.noeud(d))
+
 def main():
-    a = argparse.ArgumentParser(); a.add_argument('--code', required=True); a.add_argument('--racine', required=True); a.add_argument('--modele', required=True)
-    a.add_argument('--roue', action='append', default=[]); a.add_argument('--look', type=int, default=0); a.add_argument('--sortie', required=True)
-    a.add_argument('--nom', default=None)
+    a = argparse.ArgumentParser(); a.add_argument('--code', required=True); a.add_argument('--racine', required=True)
+    a.add_argument('--modele', action='append', required=True, help='un ou plusieurs modeles dans le meme repere (ex. cabine + chassis)')
+    a.add_argument('--parties', default='', help='parties a garder, separees par des virgules (ex. defaultpart,eu_part)')
+    a.add_argument('--accessoire', action='append', default=[], help='accessoire pose sur le repere qui porte le nom de son dossier (ou nom_r, nom_rh)')
+    a.add_argument('--roue', action='append', default=[]); a.add_argument('--roue-avant', action='append', default=[])
+    a.add_argument('--roue-arriere', action='append', default=[]); a.add_argument('--sellette', default=None, help='repere de la sellette (ex. hook_t)')
+    a.add_argument('--look', type=int, default=0); a.add_argument('--sortie', required=True); a.add_argument('--nom', default=None)
     o = a.parse_args(); sys.path.insert(0, o.code); import scs_model as S
-    lots, locs = lire_modele(S, o.racine, o.modele, o.look)
+    parties = set(filter(None, o.parties.split(','))); lots, locs = {}, []
+    for m in o.modele:
+        l2, lc = lire_modele(S, o.racine, m, o.look, parties)
+        for k, v in l2.items(): lots.setdefault(k, []).extend(v)
+        locs += [x for x in lc if x[0] not in {y[0] for y in locs}]
     G = GLB(); enfants = [G.noeud({'name': 'corps', 'mesh': G.maillage('corps', lots)})]
-    if o.roue:
-        rl = {}
-        for r in o.roue:
-            l2, _ = lire_modele(S, o.racine, r, 0)
-            for k, v in l2.items(): rl.setdefault(k, []).extend(v)
-        mr = G.maillage('roue', rl)
-        for nom, p, q in locs:
-            if nom.startswith('wheel'):
-                # les roues SCS sont modelisees pour le cote gauche : on les retourne de 180 degres a droite
-                d = {'name': 'roue_' + nom, 'mesh': mr, 'translation': p}
-                if p[0] > 0: d['rotation'] = [0, 1, 0, 0]
-                enfants.append(G.noeud(d))
+    reperes = {n: (p, q) for n, p, q in locs}
+    for acc in o.accessoire:
+        dossier = acc.replace('\\', '/').split('/')[-2]
+        nom = next((n for n in (dossier, dossier + '_r', dossier + '_rh') if n in reperes), None)
+        if not nom: print('repere introuvable pour', acc); continue
+        l2, _ = lire_modele(S, o.racine, acc, 0)
+        if not l2: continue
+        p, q = reperes[nom]
+        enfants.append(G.noeud({'name': 'acc_' + dossier, 'mesh': G.maillage(dossier, l2), 'translation': p, 'rotation': q}))
+    if o.roue: poser_roues(G, S, o.racine, o.roue, locs, 'wheel', enfants)
+    if o.roue_avant: poser_roues(G, S, o.racine, o.roue_avant, locs, 'wheel_f', enfants)
+    if o.roue_arriere: poser_roues(G, S, o.racine, o.roue_arriere, locs, 'wheel_r', enfants)
     for nom, p, q in locs: enfants.append(G.noeud({'name': 'loc:' + nom, 'translation': p, 'rotation': q}))
+    if o.sellette in reperes: enfants.append(G.noeud({'name': 'loc:fifth_wheel', 'translation': reperes[o.sellette][0]}))
     G.noeud({'name': o.nom or os.path.splitext(os.path.basename(o.sortie))[0], 'children': enfants}, racine=True)
     G.ecrire(o.sortie)
-    print('ok', o.sortie, os.path.getsize(o.sortie) // 1024, 'Ko', {k[0]: len(v) for k, v in lots.items()})
+    print('ok', o.sortie, os.path.getsize(o.sortie) // 1024, 'Ko', len(o.accessoire), 'accessoires', {k[0]: len(v) for k, v in lots.items()})
 
 if __name__ == '__main__': main()

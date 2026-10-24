@@ -11,6 +11,9 @@ Essais dans Chromium (rendu logiciel SwiftShader) sur un serveur local, captures
 | Conversion de la vraie citerne TSC (mod AkirixDesign3D) en .glb : 54 pièces, ombres factices écartées, sens des faces SCS corrigé, roues posées sur les repères `wheel_*` | Validé (15 Mo) |
 | Chargement de la citerne réelle, attelage sur le repère `hook` (z −4,99) | Validé |
 | Tracteur provisoire type Scania R, signalé par le bandeau orange | Validé |
+| Vrai Scania R 2016 converti depuis les fichiers du jeu : cabine R haute + châssis 4x2 (parties « défaut » et « EU », jamais UK), 33 accessoires posés sur leurs repères, roues avant et arrière jumelées, sellette sur `hook_t` | Validé (5 Mo), attelé à la citerne |
+| Matières des pièces non peintes choisies d'après la texture d'origine (plastique noir, acier, pneus, feux) ; ombres factices `shadowonly` écartées | Validé visuellement |
+| Vue de face et de dos cadrée sur la face visée (avant : calandre entière) | Validé |
 | Vues 3/4 avant, gauche, droite, avant, 3/4 arrière | Validé |
 | Modes ensemble, écartés, camion seul | Validé |
 | Éclairages studio photo, coucher de soleil, nuit | Validé |
@@ -23,6 +26,7 @@ Essais dans Chromium (rendu logiciel SwiftShader) sur un serveur local, captures
 | Fluidité sur la carte graphique du PC | **Non mesurée** |
 
 Limites connues :
-- Le camion est un modèle provisoire tant que le Scania R n'a pas été converti depuis les fichiers du jeu sur le PC.
+- Le cadrage 3/4 en mode « camion seul » est décalé dans les captures automatiques (à vérifier à la main).
+- Le texte d'essai TSCF sur la cabine touche le haut du toit : la vraie livrée cabine arrive en phase 3.
 - Les textures d'origine du modèle (ombrage cuit, détails) ne sont pas encore chargées : les pièces non peintes sont en couleurs unies.
 - La livrée d'essai ne sert qu'à juger les matières ; la vraie livrée TSCF éditable arrive en phase 3.

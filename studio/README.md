@@ -30,6 +30,8 @@ python outils/pmg_vers_glb.py --code <code TSC>/tests_pilote/cuir --racine <doss
        --sortie modeles/citerne_tsc.glb
 ```
 
+Le Scania R 2016 s'assemble avec plusieurs `--modele` (cabine + châssis), `--parties defaultpart,eu_part`, un `--accessoire` par pièce (posé sur le repère du même nom), `--roue-avant`, `--roue-arriere` et `--sellette hook_t`.
+
 Puis l'ajouter à `modeles/modeles.json` (`camions` ou `remorques` : `id`, `nom`, `fichier`). Les fichiers `.glb` ne vont pas dans le dépôt.
 
 ## Contenu

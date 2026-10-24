@@ -86,8 +86,14 @@ export class Scene3D {
       trois_quarts: [-0.75, 0.32, -0.62], trois_quarts_arriere: [0.7, 0.3, 0.68],
     };
     const v = new THREE.Vector3(...(dirs[nom] || dirs.trois_quarts)).normalize();
-    // de face ou de dos, l'ensemble paraît étroit : on se rapproche
-    const k = nom === 'avant' || nom === 'arriere' ? Math.max(t.x, t.y) / t.length() * 2.3 : nom === 'dessus' ? 0.9 : 1;
+    if (nom === 'avant' || nom === 'arriere') {
+      // de face ou de dos : on cadre la face visée (largeur et hauteur), pas le centre de l'ensemble
+      const face = c.clone().setZ(nom === 'avant' ? b.min.z : b.max.z);
+      const recul = (Math.max(t.x * 1.1, t.y) / 2 / Math.tan(fov / 2)) * 1.25;
+      this.aller(face.clone().add(v.multiplyScalar(recul)), face.setY(Math.max(1.2, c.y * 0.9)), duree);
+      return;
+    }
+    const k = nom === 'dessus' ? 0.9 : 1;
     this.aller(c.clone().add(v.multiplyScalar(d * k)), c.clone().setY(Math.max(1.2, c.y * 0.9)), duree);
   }
   aller(pos, cible, duree = 650) {
