@@ -30,3 +30,20 @@ Limites connues :
 - Le texte d'essai TSCF sur la cabine touche le haut du toit : la vraie livrée cabine arrive en phase 3.
 - Les textures d'origine du modèle (ombrage cuit, détails) ne sont pas encore chargées : les pièces non peintes sont en couleurs unies.
 - La livrée d'essai ne sert qu'à juger les matières ; la vraie livrée TSCF éditable arrive en phase 3.
+
+## Phase 3 (24/10/2026) : édition de la livrée
+
+Essais automatiques dans Chromium (rendu logiciel), fenêtres 1600×900 et 1280×720, sans erreur dans la console.
+
+| Fonction | Résultat |
+|---|---|
+| Calques séparés camion et remorque, choix dans la liste | Validé |
+| Changer un texte (« TSCF » → « TRUCK SO CLEAN ») et sa couleur (chrome) : la citerne est repeinte aussitôt | Validé (captures) |
+| Ajouter une bande | Validé |
+| Annuler deux fois puis rétablir (Ctrl+Z, Ctrl+Y) | Validé |
+| Clic sur le texte TSCF de la cabine dans la vue 3D : il est choisi, puis glissé à la souris (s 1,25 → 0,86 m) | Validé |
+| Côté droit : texte lisible, non retourné ; lion tourné vers l'avant | Validé (captures) |
+| Sauvegarde automatique sur le PC (stockage du navigateur) | Validé (projet de 2 Ko enregistré) |
+| Export et import du projet (.tscf.json) | Code en place, **non essayé** (boîte de fichier) |
+| Image importée depuis le PC, police Great Vibes, curseurs un par un | Code en place, **non essayés un par un** |
+| Dans l'appli tablette (iframe) et à la souris sur le PC de Mendy | **Non testé** |

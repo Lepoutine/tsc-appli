@@ -651,10 +651,10 @@
     },
     {
       "id": "polices_spartan_studio",
-      "nom": "Polices Saira, Rajdhani, Kaushan Script (Spartan Studio)",
+      "nom": "Polices Saira, Rajdhani, Kaushan Script, Great Vibes (Spartan Studio)",
       "categorie": "police",
       "origine": "externe",
-      "auteurs": ["Omnibus-Type (Saira)", "Indian Type Foundry (Rajdhani)", "Impallari Type (Kaushan Script)"],
+      "auteurs": ["Omnibus-Type (Saira)", "Indian Type Foundry (Rajdhani)", "Impallari Type (Kaushan Script)", "TypeSETit (Great Vibes)"],
       "source": "npm @fontsource 5.1.0, copiées dans studio/vendor/polices",
       "licence": "SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt)",
       "autorisations": "Licence libre",

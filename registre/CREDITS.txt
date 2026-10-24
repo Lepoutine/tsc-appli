@@ -23,7 +23,7 @@ Les composants ci-dessous restent la propriété de leurs auteurs, sous leur pro
 - Police DejaVu Sans : Police DejaVu Sans (licence Bitstream Vera).
 - Police Great Vibes : Police Great Vibes © Robert Leuschke (TypeSETit), SIL Open Font License 1.1.
 - Polices Montserrat, Inter, Kaushan Script (tablette) : Polices Montserrat, Inter et Kaushan Script, SIL Open Font License 1.1.
-- Polices Saira, Rajdhani, Kaushan Script (Spartan Studio) : Polices Saira, Rajdhani et Kaushan Script, SIL Open Font License 1.1.
+- Polices Saira, Rajdhani, Kaushan Script, Great Vibes (Spartan Studio) : Polices Saira, Rajdhani et Kaushan Script, SIL Open Font License 1.1.
 - Presets TSC pour TM MasterGrade (reshade/tm/) : Utilise TM MasterGrade d'Izuan Bakar (à télécharger chez l'auteur).
 - QR Code Generator for JavaScript (ui/qrcode.js) : Générateur de QR code © 2009 Kazuhiko Arase, licence MIT.
 - SCS SDK (télémétrie et entrées) : SCS SDK © 2016 SCS Software, licence MIT.

@@ -19,7 +19,7 @@
   <div class="projet">
     <span class="etiquette">Projet</span>
     <b id="nomProjet">Ensemble Scania R + citerne TSC</b>
-    <span class="phase">Phase 2 · aperçu 3D</span>
+    <span class="phase">Phase 3 · édition de la livrée</span>
   </div>
 </header>
 
@@ -41,12 +41,19 @@
       <label>Éclairage<select id="choixEclairage"></select></label>
     </section>
     <section>
-      <h2>Livrée</h2>
-      <p class="note">Livrée d’essai noir, rouge et or pour juger les matières (laque, rouge nacré, or poli et brossé). Les calques modifiables un par un arrivent en phase 3.</p>
+      <h2>Projet</h2>
+      <div class="boutons4">
+        <button id="annuler" title="Ctrl+Z" disabled>Annuler</button>
+        <button id="refaire" title="Ctrl+Y" disabled>Rétablir</button>
+        <button id="exporter" title="Enregistrer le projet dans un fichier">Exporter</button>
+        <button id="importer" title="Ouvrir un projet enregistré">Importer</button>
+      </div>
+      <input id="fichierProjet" type="file" accept=".json,application/json" hidden>
+      <p class="note">Chaque modification est enregistrée automatiquement sur ce PC.</p>
     </section>
     <section class="aide">
       <h2>Commandes</h2>
-      <p>Glisser : tourner · Molette : zoom · Clic droit : déplacer<br>Double-clic sur le camion : zoom sur ce détail<br>Touches 1 à 6 : vues</p>
+      <p>Clic sur un élément peint : le choisir · Glisser l’élément : le déplacer<br>Glisser ailleurs : tourner · Molette : zoom · Clic droit : déplacer la vue<br>Double-clic : zoom sur le détail · Touches 1 à 6 : vues<br>Flèches : déplacer de 5 cm (Maj : 1 cm) · Suppr : effacer<br>Ctrl+Z / Ctrl+Y : annuler / rétablir · Ctrl+D : dupliquer</p>
     </section>
   </aside>
 
@@ -67,18 +74,29 @@
   </section>
 
   <aside class="panneau droite">
-    <section class="assistant">
-      <h2>Assistant vocal</h2>
-      <div class="micro" aria-disabled="true"><span></span></div>
-      <p class="note">Disponible en phase 4 : tu parles, l’assistant modifie la livrée et te répond à voix haute.</p>
+    <section class="livree">
+      <h2>Livrée</h2>
+      <div class="onglets">
+        <button data-cible="camion" class="on">Camion</button>
+        <button data-cible="remorque">Remorque</button>
+      </div>
+      <div class="ajouts">
+        <span>Ajouter</span>
+        <button data-ajout="texte" title="Ajouter un texte">Texte</button>
+        <button data-ajout="bande" title="Ajouter une bande droite ou inclinée">Bande</button>
+        <button data-ajout="vague" title="Ajouter une vague">Vague</button>
+        <button data-ajout="image" title="Ajouter une image (lion, logo…)">Image</button>
+      </div>
+      <ul id="calques" class="calques"></ul>
+      <button id="repartir" class="discret">Revenir à la livrée de départ</button>
     </section>
     <section>
-      <h2>Historique et versions</h2>
-      <p class="note">Phase 5 : annuler, rétablir, versions nommées, comparaison et sauvegarde automatique.</p>
+      <h2>Élément choisi</h2>
+      <div id="proprietes" class="proprietes"></div>
     </section>
     <section>
-      <h2>Export ETS2</h2>
-      <p class="note">Phase 6 : le mod n’est généré qu’après ta validation de la version définitive.</p>
+      <h2>À venir</h2>
+      <p class="note">Assistant vocal (phase 4), versions nommées et comparaison (phase 5), puis export du mod après ta validation (phase 6).</p>
     </section>
   </aside>
 </main>

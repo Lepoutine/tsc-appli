@@ -1,9 +1,10 @@
-// TSCF Spartan Studio : interface de l'atelier (phase 2 : ensemble 3D, vues, éclairages, livrée d'essai).
+// TSCF Spartan Studio : interface de l'atelier (ensemble 3D, vues, éclairages, édition de la livrée).
 import * as THREE from 'three';
 import { Scene3D, ECLAIRAGES } from './scene.js';
 import { tracteurProvisoire, citerneProvisoire, chargerGlb } from './vehicules.js';
 import { decoupe, projeter } from './projection.js';
-import { Planche, livreeEssai } from './livree.js';
+import { Planche, livreeDepart } from './livree.js';
+import { Editeur } from './editeur.js';
 
 const $ = (id) => document.getElementById(id);
 const S = new Scene3D($('vue3d'));
@@ -23,7 +24,6 @@ function habiller(v, cible) {
     geo.computeBoundingBox(); box.union(geo.boundingBox); pieces.push([o, geo]);
   });
   const plan = decoupe(box, 170), planche = new Planche(plan);
-  planche.peindre(livreeEssai(cible, plan.L, plan.H));
   const mat = new THREE.MeshPhysicalMaterial({ map: planche.texCouleur, roughnessMap: planche.texMatiere, metalnessMap: planche.texMatiere,
     roughness: 1, metalness: 1, clearcoat: 1, clearcoatRoughness: 0.06 });
   for (const [o, geo] of pieces) {
@@ -34,6 +34,16 @@ function habiller(v, cible) {
   }
   v.planche = planche; v.plan = plan;
 }
+
+// Éditeur de livrée : les calques sont en mètres, la planche de chaque véhicule est repeinte à chaque changement
+const dims = (cible) => { const v = etat[cible]; return v ? { L: v.plan.L, H: v.plan.box.max.y } : { L: 6, H: 4 }; };
+const depart = (cible) => { const { L, H } = dims(cible); return livreeDepart(cible, L, H); };
+function repeindre(cible) {
+  const v = etat[cible]; if (!v || !E.projet.livrees[cible]) return;
+  v.planche.peindre(E.projet.livrees[cible], E.cible === cible ? E.choisi : null, () => repeindre(cible));
+}
+const E = new Editeur({ calques: $('calques'), proprietes: $('proprietes'), dims, repeindre, statut });
+window.TSCF_editeur = E;
 
 async function choisir(type, id) {
   const liste = type === 'camion' ? etat.modeles.camions : etat.modeles.remorques;
@@ -46,7 +56,7 @@ async function choisir(type, id) {
   habiller(v, type);
   const ancien = etat[type]; if (ancien) S.racine.remove(ancien.groupe);
   etat[type] = v; S.racine.add(v.groupe);
-  placer(); avertir();
+  repeindre(type); placer(); avertir();
 }
 
 // Attelage : la sellette du camion sous le pivot de la remorque ; mode « écartés » pour les juger séparément
@@ -77,7 +87,9 @@ async function demarrer() {
   remplir($('choixCamion'), etat.modeles.camions); remplir($('choixRemorque'), etat.modeles.remorques);
   $('choixEclairage').innerHTML = Object.entries(ECLAIRAGES).map(([k, e]) => `<option value="${k}">${e.nom}</option>`).join('');
   await document.fonts.load('italic 900 40px "Saira"'); await document.fonts.load('40px "Kaushan Script"');
+  await document.fonts.load('40px "Great Vibes"'); await document.fonts.load('700 40px "Rajdhani"');
   await Promise.all([choisir('camion', $('choixCamion').value), choisir('remorque', $('choixRemorque').value)]);
+  E.charger(depart); repeindre('camion'); repeindre('remorque');
   S.vue('trois_quarts', 1);
   document.body.classList.add('pret');
 }
@@ -91,9 +103,62 @@ document.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => {
 });
 document.querySelectorAll('[data-vue]').forEach((b) => b.onclick = () => S.vue(b.dataset.vue));
 $('capture').onclick = () => { const a = document.createElement('a'); a.href = S.capture(); a.download = 'tscf_spartan_studio.png'; a.click(); };
+// Clic sur la carrosserie : choisir l'élément touché et le glisser ; ailleurs, la caméra tourne comme d'habitude
+function toucher(e) {
+  const r = S.rendu.domElement.getBoundingClientRect();
+  S.rayon.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), S.cam);
+  const hit = S.rayon.intersectObjects(S.racine.children, true).find((x) => x.object.visible && isVisible(x.object));
+  if (!hit || !hit.object.userData.peint || !hit.uv) return null;
+  const cible = ['camion', 'remorque'].find((c) => etat[c] && aPourParent(hit.object, etat[c].groupe)); if (!cible) return null;
+  const pos = etat[cible].planche.versMetres(hit.uv.x, hit.uv.y);
+  return pos ? { cible, ...pos } : null;
+}
+const isVisible = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+const aPourParent = (o, g) => { for (let p = o; p; p = p.parent) if (p === g) return true; return false; };
+let glisse = null;
+$('vue3d').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || !E.projet.livrees.camion) return;
+  const t = toucher(e); if (!t) return;
+  const el = etat[t.cible].planche.trouver(E.projet.livrees[t.cible], t.s, t.y); if (!el) return;
+  e.stopPropagation(); e.preventDefault();          // la caméra ne bouge pas pendant qu'on déplace un élément
+  E.choisir(el, t.cible); glisse = { ...t, el, bouge: false };
+  $('vue3d').classList.add('glisse');
+}, true);
+addEventListener('pointermove', (e) => {
+  if (!glisse) return;
+  const t = toucher(e); if (!t || t.cible !== glisse.cible || t.vue !== glisse.vue) return;
+  E.deplacer(glisse.el, t.s - glisse.s, t.y - glisse.y); glisse.s = t.s; glisse.y = t.y; glisse.bouge = true; E.direct();
+});
+addEventListener('pointerup', () => {
+  if (!glisse) return;
+  if (glisse.bouge) { E.valider(); E.dessinerProprietes(); }
+  glisse = null; $('vue3d').classList.remove('glisse');
+});
+
+document.querySelectorAll('[data-cible]').forEach((b) => b.onclick = () => E.choisirCible(b.dataset.cible));
+document.querySelectorAll('[data-ajout]').forEach((b) => b.onclick = () => E.ajouter(b.dataset.ajout));
+$('annuler').onclick = () => E.annuler(); $('refaire').onclick = () => E.refaire();
+$('exporter').onclick = () => E.exporter();
+$('importer').onclick = () => $('fichierProjet').click();
+$('fichierProjet').onchange = (e) => { if (e.target.files[0]) E.importer(e.target.files[0]); e.target.value = ''; };
+$('repartir').onclick = () => { if (confirm('Remettre la livrée de départ sur le ' + (E.cible === 'camion' ? 'camion' : 'la remorque') + ' ? (Annuler reste possible)')) E.repartir(depart); };
+
 // Raccourcis : 1 avant, 2 arrière, 3 gauche, 4 droite, 5 dessus, 6 trois-quarts
 const touches = { 1: 'avant', 2: 'arriere', 3: 'gauche', 4: 'droite', 5: 'dessus', 6: 'trois_quarts' };
-addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT' && touches[e.key]) S.vue(touches[e.key]); });
+addEventListener('keydown', (e) => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? E.refaire() : E.annuler(); return; }
+  if (e.ctrlKey && k === 'y') { e.preventDefault(); E.refaire(); return; }
+  if (e.ctrlKey && k === 'd') { e.preventDefault(); E.dupliquer(); return; }
+  if ((k === 'delete' || k === 'backspace') && E.choisi) { e.preventDefault(); E.supprimer(); return; }
+  // flèches : déplacer l'élément choisi de 5 cm (1 cm avec Maj)
+  const fl = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, 1], arrowdown: [0, -1] }[k];
+  if (fl && E.choisi && E.choisi.type !== 'fond') { e.preventDefault(); const p = e.shiftKey ? 0.01 : 0.05; E.deplacer(E.choisi, fl[0] * p, fl[1] * p); E.valider(); E.dessinerProprietes(); return; }
+  if (touches[e.key]) S.vue(touches[e.key]);
+});
 
+// essais automatiques : élément sous un point de l'écran
+window.__toucher = (e) => { const t = toucher(e); return t ? { ...t, el: etat[t.cible].planche.trouver(E.projet.livrees[t.cible], t.s, t.y) } : null; };
 window.TSCF_etat = etat; window.TSCF_mode = (m) => document.querySelector(`[data-mode="${m}"]`).click();
 demarrer().catch((e) => { console.error(e); statut('Erreur : ' + e.message, true); });

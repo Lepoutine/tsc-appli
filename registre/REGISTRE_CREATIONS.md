@@ -56,7 +56,7 @@
 | Photo du Mont-Saint-Michel au coucher de soleil | photo | Logiciel, bibliothèque, police ou service externe (non TSCF) | Burcin Sahin | Licence Pexels | Peut être distribué avec les crédits indiqués | Bétaillère Normandie 1.3-1.5 ; Benne Normandie Show 1.1 ; Vidéo bêta |
 | Police DejaVu Sans | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Projet DejaVu (d'après Bitstream Vera) | Licence Bitstream Vera + domaine public (modifications DejaVu) | Peut être distribué avec les crédits indiqués | Vidéo bêta (sous-titres) ; Kit templates (légendes) |
 | Police Great Vibes | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Robert Leuschke (TypeSETit) | SIL Open Font License 1.1 | Peut être distribué avec les crédits indiqués | Bétaillère Normandie ; Benne Normandie Show ; Citerne TSC v1.6 (noms) ; Vidéo bêta ; Vignettes |
-| Polices Saira, Rajdhani, Kaushan Script (Spartan Studio) | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Omnibus-Type (Saira) ; Indian Type Foundry (Rajdhani) ; Impallari Type (Kaushan Script) | SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt) | Peut être distribué avec les crédits indiqués | TSCF Spartan Studio |
+| Polices Saira, Rajdhani, Kaushan Script, Great Vibes (Spartan Studio) | police | Logiciel, bibliothèque, police ou service externe (non TSCF) | Omnibus-Type (Saira) ; Indian Type Foundry (Rajdhani) ; Impallari Type (Kaushan Script) ; TypeSETit (Great Vibes) | SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt) | Peut être distribué avec les crédits indiqués | TSCF Spartan Studio |
 | Sons de portière (porte_ouvre.mp3, porte_ferme.mp3) | son | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Appli TSC (mode à pied) |
 | Échappement V8, turbo et air comprimé (echap.js, echap_dsp.js, echap_worklet.js) | son / code | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Appli TSC ; Musique d'intro |
 | Bande-son de la vidéo bêta TSC Driver | son / musique | Création intégralement originale de TSCF | Poutine / TSCF | Propriétaire TSCF | Peut être distribué avec les crédits indiqués | Vidéo bêta officielle |
@@ -529,12 +529,12 @@
 - À faire : —
 - Vérifié le : 2026-10-24
 
-### Polices Saira, Rajdhani, Kaushan Script (Spartan Studio)
+### Polices Saira, Rajdhani, Kaushan Script, Great Vibes (Spartan Studio)
 
 - Identifiant : `polices_spartan_studio`
 - Catégorie : police
 - Origine : Logiciel, bibliothèque, police ou service externe (non TSCF)
-- Auteurs : Omnibus-Type (Saira) ; Indian Type Foundry (Rajdhani) ; Impallari Type (Kaushan Script)
+- Auteurs : Omnibus-Type (Saira) ; Indian Type Foundry (Rajdhani) ; Impallari Type (Kaushan Script) ; TypeSETit (Great Vibes)
 - Source : npm @fontsource 5.1.0, copiées dans studio/vendor/polices
 - Licence : SIL Open Font License 1.1 (studio/vendor/polices/OFL_*.txt)
 - Autorisations : Licence libre

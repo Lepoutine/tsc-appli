@@ -3,7 +3,7 @@
 Atelier de création de livrées ETS2 de Truck So Clean France : on compose une peinture en direct sur le camion et sa remorque en 3D,
 on la peaufine (bientôt à la voix), et le mod n'est généré qu'après validation.
 
-État : phase 2 (aperçu 3D). Voir `docs/ARCHITECTURE.md` pour le plan et `docs/RAPPORT_TESTS.md` pour ce qui est vérifié.
+État : phase 3 (édition de la livrée : calques, propriétés, déplacement à la souris, annuler, sauvegarde, export du projet). Voir `docs/ARCHITECTURE.md` pour le plan et `docs/RAPPORT_TESTS.md` pour ce qui est vérifié.
 
 ## Lancer
 
@@ -19,6 +19,13 @@ Rien n'est installé et rien n'est exposé sur le réseau (adresse 127.0.0.1 uni
 - Touches 1 à 6 : avant, arrière, gauche, droite, dessus, 3/4.
 - Panneau de gauche : choix du camion et de la remorque, affichage (ensemble, écartés, camion seul, remorque seule), éclairage.
 - Un bandeau orange signale tout modèle provisoire (forme générique, pas le modèle ETS2 exact).
+
+## Modifier la livrée
+
+- Panneau de droite : onglet Camion ou Remorque, puis les calques (fond, vagues, bandes, textes, images). L'œil masque un calque, les flèches changent l'ordre.
+- Cliquer un calque, ou directement l'élément sur le véhicule, pour le modifier : texte, police, couleur, finition, taille, position en mètres, inclinaison, opacité. Glisser l'élément sur le véhicule le déplace.
+- « Ajouter » : texte, bande, vague, image (le lion TSCF ou une image du PC).
+- Tout est enregistré automatiquement sur le PC. « Exporter » crée un fichier `.tscf.json` (sauvegarde, partage, et base du futur export du mod).
 
 ## Ajouter un modèle réel
 

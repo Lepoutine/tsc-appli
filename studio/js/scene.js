@@ -79,8 +79,10 @@ export class Scene3D {
   }
   vue(nom, duree = 650) {
     const b = this.boite(), c = b.getCenter(new THREE.Vector3()), t = b.getSize(new THREE.Vector3());
-    const rayon = t.length() / 2, fov = (this.cam.fov * Math.PI) / 180;
-    const d = (rayon / Math.sin(fov / 2)) * 0.82;
+    // angle de vue le plus étroit (fenêtre haute ou large) pour que l'ensemble tienne dans l'image
+    const fv = (this.cam.fov * Math.PI) / 180, fov = Math.min(fv, 2 * Math.atan(Math.tan(fv / 2) * this.cam.aspect));
+    const rayon = t.length() / 2;
+    const d = (rayon / Math.sin(fov / 2)) * (this.cam.aspect < 1.3 ? 1 : 0.82);
     const dirs = {
       avant: [0, 0.12, -1], arriere: [0, 0.12, 1], gauche: [-1, 0.08, 0], droite: [1, 0.08, 0], dessus: [0.001, 1, 0.12],
       trois_quarts: [-0.75, 0.32, -0.62], trois_quarts_arriere: [0.7, 0.3, 0.68],
