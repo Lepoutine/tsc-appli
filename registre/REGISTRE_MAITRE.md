@@ -64,11 +64,11 @@ renommer sa DLL.
    `Pilote_Tete_TSC.ps1` (variable `ticketHookTsc`), donc présente dans l'exe distribué. N'importe quel testeur peut
    l'extraire et poster dans le salon. À faire : régénérer le webhook côté Discord, puis le faire passer par le site HUB
    ou un relais au lieu de l'embarquer. Le jeton n'est recopié dans aucun document du registre.
-2. **Contenus à l'origine non documentée** dans l'appli : `hero.mp4`, `hero.jpg`, `camion.jpg` (livrée « Spartan / Le 300 »),
-   `intro_tsc.mp3`, `TSC_Photoreal.fx`, données « Grand Utopia ». Voir `REGISTRE_CREATIONS.md`.
+2. **Contenus de l'appli** : visuels d'accueil, musique d'intro et `TSC_Photoreal.fx` confirmés créations TSCF le 24/10.
+   Reste : `carte/roads.json` (« Grand Utopia ») vient de la carte de MyGodness et est livré avec l'appli sans accord connu.
 3. **Crédits du catalogue** : plusieurs mods portent « Créations de Poutine – propriété de Truck So Clean France » alors
    qu'ils contiennent des modèles SCS modifiés. Correction proposée dans `MENTIONS_PRODUITS.md`.
-4. **Autorisations non archivées** : Madame Afro (SergioSomf ?) et templates MDT. Citerne : modèle acheté (facture à garder).
+4. **Autorisations non archivées** : Madame Afro (modèle gratuit, auteur inconnu) et templates MDT. Citerne : modèle acheté (facture à garder).
    Le catalogue dit « avec autorisation » mais aucune preuve n'est conservée.
 5. **Polices chargées depuis Google** : la tablette contacte fonts.googleapis.com (adresse IP du joueur transmise).
 6. **Mentions de licence incohérentes** entre `TSC_Photoreal.fx` (« libre d'utilisation pour les membres TSC ») et le

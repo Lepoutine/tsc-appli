@@ -254,23 +254,22 @@
       "id": "ui_hero_spartan",
       "nom": "Visuels d'accueil de la tablette : hero.mp4, hero.jpg, camion.jpg (livrée « Spartan / Le 300 »)",
       "categorie": "vidéo / image",
-      "origine": "a_clarifier",
+      "origine": "originale_tscf",
       "auteurs": [
-        "Inconnu"
+        "Poutine / TSCF (avec Claude et ChatGPT)"
       ],
-      "source": "Présents dès l'« État avant audit » du 16/10/2026 (commit cc8f03b), origine non notée",
-      "licence": "Inconnue",
-      "autorisations": "Aucune trace",
-      "modifications": "Inconnues ; incrustations « Les frigorifiques – Édition Spartan – Le 300 »",
-      "redistribution": "À suspendre : peut reprendre des éléments du film 300 (Warner Bros.)",
-      "credits": "À définir",
+      "source": "Créés par Poutine avec Claude et ChatGPT (confirmé par Poutine le 24/10/2026)",
+      "licence": "Propriétaire TSCF",
+      "autorisations": "Sans objet",
+      "modifications": "Sans objet ; aucune image du film 300 (confirmé par Poutine)",
+      "redistribution": "TSCF",
+      "credits": "Visuels © Truck So Clean France.",
       "projets": [
         "Appli TSC 2.14.27 (écran d'accueil)"
       ],
-      "statut": "a_clarifier",
+      "statut": "distribuable",
       "a_faire": [
-        "Mendy : dire qui a fait cette vidéo et ces images, et si elles contiennent des images du film 300",
-        "Sinon : les remplacer par une capture TSCF (sans retirer l'écran d'accueil)"
+        "Question pour le juriste : protection des visuels générés avec une IA"
       ],
       "verifie_le": "2026-10-24"
     },
@@ -344,23 +343,21 @@
       "id": "musique_intro",
       "nom": "Musique d'intro « TSC Run in My Way » (ui/intro_tsc.mp3)",
       "categorie": "son / musique",
-      "origine": "a_clarifier",
+      "origine": "originale_tscf",
       "auteurs": [
-        "TSCF (selon le commit 76dfc03)"
+        "Poutine / TSCF (composée par Claude dans le code TSCF)"
       ],
-      "source": "tests_pilote/musique/intro_tsc.py (synthèse, aucun échantillon tiers d'après le script)",
-      "licence": "Propriétaire TSCF si le fichier vient bien du script",
-      "autorisations": "Sans objet si synthèse ; si enregistrement Suno : conditions Suno à vérifier",
+      "source": "tests_pilote/musique/intro_tsc.py (synthèse, aucun échantillon tiers), ajouté avec le mp3 dans le même commit 76dfc03",
+      "licence": "Propriétaire TSCF",
+      "autorisations": "Sans objet",
       "modifications": "Sans objet",
-      "redistribution": "À confirmer",
-      "credits": "À définir (composition TSCF seulement si le fichier vient du script).",
+      "redistribution": "TSCF",
+      "credits": "Musique « TSC Run in My Way » © Truck So Clean France.",
       "projets": [
         "Appli TSC 2.14.27 (intro)"
       ],
-      "statut": "a_clarifier",
-      "a_faire": [
-        "Mendy : le mp3 de l'appli est-il le rendu du script ou un enregistrement Suno ? Si Suno : retirer de la diffusion ou vérifier l'abonnement et les droits"
-      ],
+      "statut": "distribuable",
+      "a_faire": [],
       "verifie_le": "2026-10-24"
     },
     {
@@ -388,23 +385,22 @@
       "id": "shaders_tsc",
       "nom": "Shaders ReShade TSC_Photoreal.fx et TSC_Realisme.fx + presets « Rendu TSC »",
       "categorie": "script / shader",
-      "origine": "a_clarifier",
+      "origine": "originale_tscf",
       "auteurs": [
-        "TSCF (en-têtes « code original, sans dépendance »)"
+        "Poutine / TSCF (écrits par Claude)"
       ],
       "source": "Tete_Pilote_TSC/reshade/ ; TSC_Photoreal présent dès l'état du 16/10, TSC_Realisme ajouté le 17/10 (2.14.13)",
-      "licence": "Incohérente : Photoreal « libre d'utilisation pour les membres TSC », Realisme « Tous droits réservés »",
+      "licence": "Propriétaire TSCF (en-têtes à harmoniser)",
       "autorisations": "Sans objet si original",
       "modifications": "Sans objet",
       "redistribution": "TSCF, à harmoniser",
-      "credits": "Shaders TSC (aucune mention de droits TSCF tant que l'origine n'est pas confirmée).",
+      "credits": "Shaders TSC Photoreal et TSC Réalisme © Truck So Clean France.",
       "projets": [
         "Appli TSC (Rendu TSC)"
       ],
-      "statut": "a_clarifier",
+      "statut": "distribuable",
       "a_faire": [
-        "Mendy : confirmer qu'aucune partie de TSC_Photoreal ne vient d'un shader tiers (avant le 16/10)",
-        "Harmoniser la mention de licence des deux en-têtes"
+        "Harmoniser l'en-tête de TSC_Photoreal.fx (« libre pour les membres TSC ») avec celui de TSC_Realisme.fx"
       ],
       "verifie_le": "2026-10-24"
     },
@@ -527,22 +523,23 @@
       "id": "carte_grand_utopia",
       "nom": "Données de carte roads.json / junctions.json (« Grand Utopia »)",
       "categorie": "données",
-      "origine": "a_clarifier",
+      "origine": "modification_tierce",
       "auteurs": [
-        "Inconnu"
+        "MyGodness (carte Grand Utopia)"
       ],
-      "source": "Tete_Pilote_TSC/carte/ (état du 16/10)",
-      "licence": "Inconnue (extrait du jeu ? d'une carte moddée ?)",
+      "source": "Réseau routier extrait de la carte Grand Utopia de MyGodness",
+      "licence": "Conditions de MyGodness (inconnues)",
       "autorisations": "Aucune trace",
-      "modifications": "Inconnues",
-      "redistribution": "À confirmer",
-      "credits": "À définir",
+      "modifications": "Routes et carrefours convertis en roads.json / junctions.json",
+      "redistribution": "À suspendre : le fichier est livré avec l'appli",
+      "credits": "Données de carte d'après Grand Utopia de MyGodness.",
       "projets": [
         "Pilote de tête (tests et mode carte)"
       ],
       "statut": "a_clarifier",
       "a_faire": [
-        "Mendy : d'où vient le réseau Grand Utopia ? Si c'est une carte moddée : demander l'accord de son auteur"
+        "Demander à MyGodness son accord pour livrer ces données avec l'appli",
+        "Sinon : ne plus livrer roads.json (le pilote de tête marche sans carte et apprend les carrefours seul) et le garder pour les tests internes"
       ],
       "verifie_le": "2026-10-24"
     },
@@ -664,24 +661,26 @@
     },
     {
       "id": "afro_sergiosomf",
-      "nom": "Modèle de passagère (mod afro.scs)",
+      "nom": "Modèle de passagère (mod afro.scs, gratuit, auteur inconnu)",
       "categorie": "modèle 3D",
       "origine": "modification_tierce",
       "auteurs": [
-        "SergioSomf (selon le catalogue, à confirmer)"
+        "Inconnu (modèle gratuit récupéré par Poutine ; l'ancien crédit « SergioSomf » n'est pas confirmé)"
       ],
       "source": "Downloads\\afro.scs (mod tiers)",
-      "licence": "Inconnue",
-      "autorisations": "Le catalogue dit « avec autorisation » mais aucune preuve n'est archivée et l'auteur n'est pas confirmé côté code",
-      "modifications": "Texture TSC (écusson) et repackaging autonome",
+      "licence": "Inconnue : gratuit ne veut pas dire libre de droits",
+      "autorisations": "Aucune (auteur inconnu, confirmé par Poutine le 24/10/2026)",
+      "modifications": "Écusson TSC (création TSCF, déjà couverte par le logo) et repackaging autonome",
       "redistribution": "À suspendre jusqu'à la preuve d'autorisation",
-      "credits": "Modèle : SergioSomf (à confirmer). Écusson : TSCF.",
+      "credits": "À définir (auteur du modèle inconnu).",
       "projets": [
         "Madame Afro TSC 1.0.0"
       ],
       "statut": "a_clarifier",
       "a_faire": [
-        "Mendy : confirmer l'auteur et archiver son accord dans registre/preuves/"
+        "Retrouver l'auteur (page de téléchargement d'origine, manifest du mod) et lui demander son accord",
+        "Sinon : remplacer le modèle par un modèle sous licence claire avant la prochaine diffusion",
+        "Retirer « SergioSomf (avec autorisation) » du catalogue s'il n'est pas l'auteur"
       ],
       "verifie_le": "2026-10-24"
     },

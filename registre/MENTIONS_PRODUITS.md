@@ -38,10 +38,11 @@ Une mention de copyright informe ; elle ne prouve pas à elle seule la propriét
   QR code de Kazuhiko Arase (MIT), runtime Go (BSD).
 - Utilisés sans être inclus : OpenTrack, cloudflared, ReShade, PresentMon, TM Real Walk et TM MasterGrade (Izuan Bakar),
   polices Google Fonts (OFL), services Discord, Trucky, TruckersMP, YouTube, Twitch, Spotify.
-- **À clarifier avant la prochaine version** : visuels d'accueil « Spartan / Le 300 », musique d'intro, `TSC_Photoreal.fx`,
-  données « Grand Utopia ».
+- Visuels d'accueil, musique d'intro et shaders TSC : créations TSCF (confirmé par Poutine le 24/10/2026).
+- **À clarifier avant la prochaine version** : données « Grand Utopia » (carte de MyGodness, accord à demander ou fichier
+  à ne plus livrer) et aperçus gps_*/rs_*.
 - `LICENCE.txt` §1 revendique « les sons, visuels, logos » de l'appli en bloc : à restreindre aux éléments créés par
-  TSCF (les visuels d'accueil « Spartan / Le 300 » et la musique d'intro en sont exclus tant qu'ils ne sont pas clarifiés).
+  TSCF (les données « Grand Utopia » de MyGodness en sont exclues).
 - Ajout conseillé au `LICENCE.txt` §4 : runtime Go (BSD) ; CityHash (MIT) si les outils de modding sont un jour distribués.
 
 ## TSC Bétaillère Normandie - Poutine 1.5
@@ -79,10 +80,11 @@ Une mention de copyright informe ; elle ne prouve pas à elle seule la propriét
 
 ## Madame Afro TSC 1.0.0
 
-- Modèle de la passagère : auteur à confirmer (SergioSomf d'après le catalogue), sans © TSCF. Écusson © Truck So Clean France.
-- Crédit catalogue actuel : « … Propriété Truck So Clean France. » → **trop large** (laisse croire que la passagère est à
-  TSCF). Proposé : « Modèle : SergioSomf (avec autorisation). Écusson © Truck So Clean France. »
-- **Statut : à clarifier**, mêmes preuves à archiver que pour la citerne.
+- Modèle de la passagère : modèle gratuit récupéré, **auteur inconnu** (confirmé par Poutine le 24/10/2026). Gratuit ne
+  veut pas dire libre : sans auteur ni licence, on ne peut ni créditer ni prouver le droit de diffuser.
+- Écusson : © Truck So Clean France.
+- **Statut : à clarifier.** Retrouver l'auteur et son accord, ou remplacer le modèle. Le crédit actuel du catalogue
+  (« SergioSomf, avec autorisation ») est à retirer s'il n'est pas exact.
 
 ## Mods GPS TSC
 
