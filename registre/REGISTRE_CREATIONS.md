@@ -9,8 +9,8 @@
 | Statut | Nombre |
 |---|---|
 | Interdit d'utilisation ou de distribution | 1 |
-| Distribution à suspendre jusqu'à la preuve (règle 1.4) | 3 |
-| Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | 4 |
+| Distribution à suspendre jusqu'à la preuve (règle 1.4) | 2 |
+| Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | 5 |
 | Peut être distribué avec les crédits indiqués | 23 |
 | Utilisé ou téléchargé par le joueur, jamais redistribué par TSCF | 6 |
 
@@ -19,7 +19,6 @@
 - **4 images du film 300 (photos_poutine/film_300_*.jpg)** (Interdit d'utilisation ou de distribution) : ne pas utiliser
 - **Données de carte roads.json / junctions.json (« Grand Utopia »)** (Distribution à suspendre jusqu'à la preuve) : Demander à MyGodness son accord pour livrer ces données avec l'appli ; Sinon : ne plus livrer roads.json (le pilote de tête marche sans carte et apprend les carrefours seul) et le garder pour les tests internes
 - **Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png** (Distribution à suspendre jusqu'à la preuve) : Mendy : confirmer que ce sont ses captures du jeu
-- **Modèle de passagère (mod afro.scs, gratuit, auteur inconnu)** (Distribution à suspendre jusqu'à la preuve) : Retrouver l'auteur (page de téléchargement d'origine, manifest du mod) et lui demander son accord ; Sinon : remplacer le modèle par un modèle sous licence claire avant la prochaine diffusion ; Retirer « SergioSomf (avec autorisation) » du catalogue s'il n'est pas l'auteur
 
 ## Toutes les ressources
 
@@ -28,7 +27,7 @@
 | 4 images du film 300 (photos_poutine/film_300_*.jpg) | image | Logiciel, bibliothèque, police ou service externe (non TSCF) | Warner Bros. / Legendary | Œuvre protégée, aucune licence | Interdit d'utilisation ou de distribution | — |
 | Données de carte roads.json / junctions.json (« Grand Utopia ») | données | Modification d'une ressource appartenant à un tiers | MyGodness (carte Grand Utopia) | Conditions de MyGodness (inconnues) | Distribution à suspendre jusqu'à la preuve (règle 1.4) | Pilote de tête (tests et mode carte) |
 | Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png | image | Origine ou droits non établis | Probablement captures d'écran TSCF du jeu | Captures d'ETS2 : contenu du jeu © SCS Software | Distribution à suspendre jusqu'à la preuve (règle 1.4) | Appli TSC 2.14.27 |
-| Modèle de passagère (mod afro.scs, gratuit, auteur inconnu) | modèle 3D | Modification d'une ressource appartenant à un tiers | Inconnu (modèle gratuit récupéré par Poutine ; l'ancien crédit « SergioSomf » n'est pas confirmé) | Inconnue : gratuit ne veut pas dire libre de droits | Distribution à suspendre jusqu'à la preuve (règle 1.4) | Madame Afro TSC 1.0.0 |
+| Modèle de passagère (mod afro.scs, gratuit) | modèle 3D | Modification d'une ressource appartenant à un tiers | Inconnu | Déclaré libre de droits par Poutine (24/10/2026), sans page source | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Madame Afro TSC 1.0.0 |
 | Modèle 3D de citerne AkirixDesign3D (acheté par Poutine) | modèle 3D | Création TSCF réalisée à partir d'une ressource tierce autorisée | AkirixDesign3D (modèle 3D) ; base Gaming ModdinG (selon l'ancien crédit, à confirmer) | Licence d'achat du modèle (conditions du vendeur à archiver) | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Citerne TSC (pack remorques) |
 | Modèles, matériaux et textures SCS Software modifiés (bétaillère scs_livestock et coffres, intérieur Scania R/S 2016, défs benne scs_dumper, kit Wielton) | modèle 3D / texture | Modification d'une ressource appartenant à un tiers | SCS Software (et constructeurs sous licence : Scania, Wielton) | Contenu propriétaire SCS Software | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Bétaillère Normandie ; Cuir Scania 2016 ; Benne Normandie Show ; Kit templates |
 | Templates de peinture MDT (Scania S open mod, Volvo Aero, FlatCab, Custom Ekeri 3.4, Trux Pack...) | texture / gabarit | Logiciel, bibliothèque, police ou service externe (non TSCF) | MDT | Licence MDT ; templates modifiables avec l'accord du créateur (selon Poutine, 24/10/2026) | Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires) | Livrées Lion noir et TSCF Spartan (Scania S, Volvo FH, Ekeri) ; Compat MDT des remorques |
@@ -93,7 +92,7 @@
 - Autorisations : Aucune trace
 - Modifications : Routes et carrefours convertis en roads.json / junctions.json
 - Redistribution : À suspendre : le fichier est livré avec l'appli
-- Crédits à afficher : Données de carte d'après Grand Utopia de MyGodness.
+- Crédits à afficher : Données de carte d'après Grand Utopia de MyGodness (le pilote de tête qui les lit est une création TSCF).
 - Projets : Pilote de tête (tests et mode carte)
 - Statut : Distribution à suspendre jusqu'à la preuve (règle 1.4)
 - À faire : Demander à MyGodness son accord pour livrer ces données avec l'appli ; Sinon : ne plus livrer roads.json (le pilote de tête marche sans carte et apprend les carrefours seul) et le garder pour les tests internes
@@ -116,21 +115,21 @@
 - À faire : Mendy : confirmer que ce sont ses captures du jeu
 - Vérifié le : 2026-10-24
 
-### Modèle de passagère (mod afro.scs, gratuit, auteur inconnu)
+### Modèle de passagère (mod afro.scs, gratuit)
 
 - Identifiant : `afro_sergiosomf`
 - Catégorie : modèle 3D
 - Origine : Modification d'une ressource appartenant à un tiers
-- Auteurs : Inconnu (modèle gratuit récupéré par Poutine ; l'ancien crédit « SergioSomf » n'est pas confirmé)
+- Auteurs : Inconnu
 - Source : Downloads\afro.scs (mod tiers)
-- Licence : Inconnue : gratuit ne veut pas dire libre de droits
-- Autorisations : Aucune (auteur inconnu, confirmé par Poutine le 24/10/2026)
+- Licence : Déclaré libre de droits par Poutine (24/10/2026), sans page source
+- Autorisations : Déclaration de Poutine ; aucune page ni licence écrite retrouvée
 - Modifications : Écusson TSC (création TSCF, déjà couverte par le logo) et repackaging autonome
-- Redistribution : À suspendre jusqu'à la preuve d'autorisation
-- Crédits à afficher : À définir (auteur du modèle inconnu).
+- Redistribution : Dans Madame Afro TSC, tant qu'aucun auteur ne se manifeste
+- Crédits à afficher : Modèle de passagère : auteur inconnu (modèle libre de droits).
 - Projets : Madame Afro TSC 1.0.0
-- Statut : Distribution à suspendre jusqu'à la preuve (règle 1.4)
-- À faire : Retrouver l'auteur (page de téléchargement d'origine, manifest du mod) et lui demander son accord ; Sinon : remplacer le modèle par un modèle sous licence claire avant la prochaine diffusion ; Retirer « SergioSomf (avec autorisation) » du catalogue s'il n'est pas l'auteur
+- Statut : Distribuable seulement dans le cadre indiqué (ex. mod ETS2, crédits obligatoires)
+- À faire : Retirer « SergioSomf (avec autorisation) » du catalogue ; Si un auteur se manifeste : suspendre le mod et appliquer la procédure de PROTECTION_ET_SIGNALEMENT.md
 - Vérifié le : 2026-10-24
 
 ### Modèle 3D de citerne AkirixDesign3D (acheté par Poutine)
