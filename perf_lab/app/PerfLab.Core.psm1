@@ -145,7 +145,7 @@ $script:GfxVars = [ordered]@{
   'g_lod_factor_traffic'   = 'Detail du trafic'
   'g_lod_factor_parked'    = 'Detail vehicules gares'
   'g_lod_factor_pedestrian'= 'Detail pietons'
-  'r_light_distance_factor'= 'Distance des lumieres'
+  'g_light_distance_factor'= 'Distance des lumieres'
   'r_buffer_page_size'     = 'Taille des pages tampon'
   'r_minimal_unfinished_frames' = 'Images en attente'
   'g_mirrors'              = 'Retros (profil)'
@@ -282,7 +282,8 @@ function Get-PLPlugins {
   param([string]$GameDir)
   if (-not $GameDir) { return @() }
   $dir = Join-Path $GameDir 'bin\win_x64\plugins'
-  @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter *.dll -ErrorAction SilentlyContinue | ForEach-Object {
+  # le jeu ne charge que les DLL a la racine du dossier plugins (les sous-dossiers sont des donnees)
+  @(Get-ChildItem -LiteralPath $dir -File -Filter *.dll -ErrorAction SilentlyContinue | ForEach-Object {
     $vi = $_.VersionInfo
     [pscustomobject]@{
       Fichier  = $_.Name
@@ -316,7 +317,7 @@ function Get-PLGameLog {
     }
     if (-not $r.Version -and $msg -match '\[ufs\] Loaded pack set version (\S+)') { $r.Version = $Matches[1] }
     if ($msg -match '^\[(gfx|dxgi|dx11|disp)\]') { if ($r.Rendu.Count -lt 40) { $r.Rendu += $msg } }
-    if ($msg -match '\[d3d_hook\]|hooked') { if ($r.Crochets.Count -lt 20) { $r.Crochets += $msg } }
+    if ($msg -match '\[d3d_hook\].*(Present hooked|hooked on)') { if ($r.Crochets.Count -lt 20) { $r.Crochets += $msg } }
     if ($msg -match '<ERROR>') { if ($err.ContainsKey($msg)) { $err[$msg]++ } else { $err[$msg] = 1 } }
     elseif ($msg -match '<WARNING>') { if ($warn.ContainsKey($msg)) { $warn[$msg]++ } else { $warn[$msg] = 1 } }
     if ($msg -match 'Incompatible mod\s*-\s*(.+?)\s*$') { $r.Incompatibles += $Matches[1] }
@@ -373,7 +374,7 @@ function Get-PLMods {
   param([string]$DocsDir, [string]$SteamDir, $GameLog)
   $items = @()
   if ($DocsDir) {
-    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $DocsDir 'mod') -ErrorAction SilentlyContinue)) {
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $DocsDir 'mod') -ErrorAction SilentlyContinue | Where-Object { $_.PSIsContainer -or $_.Extension -in '.scs', '.zip' })) {
       $size = if ($f.PSIsContainer) { (Get-ChildItem -LiteralPath $f.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum } else { $f.Length }
       $items += [pscustomobject]@{ Cle = $f.Name.ToLower(); Fichier = $f.Name; Source = 'Dossier mod'; TailleMo = [math]::Round([double]$size / 1MB, 1); Date = $f.LastWriteTime }
     }
@@ -438,7 +439,9 @@ function Get-PLRecommendations {
   $lim = if ($gl.Contains('t_limit_fps')) { [int]$gl['t_limit_fps'] } else { 0 }
   $vs = if ($gl.Contains('r_vsync')) { $gl['r_vsync'] } else { $null }
   if ($vs -eq '0' -and $lim -ne 60) {
-    $r += New-PLReco 'frame-cadence' 'Rythme des images different de celui des ecrans' "Le jeu vise $(if ($lim) { "$lim images/s (t_limit_fps $lim)" } else { 'un nombre d''images non limite' }), sans synchro verticale, alors que les ecrans du PC principal affichent 60 images/s. Le surplus est jete de facon irreguliere." 'Mesurer le profil actuel puis le profil "Limite 60 images/s" sur le meme parcours, avec le flux Shadow regle a 60, et garder le plus regulier.' 'Fort' 'Faible' $false $true
+    $hz = $null
+    if ($Diag.Machine -and @($Diag.Machine.CartesGraphiques).Count) { $hz = $Diag.Machine.CartesGraphiques[0].FrequenceHz }
+    $r += New-PLReco 'frame-cadence' 'Rythme des images a verifier' "Le jeu vise $(if ($lim) { "$lim images/s (t_limit_fps $lim)" } else { 'un nombre d''images non limite' }), sans synchro verticale$(if ($hz) { ", sur un affichage a $hz Hz" }). Si le flux Shadow et les ecrans du PC principal tournent a 60 images/s, le surplus est jete de facon irreguliere : hypothese a confirmer par la mesure." 'Mesurer le profil actuel puis le profil "Limite 60 images/s" sur le meme parcours, avec le flux Shadow regle a 60, et garder le plus regulier.' 'Fort' 'Faible' $false $true
   }
   if ($gl.Contains('r_multimon_mode') -and $gl['r_multimon_mode'] -ne '0') {
     $r += New-PLReco 'multimon' 'Mode multi-ecran du jeu actif' "r_multimon_mode = $($gl['r_multimon_mode']). Selon le mode, le jeu calcule une vue par ecran, ce qui multiplie le travail du processeur." 'A chiffrer : mesurer le meme parcours avec ce mode et en ecran unique etire, avant toute decision.' 'A mesurer' 'Faible' $false $false
@@ -449,13 +452,13 @@ function Get-PLRecommendations {
   if ($Diag.Machine -and $Diag.Game -and $Diag.Game.Exe) {
     $pref = Get-PLGpuPreference $Diag.Game.Exe
     if ($pref -and $pref -match 'GpuPreference=1') {
-      $r += New-PLReco 'gpu-pref' 'Preference graphique "economie d''energie"' 'Windows demande la carte economique pour eurotrucks2.exe.' 'Passer la preference en "hautes performances" (sauvegarde et restauration automatiques).' 'Faible' 'Tres faible' $false $true
+      $r += New-PLReco 'gpu-pref' 'Preference graphique "economie d''energie"' 'Windows demande la carte economique pour eurotrucks2.exe.' 'Passer la preference en "hautes performances" (sauvegarde et restauration automatiques).' $(if ($Diag.Machine.EstShadow) { 'A mesurer' } else { 'Faible' }) 'Tres faible' $false $true
     }
     if ($Diag.Machine.GameDVR -eq 1 -or $Diag.Machine.CaptureApp -eq 1) {
       $r += New-PLReco 'game-dvr' 'Capture Windows active' 'Game DVR / capture d''applications est actif : il peut enregistrer en fond et solliciter l''encodeur video.' 'Couper Game DVR et la capture d''applications (sauvegarde et restauration automatiques).' 'Moyen' 'Tres faible' $false $true
     }
     if ($Diag.Machine.PlanAlimentation -and $Diag.Machine.PlanAlimentation -notmatch 'performance|Performances|Bitsum') {
-      $r += New-PLReco 'power-plan' 'Plan d''alimentation standard' "Plan actif : $($Diag.Machine.PlanAlimentation)." 'Activer le plan "Performances elevees" pendant le jeu (le plan d''origine est restaurable).' 'Faible' 'Tres faible' $false $true
+      $r += New-PLReco 'power-plan' 'Plan d''alimentation standard' "Plan actif : $($Diag.Machine.PlanAlimentation).$(if ($Diag.Machine.EstShadow) { ' Sur un Shadow, le processeur tourne a frequence fixe : effet probablement faible.' })" 'Activer le plan "Performances elevees" pendant le jeu (le plan d''origine est restaurable).' $(if ($Diag.Machine.EstShadow) { 'A mesurer' } else { 'Faible' }) 'Tres faible' $false $true
     }
   }
   if ($Diag.Machine) {
@@ -472,7 +475,7 @@ function Get-PLRecommendations {
     $r += New-PLReco 'incompatible-mods' 'Mods signales incompatibles' "Le jeu signale : $((@($Diag.Journal.Incompatibles)) -join ', ')." 'Mettre a jour ou retirer ces mods du profil (gestionnaire de mods du jeu).' 'Faible' 'Faible' $false $false
   }
   if ($Diag.Journal -and @($Diag.Journal.Doublons).Count) {
-    $r += New-PLReco 'duplicate-packages' 'Paquets en double' "Presents deux fois (fichier .scs et dossier) : $((@($Diag.Journal.Doublons)) -join ', ')." 'Garder une seule copie de chaque paquet pour alleger le chargement.' 'Faible' 'Faible' $false $false
+    $r += New-PLReco 'duplicate-packages' 'Paquets en double' "Presents deux fois (deux fichiers, ou un fichier et un dossier) : $((@($Diag.Journal.Doublons)) -join ', ')." 'Garder une seule copie de chaque paquet pour alleger le chargement.' 'Faible' 'Faible' $false $false
   }
   if ($Diag.Journal -and $Diag.Journal.ChargementCarteS -and $Diag.Journal.ChargementCarteS -gt 180) {
     $r += New-PLReco 'load-time' 'Chargement tres long' "Carte chargee en $([math]::Round($Diag.Journal.ChargementCarteS / 60, 1)) min." 'Comparer le temps de chargement avec un profil de test allege pour chiffrer le cout des gros mods.' 'Moyen' 'Faible' $false $false

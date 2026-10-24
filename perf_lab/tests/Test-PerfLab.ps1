@@ -21,7 +21,7 @@ Check 'mod incompatible' ($log.Incompatibles[0] -eq 'RPM_1_2_4_x_Real_Poland_Com
 Check 'erreurs groupees et comptees' ($log.Erreurs[0].Nombre -eq 2)
 Check 'paquet en double' ($log.Doublons[0] -eq 'promods-cap-v161')
 Check 'carte chargee a 441,7 s' ($log.ChargementCarteS -eq 441.7)
-Check 'crochet sur l''affichage detecte' (@($log.Crochets).Count -eq 1)
+Check 'crochet sur l''affichage detecte, sans faux positif' (@($log.Crochets).Count -eq 1 -and $log.Crochets[0] -match 'Present hooked')
 Check 'abonnements Workshop' ($log.WorkshopRecus -eq 22)
 
 # --- config.cfg : lecture et ecriture ciblee

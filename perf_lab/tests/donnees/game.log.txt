@@ -22,4 +22,5 @@
 00:05:46.103 : [mod_package_manager] Mod "Air Ride Ultimate" has been mounted. (package_name: mod_workshop_package.000000005AFE1AB6, version: 1.0, source: Steam Workshop)
 00:07:21.722 : Map loaded
 00:07:22.642 : Loading save. Type: 0, slot: 0, path: <MEMFILE><UFS>/home/profiles/4C6520506F7574696E65/save/autosave/game.sii
+00:07:29.500 : [TMRealWalk] [profile] company name in game (display only): 3 of 3 display readers hooked
 00:07:29.819 : [TMRealWalk] [d3d_hook] Present hooked on the game's own swap chain
