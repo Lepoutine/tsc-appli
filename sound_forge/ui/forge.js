@@ -233,9 +233,9 @@
     (function pas(t) { const u = Math.min(1, (t - t0) / D); clapetK = de + (vers - de) * u; if (!anim) simMaj(); if (u < 1) clapetAnim = requestAnimationFrame(pas); })(t0);
   }
   function simMaj() {
-    const rpm = +$('rpm').value, load = +$('load').value / 100;
+    const rpm = gazAnim ? Math.round(gazRpm) : +$('rpm').value, load = +$('load').value / 100;
     $('rpmO').textContent = rpm; $('loadO').textContent = Math.round(load * 100) + ' %'; $('rpmV').textContent = rpm;
-    $('rpmG').style.setProperty('--v', Math.round((rpm - 500) / 1900 * 100));
+    $('rpmG').style.setProperty('--v', Math.round(rpm / 2400 * 100));
     const sim = P.couches.filter(c => SF.ROLES[c.role].sim);
     const p = moteur.marche ? moteur.regle(P.couches, bufs, rpm, load, clapetK) : SF.poids(sim, rpm, load, clapetK);
     $('layers').innerHTML = sim.length ? sim.map(c => { const g = p[c.id] ? p[c.id].g : 0; return '<div class="ly"><span title="' + esc(c.fichier) + '">' + esc(SF.ROLES[c.role].court) + (c.rpm && c.role !== 'turbo' ? ' ' + c.rpm : '') + '</span><span class="g"><i style="width:' + Math.round(g * 100) + '%"></i></span><output>' + Math.round(g * 100) + '%</output></div>'; }).join('')
@@ -247,6 +247,25 @@
     if (!sim.length) { toast('Importe d\'abord un ralenti et des régimes en charge.'); return; }
     SF.stopSolo(); moteur.demarre(P.couches, bufs); majProjet.ecoute = true; majProjet();
     $('bMoteur').textContent = 'Couper le moteur'; $('simEtat').className = 'etat ok'; $('simEtat').textContent = 'moteur en marche'; simMaj();
+  }
+  /* coups de gaz : maintenir = pied au plancher, relâcher = retour au ralenti (les « vroum » du V8) */
+  const RALENTI = 600, RUPTEUR = 2100;
+  let gazAppui = false, gazAnim = 0, gazT = 0, gazRpm = 0; // régime en continu (le curseur avance par pas de 10)
+  function gaz(appui) {
+    if (appui === gazAppui) return;
+    gazAppui = appui;
+    if (appui) { arreteAccel(); if (!moteur.marche) moteurOnOff(); if (!moteur.marche) { gazAppui = false; return; } $('bGaz').classList.add('red'); }
+    else $('bGaz').classList.remove('red');
+    if (!gazAnim) { gazT = performance.now(); gazRpm = +$('rpm').value; gazAnim = requestAnimationFrame(gazPas); }
+  }
+  function gazPas(t) {
+    const dt = Math.min(0.05, (t - gazT) / 1000); gazT = t;
+    let rpm = gazRpm;
+    if (gazAppui) { rpm += (RUPTEUR - rpm) * Math.min(1, dt * 5.5); $('load').value = 100; }
+    else { rpm += (RALENTI - rpm) * Math.min(1, dt * 3); $('load').value = rpm > RALENTI + 40 ? 0 : 15; }
+    gazRpm = rpm; $('rpm').value = Math.round(rpm); simMaj();
+    if (!gazAppui && Math.abs(rpm - RALENTI) < 5) { $('rpm').value = RALENTI; $('load').value = 0; simMaj(); gazAnim = 0; return; }
+    gazAnim = requestAnimationFrame(gazPas);
   }
   function arreteAccel() { cancelAnimationFrame(anim); anim = 0; $('bAccel').classList.remove('gold'); }
   function accel() {
@@ -413,8 +432,15 @@
     $('eLic').addEventListener('change', () => { const c = couche(); if (!c) return; c.licence = $('eLic').value; sauve(); rendLib(); });
     $('eSrc').addEventListener('change', () => { const c = couche(); if (!c) return; c.source = $('eSrc').value.trim(); sauve(); rendLib(); });
     $('eRole').addEventListener('change', () => { const c = couche(); if (!c) return; c.role = $('eRole').value; c.boucle = SF.ROLES[c.role].boucle; if (SF.ROLES[c.role].rpm && (c.role === 'ralenti')) c.rpm = 600; if (moteur.marche) moteur.demarre(P.couches, bufs); sauve(); rendTout(); });
-    $('rpm').addEventListener('input', () => { arreteAccel(); simMaj(); }); $('load').addEventListener('input', () => { arreteAccel(); simMaj(); });
+    $('rpm').addEventListener('input', () => { arreteAccel(); if (gazAnim && !gazAppui) { cancelAnimationFrame(gazAnim); gazAnim = 0; } simMaj(); }); $('load').addEventListener('input', () => { arreteAccel(); simMaj(); });
     $('bMoteur').onclick = moteurOnOff; $('bAccel').onclick = accel; $('bClapet').onclick = clapet;
+    const bg = $('bGaz');
+    bg.addEventListener('pointerdown', e => { e.preventDefault(); bg.setPointerCapture(e.pointerId); gaz(true); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => bg.addEventListener(n, () => gaz(false)));
+    const champTexte = e => e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || (e.target.tagName === 'INPUT' && /^(text|search|number)$/.test(e.target.type));
+    document.addEventListener('keydown', e => { if (e.code === 'Space' && !champTexte(e)) { e.preventDefault(); if (!e.repeat) gaz(true); } });
+    document.addEventListener('keyup', e => { if (e.code === 'Space' && !champTexte(e)) { e.preventDefault(); gaz(false); } });
+    window.addEventListener('blur', () => gaz(false));
     document.addEventListener('keydown', e => { if (e.key.toLowerCase() === TOUCHE_CLAPET && !e.shiftKey && !e.ctrlKey && !e.altKey && !(e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && /^(text|search|number)$/.test(e.target.type))) && !e.repeat) { e.preventDefault(); clapet(); } });
     $('bDemarre').onclick = () => { const c = P.couches.find(x => x.role === 'demarrage' && bufs[x.id]); if (!c) { toast('Aucun son de démarrage dans le projet.'); return; } SF.joue(c, bufs[c.id], {}); };
     $('bExportWav').onclick = exporteWav; $('bExportJson').onclick = exporteProjet;

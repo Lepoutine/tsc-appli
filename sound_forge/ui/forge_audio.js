@@ -173,6 +173,8 @@
     };
     this.regle = function (couches, bufs, rpm, charge, clapet) {
       const p = SF.poids(couches.filter(c => voix[c.id]), rpm, charge, clapet), t = x.currentTime;
+      // sous 400 tr/min le moteur s'éteint doucement (0 = silence)
+      maitre.gain.setTargetAtTime(0.8 * Math.max(0, Math.min(1, rpm / 400)), t, 0.05);
       Object.keys(voix).forEach(id => {
         const v = voix[id], q = p[id] || { g: 0, vitesse: 1 };
         v.mix.gain.setTargetAtTime(q.g, t, 0.04);

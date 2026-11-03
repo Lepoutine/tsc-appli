@@ -89,13 +89,14 @@
     <div class="sim">
      <div class="rpm" id="rpmG"><div><b id="rpmV">600</b><small>TR/MIN</small></div></div>
      <div>
-      <div class="ctl"><span>Régime</span><input type="range" id="rpm" min="500" max="2400" step="10" value="600"><output id="rpmO">600</output></div>
+      <div class="ctl"><span>Régime</span><input type="range" id="rpm" min="0" max="2400" step="10" value="600"><output id="rpmO">600</output></div>
       <div class="ctl"><span>Charge</span><input type="range" id="load" min="0" max="100" step="1" value="0"><output id="loadO">0 %</output></div>
       <div id="layers"></div>
       <div class="simbt">
        <button class="b red" type="button" id="bMoteur">Démarrer le moteur</button>
        <button class="b" type="button" id="bAccel">Accélération auto</button>
        <button class="b" type="button" id="bDemarre" title="Joue le son de démarrage s'il existe">Son de démarrage</button>
+       <button class="b gold" type="button" id="bGaz" title="Maintiens pour accélérer, relâche pour revenir au ralenti (ou maintiens la barre Espace)">Coup de gaz (Espace)</button>
        <button class="b" type="button" id="bClapet" title="TSC Clapet : ouvre ou ferme le clapet d'échappement (touche V)">Ouvrir le clapet (V)</button>
       </div>
      </div>
