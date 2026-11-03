@@ -36,6 +36,7 @@ __declspec(dllimport) BOOL WINAPI ReadFile(HANDLE, void *, DWORD, DWORD *, void 
 __declspec(dllimport) BOOL WINAPI WriteFile(HANDLE, const void *, DWORD, DWORD *, void *);
 __declspec(dllimport) DWORD WINAPI GetFileSize(HANDLE, DWORD *);
 __declspec(dllimport) BOOL WINAPI CloseHandle(HANDLE);
+__declspec(dllimport) BOOL WINAPI CreateDirectoryA(const char *, void *);
 __declspec(dllimport) DWORD WINAPI GetModuleFileNameA(HMODULE, char *, DWORD);
 __declspec(dllimport) u64 WINAPI GetTickCount64(void);
 __declspec(dllimport) BOOL WINAPI QueryPerformanceCounter(i64 *);
@@ -53,7 +54,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.9.2"
+#define VERSION "tsc-graphics 0.9.3"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -102,6 +103,9 @@ struct Reglages {
 	float ldr = 1, ldr_expo = 1.5f, ldr_contraste = 1, ldr_epaule = 0.75f, ldr_sat = 0.88f, ldr_sat_hautes = -0.3f, ldr_temperature = 0, ldr_teinte = 0, ldr_noirs = 0, ldr_verts = 0.4f;
 	/* 0.9.2 : table de couleurs 3D apprise sur les videos reelles (tsc-graphics-lut.bin, 32x32x32 RGBA 16 bits), force 0-1 */
 	float ldr_lut = 1;
+	/* 0.9.3 : TSC Neural, donnees d'entrainement : changer ce nombre (N) = N images enregistrees, une toutes les 2 s, image du jeu
+	   SANS effet TSC (HDR, profondeur, albedo+feuillage, vue 8 bits du jeu) dans plugins\\tsc_neural */
+	float enregistre = 0;
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -128,7 +132,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -235,7 +239,8 @@ static float g_val_effacement = -1;
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
 static void *g_ps_lm, *g_lm, *g_lm_srv, *g_lm_rtv;
-static void *g_lut, *g_lut_srv; static u64 g_lut_hash;   /* 0.9.2 : table de couleurs 3D */   /* 0.9.1 : reference de lumiere partagee par les 3 vues */
+static void *g_lut, *g_lut_srv; static u64 g_lut_hash;
+static int g_enr_image, g_enr_reste, g_enr_num; static u64 g_enr_t;   /* 0.9.3 : enregistrement TSC Neural */   /* 0.9.2 : table de couleurs 3D */   /* 0.9.1 : reference de lumiere partagee par les 3 vues */
 static void *g_ps_ldr, *g_ldr, *g_ldr_srv, *g_ldr_tex; static UINT g_ldr_w, g_ldr_h, g_ldr_fmt; static int g_ldr_n; static i64 g_n_ldr;   /* 0.9 */
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
@@ -304,6 +309,26 @@ static void charger_lut() {
 	g_nous--;
 	if (hr < 0 || !g_lut_srv) { REL(g_lut); logline("table de couleurs refusee", hr); return; }
 	logline("table de couleurs chargee (tsc-graphics-lut.bin, 32x32x32)");
+}
+/* 0.9.3 : copie GPU -> disque d'une texture (niveau 0), en-tete 32 octets : "TSCN", largeur, hauteur, format DXGI, pas de ligne */
+static void vider_tex(void *src, const char *quoi, int vue) {
+	TEX2D_DESC d; desc_tex(src, d);
+	TEX2D_DESC n = {d.Width, d.Height, 1, 1, d.Format, 1, 0, 3 /*STAGING*/, 0, 0x20000 /*CPU_READ*/, 0};
+	void *st = 0; if (dev_tex(&n, &st) < 0 || !st) { logline("enregistrement : texture de lecture refusee"); return; }
+	((void (WINAPI *)(void *, void *, UINT, UINT, UINT, UINT, void *, UINT, const void *))VT(g_ctx)[C_CopySubresourceRegion])(g_ctx, st, 0, 0, 0, 0, src, 0, 0);
+	struct { void *p; UINT rp, dp; } m = {0, 0, 0};
+	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, st, 0, 1 /*READ*/, 0, &m) >= 0 && m.p) {
+		char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_neural"); CreateDirectoryA(p, 0);
+		Ligne nm; nm.s("\\i"); { i64 v = g_enr_num; char b[8]; for (int k = 5; k >= 0; k--) { b[k] = (char)('0' + v % 10); v /= 10; } b[6] = 0; nm.s(b); }
+		nm.s("_v"); nm.i(vue); nm.s("_"); nm.s(quoi); nm.s(".raw"); cat(p, nm.t);
+		HANDLE f = CreateFileA(p, 0x40000000 /*GENERIC_WRITE*/, 0, 0, 2 /*CREATE_ALWAYS*/, 0x80, 0);
+		if (f != INVALID) {
+			UINT h[8] = {0x4E435354, d.Width, d.Height, d.Format, m.rp, 0, 0, 0}; DWORD w;
+			WriteFile(f, h, sizeof h, &w, 0); WriteFile(f, m.p, m.rp * d.Height, &w, 0); CloseHandle(f);
+		}
+		((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, st, 0);
+	}
+	REL(st);
 }
 static void compiler() {
 	static char src[65536]; int n = lire_fichier("tsc-graphics.hlsl", src, sizeof src);
@@ -567,6 +592,10 @@ static void passe_vue(void *hdr, void *prof) {
 	} else ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
 	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
 	if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
+	if (g_enr_image) {   /* image d'enregistrement : le jeu tel quel, sans effet TSC */
+		vider_tex(g_coul, "hdr", g_vues_traitees); vider_tex(g_prof, "prof", g_vues_traitees);
+		if (gb2_ok) vider_tex(g_gb2, "albedo", g_vues_traitees);
+	}
 	const bool lm_ok = g_ps_lm && g_lm_srv && g_lm_rtv;
 	cbv[61] = lm_ok ? 1.0f : 0.0f;
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
@@ -593,7 +622,7 @@ static void passe_vue(void *hdr, void *prof) {
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps, 0, 0);
 	void *srv[4] = {g_coul_srv, g_prof_srv, gb2_ok ? g_gb2_srv : 0, lm_ok ? g_lm_srv : 0};
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 4, srv);
-	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
+	if (!g_enr_image) ((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
 	void *nul[4] = {0, 0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 4, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	if (qv < QV && g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_b[qi][qv]); g_q_n[qi] = qv + 1; }
@@ -633,6 +662,7 @@ static void passe_ldr(void *tex) {
 	{ void *nr = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nr, 0); }
 	{ void *nul[3] = {0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, nul); }
 	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_ldr, tex);
+	if (g_enr_image) vider_tex(g_ldr, "jeu8", g_ldr_n - 1);
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
 	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
 	VIEWPORT vp = {0, 0, (float)d.Width, (float)d.Height, 0, 1};
@@ -645,7 +675,7 @@ static void passe_ldr(void *tex) {
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 5, srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
-	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
+	if (!g_enr_image) ((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
 	void *nul[5] = {0, 0, 0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 5, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	remettre(sv);
@@ -969,6 +999,9 @@ static void apres_image(void *sc) {
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
+	{ static float prec = -1; if (prec < 0) prec = R.enregistre; else if (R.enregistre != prec) { prec = R.enregistre; if (R.enregistre > 0) { g_enr_reste = (int)R.enregistre; g_enr_t = 0; Ligne l; l.s("TSC Neural : enregistrement de "); l.i(g_enr_reste); l.s(" images (une toutes les 2 s, sans effet)"); journal(l); } } }
+	if (g_enr_image) { g_enr_image = 0; Ligne l; l.s("TSC Neural : image "); l.i(g_enr_num); l.s(" enregistree"); journal(l); }
+	if (g_enr_reste > 0 && now - g_enr_t >= 2000) { g_enr_t = now; g_enr_reste--; g_enr_num++; g_enr_image = 1; }
 	if (!g_trace_auto_fait && n_total > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }
 
 	init_appareil(sc);

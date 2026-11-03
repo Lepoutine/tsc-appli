@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.9.2 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.9.3 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -51,3 +51,6 @@ Valeurs de depart d'apres mesures_reel_v2 (jour). Si ps_ldr ne compile pas, seul
 etait eclairci et sature bien plus que le centre. Maintenant une seule reference, mesuree sur la 1re vue de l'image, sert aux 3.
 0.9.2 : table de couleurs 3D (tsc-graphics-lut.bin, 32x32x32, RGBA 16 bits, ordre r le plus rapide puis g puis b, entree et
 sortie en sRGB) appliquee en dernier dans l'etage apres tone mapping ; relue a chaud ; cle ldr_lut (force). Sans fichier : rien.
+0.9.3 : TSC Neural, donnees d'entrainement : cle enregistre (changer le nombre N = N images sans effet, une toutes les 2 s) ;
+fichiers plugins\tsc_neural\iNNNNNN_vV_{hdr,prof,albedo,jeu8}.raw (en-tete 32 octets : TSCN, largeur, hauteur, format DXGI, pas).
+Lecteur : tsc_graphics/outils/neural_lire.py.

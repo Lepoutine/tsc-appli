@@ -13,3 +13,4 @@ GetTickCount64
 QueryPerformanceCounter
 QueryPerformanceFrequency
 GetModuleHandleExA
+CreateDirectoryA
