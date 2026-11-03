@@ -268,3 +268,65 @@ def main_v4(sons, sortie, regimes=(300, 200), duree=8.0):
         ecrire(nom, normaliser(x, -1))
         noms.append(nom)
     return noms
+
+
+# --- v6 (03/11 20:16, Mendy : « trop rapide et aigu, je veux du grave ») ---
+def grave_grain(g, facteur=0.6):
+    """Joue un coup d'allumage reel plus lentement : plus grave et plus long (facteur 0,6 = environ -9 demi-tons)."""
+    t = np.arange(int(len(g) / facteur)) * facteur
+    return np.interp(t, np.arange(len(g)), g)
+
+
+def filtre_grave(x, sr=SR):
+    """Garde le grave : +5 dB de 40 a 120 Hz, coupe douce au-dessus de 500 Hz (-12 dB a 1 kHz, -24 dB a 2 kHz)."""
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1.0 / sr)
+    g_db = np.zeros_like(f)
+    g_db[(f >= 40) & (f <= 120)] = 5.0
+    r = (f > 120) & (f < 200)
+    g_db[r] = 5.0 * (200 - f[r]) / 80
+    g_db[f < 25] = -12.0
+    h = f > 500
+    g_db[h] = -12.0 * np.log2(f[h] / 500)
+    return np.fft.irfft(X * 10 ** (np.maximum(g_db, -40) / 20), len(x))
+
+
+def ralenti_grave(grains_moteur, grains_echap, rpm, duree, rng, facteur=0.6, cylindres=8):
+    """Un gros « bop » grave par tour, les 3 autres allumages tres faibles, galop tous les 2-3 tours."""
+    gm = [grave_grain(g, facteur) for g in grains_moteur]
+    ge = [grave_grain(g, facteur) for g in grains_echap]
+    n = int(duree * SR)
+    out = np.zeros(n + 2 * SR)
+    pas = 120.0 / (rpm * cylindres)
+    motif = [1.0, 0.12, 0.25, 0.1]
+    t, k, tour, prochain = 0.0, 0, 0, 2
+    accent = 1.0
+    while t < duree:
+        if k % 4 == 0:
+            tour += 1
+            if tour >= prochain:
+                accent, prochain = rng.uniform(1.3, 1.5), tour + rng.integers(2, 4)
+                t += pas * rng.uniform(0.15, 0.35)
+            else:
+                accent = rng.uniform(0.8, 0.95)
+        g = gm[rng.integers(len(gm))]
+        h = ge[rng.integers(len(ge))]
+        amp = motif[k % 4] * accent * rng.uniform(0.9, 1.1)
+        i = int(t * SR)
+        out[i:i + len(g)] += amp * g
+        out[i:i + len(h)] += amp * 1.2 * h
+        t += pas * rng.uniform(0.95, 1.05)
+        k += 1
+    return filtre_grave(out[:n])
+
+
+def main_v6(sons, sortie, regimes=(150, 120), duree=10.0):
+    rng = np.random.default_rng(29)
+    gm = grains_allumage(charger(sons, "500_op_idle"), SR, apres=0.11)
+    ge = grains_allumage(charger(sons, "exhaust_op"), SR, apres=0.11)
+    noms = []
+    for rpm in regimes:
+        nom = os.path.join(sortie, "v6_ralenti_grave_%d.wav" % rpm)
+        ecrire(nom, normaliser(ralenti_grave(gm, ge, rpm, duree, rng), -1))
+        noms.append(nom)
+    return noms
