@@ -54,7 +54,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.9.3"
+#define VERSION "tsc-graphics 0.10"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -106,6 +106,7 @@ struct Reglages {
 	/* 0.9.3 : TSC Neural, donnees d'entrainement : changer ce nombre (N) = N images enregistrees, une toutes les 2 s, image du jeu
 	   SANS effet TSC (HDR, profondeur, albedo+feuillage, vue 8 bits du jeu) dans plugins\\tsc_neural */
 	float enregistre = 0;
+	float sonde_textures = 1;   /* 0.10 : TSC Textures, releve des textures chargees par le jeu (empreinte + format) -> tsc-textures.csv */
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -132,7 +133,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -776,6 +777,13 @@ static void WINAPI h_drawi(void *c, UINT a, UINT b, UINT d, UINT e) { compter();
 typedef HRESULT (WINAPI *PFN_MAP)(void *, void *, UINT, UINT, UINT, void *);
 typedef HRESULT (WINAPI *PFN_GETDATA)(void *, void *, void *, UINT, UINT);
 static PFN_MAP o_map; static PFN_GETDATA o_getdata;
+typedef void (WINAPI *PFN_UPD)(void *, void *, UINT, const void *, const void *, UINT, UINT);
+static PFN_UPD o_upd; static i64 g_tx_upd2;
+/* 0.10 : textures 2D remplies APRES creation (UpdateSubresource) : si ce compte est grand, le remplacement devra se faire ici aussi */
+static void WINAPI h_upd(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) {
+	if (!g_nous && r) { int dim = 0; ((void (WINAPI *)(void *, int *))VT(r)[7 /*GetType*/])(r, &dim); if (dim == 3) g_tx_upd2++; }
+	o_upd(c, r, sub, box, data, rp, dp);
+}
 static HRESULT WINAPI h_map(void *c, void *r, UINT sub, UINT type, UINT fl, void *m) {
 	if (g_nous || c != g_ctx || (type != 1 /*READ*/ && type != 3 /*READ_WRITE*/)) return o_map(c, r, sub, type, fl, m);
 	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_map(c, r, sub, type, fl, m); QueryPerformanceCounter(&b);
@@ -793,7 +801,7 @@ static Crochet g_cr[] = {
 	{C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt}, {C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv}, {C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv},
 	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
 	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi},
-	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata} };
+	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata}, {C_UpdateSubresource, (void *)h_upd, (void **)&o_upd} };
 static void accrocher_contexte() {
 	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
 		for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
@@ -808,9 +816,45 @@ typedef HRESULT (WINAPI *PFN_CTEX)(void *, const TEX2D_DESC *, const void *, voi
 typedef HRESULT (WINAPI *PFN_CPS)(void *, const void *, SIZE_T, void *, void **);
 static PFN_CTEX o_ctex; static PFN_CPS o_cps; static void **g_vt_dev;
 static void ajouter_creation(i64 *n, i64 t) { __atomic_fetch_add(n, 1, __ATOMIC_RELAXED); __atomic_fetch_add(&g_cree_t, t, __ATOMIC_RELAXED); }
+/* 0.10 TSC Textures, etape 1 : RELEVE seulement (rien n'est remplace). Pour chaque texture du jeu creee avec ses donnees
+   (textures de decor : pas de cible de rendu), on note une empreinte du niveau 0, la taille, le format, les niveaux.
+   Sert a savoir (1) si le jeu envoie ses textures a la creation ou plus tard (UpdateSubresource, compte a part),
+   (2) quelles empreintes reviennent d'une partie a l'autre (cle du cache HD). Plafond 40 000 lignes. */
+static volatile long g_tx_verrou; static i64 g_tx_lignes, g_tx_vides, g_tx_avec;
+static bool format_bloc(UINT f, UINT &octets) {
+	if (f >= 70 && f <= 72) { octets = 8; return true; }     /* BC1 */
+	if (f >= 73 && f <= 78) { octets = 16; return true; }    /* BC2, BC3 */
+	if (f >= 79 && f <= 81) { octets = 8; return true; }     /* BC4 */
+	if (f >= 82 && f <= 84) { octets = 16; return true; }    /* BC5 */
+	if (f >= 94 && f <= 99) { octets = 16; return true; }    /* BC6H, BC7 */
+	return false;
+}
+static u64 empreinte(const SUBRES *sr, const TEX2D_DESC *ds, u64 &taille) {
+	UINT ob; UINT lignes = format_bloc(ds->Format, ob) ? (ds->Height + 3) / 4 : ds->Height;
+	taille = (u64)sr->pitch * lignes; const unsigned char *p = (const unsigned char *)sr->p;
+	u64 h = 1469598103934665603ULL ^ taille;
+	/* au plus 4096 blocs de 16 octets repartis sur tout le niveau 0 : rapide et assez sur pour reconnaitre une texture */
+	u64 pas = taille / 4096; if (pas < 16) pas = 16;
+	for (u64 o = 0; o + 16 <= taille; o += pas) { const u64 *q = (const u64 *)(p + o); h = (h ^ q[0]) * 1099511628211ULL; h = (h ^ q[1]) * 1099511628211ULL; h ^= h >> 29; }
+	return h;
+}
+static void releve_texture(const TEX2D_DESC *ds, const void *init) {
+	if (!ds || (ds->BindFlags & 0x8 /*SHADER_RESOURCE*/) == 0 || (ds->BindFlags & 0xA0 /*RT|DS*/)) return;
+	if (!init) { __atomic_fetch_add(&g_tx_vides, 1, __ATOMIC_RELAXED); return; }
+	__atomic_fetch_add(&g_tx_avec, 1, __ATOMIC_RELAXED);
+	if (R.sonde_textures <= 0 || g_tx_lignes >= 40000 || ds->Width < 16 || ds->Height < 16) return;
+	const SUBRES *sr = (const SUBRES *)init; if (!sr->p || !sr->pitch) return;
+	u64 taille; u64 h = empreinte(sr, ds, taille);
+	Ligne l; l.x(h); l.s(";"); l.i(ds->Width); l.s(";"); l.i(ds->Height); l.s(";"); l.i(ds->MipLevels); l.s(";"); l.i(ds->ArraySize); l.s(";"); l.i(ds->Format);
+	l.s(";"); l.i(ds->Usage); l.s(";"); l.i(ds->MiscFlags); l.s(";"); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n");
+	while (__atomic_exchange_n(&g_tx_verrou, 1, __ATOMIC_ACQUIRE)) {}
+	if (g_tx_lignes == 0) { const char *t = "# " VERSION " : empreinte;largeur;hauteur;niveaux;tableau;format;usage;misc;octets_niveau0;tick_ms\r\n"; ecrire("tsc-textures.csv", t, lng(t)); }
+	g_tx_lignes++; ecrire("tsc-textures.csv", l.t, l.n);
+	__atomic_store_n(&g_tx_verrou, 0, __ATOMIC_RELEASE);
+}
 static HRESULT WINAPI h_ctex(void *d, const TEX2D_DESC *ds, const void *init, void **out) {
 	if (g_nous) return o_ctex(d, ds, init, out);
-	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_ctex(d, ds, init, out); QueryPerformanceCounter(&b);
+	i64 a, b; QueryPerformanceCounter(&a); releve_texture(ds, init); HRESULT hr = o_ctex(d, ds, init, out); QueryPerformanceCounter(&b);
 	ajouter_creation(&g_cree_tex, b - a); return hr;
 }
 static HRESULT WINAPI h_cps(void *d, const void *code, SIZE_T n, void *lien, void **out) {
@@ -996,6 +1040,8 @@ static void apres_image(void *sc) {
 		if (!t_bascule) t_bascule = now;
 		if (now - t_bascule >= (u64)(R.bascule_auto * 1000)) { t_bascule = now; g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE (bascule auto)" : "effet TSC : ARRET (bascule auto)"); }
 	} else t_bascule = 0;
+	{ static u64 t_tx; if (!t_tx) t_tx = now; if (now - t_tx > 30000) { t_tx = now; Ligne l; l.s("TSC Textures (releve) : creees avec donnees "); l.i(g_tx_avec);
+		l.s(", creees vides "); l.i(g_tx_vides); l.s(", remplies apres (UpdateSubresource 2D) "); l.i(g_tx_upd2); l.s(", lignes tsc-textures.csv "); l.i(g_tx_lignes); journal(l); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
