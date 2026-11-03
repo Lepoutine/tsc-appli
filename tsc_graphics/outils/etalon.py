@@ -295,8 +295,8 @@ def rendu_photo(img_srgb, p):
     ly = np.log2(y)
     h, w = ly.shape
     r = max(4, int(min(h, w) / 30))
-    small = ly[::4, ::4]
-    base_s = filtre_guide(small, small, max(2, r // 4), 0.4)
+    small = ly[::2, ::2]
+    base_s = filtre_guide(small, small, max(2, r // 2), p.get('eps', 0.12))
     base = np.asarray(Image.fromarray(base_s.astype(np.float32), mode='F').resize((w, h), Image.BILINEAR))
     detail = ly - base
     moy = np.percentile(base, 60)
@@ -329,25 +329,58 @@ def rendu_photo(img_srgb, p):
         clair = np.clip(out - 0.6, 0, None)
         dif = srgb_vers_lin(flou(lin_vers_srgb(clair), max(h, w) / 60))
         out = out + dif * p['diffusion']
-    return np.clip(lin_vers_srgb(np.clip(out, 0, 1)), 0, 1)
+    # dehors : perspective aerienne (lointain plus clair et moins sature), la ou les grandes zones sont claires
+    ext = smooth(nb, p.get('ext_seuil', -1.6), p.get('ext_seuil', -1.6) + 1.2)[..., None]
+    if p.get('ext_desat', 0) > 0:
+        yo = out @ LUMA
+        out = out + (yo[..., None] - out) * ext * p['ext_desat']
+    if p.get('ext_voile', 0) > 0:
+        out = out + ext * p['ext_voile'] * (np.asarray(p.get('ext_teinte', [0.85, 0.9, 1.0])) - out) * 0.5
+    # optique : vignetage, aberration chromatique en bord, grain du capteur
+    yy, xx = np.mgrid[0:h, 0:w]
+    rr = ((xx - w / 2) / (w / 2)) ** 2 + ((yy - h / 2) / (h / 2)) ** 2
+    if p.get('vignette', 0) > 0:
+        out = out * (1 - p['vignette'] * np.clip(rr / 2, 0, 1) ** 1.5)[..., None]
+    if p.get('aberration', 0) > 0:
+        d = p['aberration'] * min(h, w) / 1000
+        sx = ((xx - w / 2) / (w / 2) * d).astype(int); sy = ((yy - h / 2) / (h / 2) * d).astype(int)
+        r = out[np.clip(yy + sy, 0, h - 1), np.clip(xx + sx, 0, w - 1), 0]
+        b = out[np.clip(yy - sy, 0, h - 1), np.clip(xx - sx, 0, w - 1), 2]
+        out = np.stack([r, out[..., 1], b], -1)
+    o = lin_vers_srgb(np.clip(out, 0, 1))
+    if p.get('grain', 0) > 0:
+        rng = np.random.default_rng(1)
+        g = rng.standard_normal((h, w)).astype(np.float32)
+        o = o + (g * p['grain'] * (0.4 + 0.6 * (1 - o.mean(-1))))[..., None]
+    if p.get('douceur', 0) > 0:
+        o = o * (1 - p['douceur']) + flou(o, p.get('douceur_rayon', 1.2)) * p['douceur']
+    return np.clip(o, 0, 1)
 
 
+# Reglages « a fond » (03/11, demande de Mendy) : exposition camera, perspective aerienne, optique (vignetage,
+# aberration, grain, douceur). eps faible = pas de halo autour des montants de cabine.
+_OPT = dict(eps=0.04, voile=0.035, vegetation=[0.95, 1.0, 0.85], veg_force=0.5)
 LOOKS = {
     # jour : dehors lumineux et laiteux comme une camera, cabine dans l'ombre mais lisible
-    'jour': dict(macro=1.3, expo=0.9, haut=-0.6, haut_pente=0.3, micro=0.80, epaule=1.0, blanc=3.0, voile=0.035,
-                 balance=[1.0, 1.0, 1.0], sat=[1.0, 0.97, 0.95], vegetation=[0.95, 1.0, 0.85], veg_force=0.5, diffusion=0.35),
-    # gris : ciel blanc couvert, peu de contraste, couleurs eteintes, leger bleu
-    'gris': dict(macro=1.15, expo=1.15, haut=-0.7, haut_pente=0.3, micro=0.65, epaule=1.0, blanc=3.0, voile=0.05,
-                 balance=[0.97, 1.0, 1.04], sat=[0.85, 0.80, 0.70], vegetation=[0.92, 1.0, 0.9], veg_force=0.4, diffusion=0.25),
-    # pluie : comme gris, plus sombre, brume (voile fort), detail adouci par l'eau sur le pare-brise
-    'pluie': dict(macro=1.1, expo=0.6, haut=-0.8, haut_pente=0.3, micro=0.55, epaule=1.0, blanc=3.0, voile=0.07,
-                  balance=[0.96, 1.0, 1.05], sat=[0.80, 0.78, 0.70], vegetation=[0.92, 1.0, 0.92], veg_force=0.4, diffusion=0.3),
-    # crepuscule : chaud, contre-jour, halo marque autour du soleil
-    'crepuscule': dict(macro=1.3, expo=0.6, haut=-0.4, haut_pente=0.35, micro=0.75, epaule=1.0, blanc=3.0, voile=0.03,
-                       balance=[1.06, 1.0, 0.92], sat=[0.95, 1.0, 1.05], vegetation=[1.0, 1.0, 0.85], veg_force=0.3, diffusion=0.5),
-    # nuit : noirs profonds, lumieres franches qui bavent (eblouissement), pas de voile
-    'nuit': dict(macro=1.4, expo=0.0, haut=0.5, haut_pente=0.5, micro=0.85, epaule=1.0, blanc=2.0, voile=0.01,
-                 balance=[1.0, 0.98, 1.0], sat=[0.9, 1.0, 1.05], vegetation=None, veg_force=0.0, diffusion=0.6),
+    'jour': dict(_OPT, macro=1.6, expo=1.4, haut=-0.3, haut_pente=0.25, micro=0.65, epaule=1.0, blanc=2.2,
+                 balance=[1.0, 1.0, 1.0], sat=[1.0, 0.97, 0.9], diffusion=0.7, ext_desat=0.25, ext_voile=0.25,
+                 vignette=0.35, aberration=1.5, grain=0.012, douceur=0.35),
+    # gris : ciel couvert blanc, lointain delave, couleurs eteintes, leger bleu
+    'gris': dict(_OPT, macro=1.5, expo=1.6, haut=-0.4, haut_pente=0.25, micro=0.55, epaule=1.0, blanc=2.0, voile=0.05,
+                 balance=[0.97, 1.0, 1.03], sat=[0.85, 0.80, 0.6], veg_force=0.4, diffusion=0.6, ext_desat=0.55,
+                 ext_voile=0.45, ext_teinte=[0.92, 0.94, 0.97], vignette=0.3, aberration=1.2, grain=0.014, douceur=0.4),
+    # pluie : brume forte, detail noye par l'eau sur le pare-brise, gris vert
+    'pluie': dict(_OPT, macro=1.5, expo=1.3, haut=-0.5, haut_pente=0.25, micro=0.45, epaule=1.0, blanc=2.0, voile=0.07,
+                  balance=[0.96, 1.0, 1.04], sat=[0.8, 0.8, 0.65], veg_force=0.4, diffusion=0.7, ext_desat=0.5,
+                  ext_voile=0.55, ext_teinte=[0.85, 0.9, 0.92], vignette=0.35, aberration=1.2, grain=0.016, douceur=0.6),
+    # crepuscule : chaud, contre-jour, gros halo, grain de basse lumiere
+    'crepuscule': dict(_OPT, macro=1.7, expo=0.6, haut=0.0, haut_pente=0.3, micro=0.6, epaule=1.0, blanc=2.0, voile=0.03,
+                       balance=[1.08, 1.0, 0.88], sat=[0.95, 1.0, 1.05], veg_force=0.3, diffusion=0.9, ext_desat=0.1,
+                       ext_voile=0.2, ext_teinte=[1.0, 0.85, 0.7], vignette=0.45, aberration=1.5, grain=0.02, douceur=0.4),
+    # nuit : noirs profonds, lumieres franches qui bavent, grain de capteur
+    'nuit': dict(_OPT, macro=1.8, expo=-0.3, haut=0.8, haut_pente=0.5, micro=0.7, epaule=1.0, blanc=1.6, voile=0.0,
+                 balance=[1.0, 0.98, 1.0], sat=[0.9, 1.0, 1.05], vegetation=None, veg_force=0.0, diffusion=1.0,
+                 vignette=0.5, aberration=2.0, grain=0.03, douceur=0.35),
 }
 
 
