@@ -7,7 +7,7 @@ Reprend tout ce que Mendy a demande le 03/11/2026 :
 - sons d'air : purge du compresseur (decompression), frein de parc, pschitt de boite, frein pneumatique, suspension.
 
 Simulation hors FMOD et hors jeu, faite seulement avec les sons de Mendy (lecture seule).
-Usage : python3 apercu_scenario.py <dossier Mes_sons> <dossier sortie> [regime_ralenti]
+Usage : python3 apercu_scenario.py <dossier Mes_sons> <dossier sortie> [regime_ralenti | boucle_ralenti.wav]
 """
 import os
 import sys
@@ -75,7 +75,7 @@ def courbe(points, n):
     return np.interp(t, pt[:, 0], pt[:, 1])
 
 
-def scenario(sons, ralenti=300, graine=5):
+def scenario(sons, ralenti=300, graine=5, boucle_ralenti=None):
     rng = np.random.default_rng(graine)
     duree = 46.0
     n = int(duree * SR)
@@ -91,7 +91,11 @@ def scenario(sons, ralenti=300, graine=5):
     # Ralenti tres bas (galop), present seulement pres du ralenti
     gm = grains_allumage(lire(sons, V8, "500_op_idle"), SR)
     ge = grains_allumage(lire(sons, V8, "exhaust_op"), SR)
-    bas = timbre_reference(ralenti_galop(gm, ge, ralenti, duree, rng))
+    if boucle_ralenti:  # vrai ralenti enregistre (boucle_reelle.py), repete sans saut
+        b, _ = ms.lire_wav(boucle_ralenti)
+        bas = np.tile(b, int(np.ceil(n / len(b))))[:n]
+    else:
+        bas = timbre_reference(ralenti_galop(gm, ge, ralenti, duree, rng))
     bas = bas / (np.sqrt(np.mean(bas ** 2)) + 1e-9)
     couches = [(r, lire(sons, V8, nom)) for r, nom in COUCHES]
     haut = moteur(couches, regime, charge, decel)
@@ -134,10 +138,15 @@ def main(argv=None):
         print(__doc__)
         return 1
     sons, sortie = argv[0], argv[1]
-    ralenti = int(argv[2]) if len(argv) > 2 else 300
+    arg = argv[2] if len(argv) > 2 else "300"
     os.makedirs(sortie, exist_ok=True)
-    x, _, _ = scenario(sons, ralenti)
-    nom = os.path.join(sortie, "v5_scenario_complet_ralenti_%d.wav" % ralenti)
+    if arg.lower().endswith(".wav"):  # 3e argument = boucle de vrai ralenti
+        x, _, _ = scenario(sons, boucle_ralenti=arg)
+        nom = os.path.join(sortie, "scenario_complet_" + os.path.basename(arg))
+    else:
+        ralenti = int(arg)
+        x, _, _ = scenario(sons, ralenti)
+        nom = os.path.join(sortie, "v5_scenario_complet_ralenti_%d.wav" % ralenti)
     ecrire(nom, x)
     with open(os.path.join(sortie, "v5_reperes.txt"), "w", encoding="utf-8") as f:
         for t, quoi in REPERES:
