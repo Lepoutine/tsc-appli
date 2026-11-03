@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.5 « route mouillee v1 + camera v1 » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -15,6 +15,8 @@ cbuffer P : register(b0) {
 	float4 p5; // index de la vue, assombrissement de l'asphalte mouille, attenuation sur la peinture, dernier niveau de mip
 	float4 p6; // camera v1 : intensite globale, brouillard (densite), diffusion (halo des lumieres), grain
 	float4 p7; // saturation des hautes lumieres, desaturation du lointain, ombres de contact, numero d'image (grain anime)
+	float4 p8; // 0.6 : qualite (budget GPU, 0,4-1), ambiance automatique, luminance moyenne de nuit, de jour (a caler)
+	float4 p9; // 0.6 : eau sur vitre (force), taille des gouttes, pluie detectee par le jeu, secondes
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -84,7 +86,8 @@ float4 route(VSO i) {
 	float3 pos = P + N * 0.03;
 	float pas = p4.y * (0.5 + h1);       // depart decale par pixel : pas de « traits multiplies »
 	float3 refl = 0; float poids = 0; float2 libre = -1;
-	[loop] for (int k = 0; k < 64; k++) {
+	int pasmax = (int)(16 + 48 * saturate(p8.x));   // budget : moins de pas de marche si la qualite baisse
+	[loop] for (int k = 0; k < pasmax; k++) {
 		pos += R * pas; pas *= 1.06;
 		if (pos.z < p1.x) break;
 		float2 uv = versUV(pos);
@@ -157,11 +160,16 @@ float3 camera(float2 uv, float3 col) {
 	bool monde = !(ciel(d) || cabine(d));
 	float3 moy = tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb;   // moyenne de la vue (dernier mip)
 	float lm = max(lum(moy), 1e-4);
+	// ambiance automatique : nuit d'apres la luminance moyenne de la vue (seuils nuit_lum / jour_lum a caler en jeu), pluie d'apres l'humidite
+	float nuit = p8.y > 0.5 ? saturate((log2(max(p8.w, 1e-5)) - log2(lm)) / max(log2(max(p8.w, 1e-5)) - log2(max(p8.z, 1e-6)), 0.1)) : 0;
+	float pl = saturate(p0.y);
+	float k_br = p6.y * lerp(1, 0.3, nuit) * (1 + 1.4 * pl), k_dif = p6.z * lerp(1, 1.7, nuit) * (1 + 0.3 * pl);
+	float k_gr = p6.w * lerp(1, 2.5, nuit), k_sat = p7.x * lerp(1, 1.2, nuit) * (1 - 0.4 * pl), k_des = p7.y * (1 + pl);
 	float3 c = col;
 	if (monde) {
 		float3 P = posVue(uv); float z = P.z;
 		// ombres de contact : creux et pieds d'objets, depuis la profondeur reelle (8 directions, ~0,5 m)
-		if (p7.z > 0) {
+		if (p7.z > 0 && p8.x > 0.55) {
 			float pxm = p2.y / (2 * p0.z * max(z, p1.x)); float r = clamp(0.5 * pxm, 2, 40);
 			float occ = 0;
 			[unroll] for (int a = 0; a < 8; a++) {
@@ -175,28 +183,71 @@ float3 camera(float2 uv, float3 col) {
 			c *= 1 - p7.z * 0.45 * saturate(occ / 8 * 1.6);
 		}
 		// perspective aerienne : le lointain se voile vers la couleur moyenne du ciel et se delave
-		float b = 1 - exp(-max(z - 20, 0) * p6.y * 0.002);
+		float b = 1 - exp(-max(z - 20, 0) * k_br * 0.002);
 		float3 voile = moy * float3(0.95, 0.98, 1.05) * 1.3;
 		float l = lum(c);
-		c = lerp(c, lerp(c, float3(l, l, l), p7.y), saturate(b * 2));
+		c = lerp(c, lerp(c, float3(l, l, l), saturate(k_des)), saturate(b * 2));
 		c = lerp(c, voile, saturate(b * 0.85));
 	}
 	// diffusion de l'optique : les lumieres fortes bavent (mips de la copie HDR, au-dessus de 3x la moyenne)
-	if (p6.z > 0) {
+	if (k_dif > 0) {
 		float3 h = 0;
 		[unroll] for (int m = 2; m <= 5; m++) { float3 s = tCouleur.SampleLevel(sLin, uv, min((float)m, p5.w)).rgb; h += max(s - lm * 3, 0) * (0.5 / (m - 1)); }
-		c += h * p6.z * 0.35;
+		c += h * k_dif * 0.35;
 	}
 	// hautes lumieres plus saturees (comme la camera), sans toucher aux tons moyens
-	if (p7.x > 0) { float l = lum(c); float w = saturate((l / lm - 1.5) / 3); c = max(0, l + (c - l) * (1 + p7.x * w)); }
+	if (k_sat > 0) { float l = lum(c); float w = saturate((l / lm - 1.5) / 3); c = max(0, l + (c - l) * (1 + k_sat * w)); }
 	// grain de capteur, plus visible dans les ombres, anime d'une image a l'autre
-	if (p6.w > 0) { float g = bruit(uv * p2.xy + p7.w * float2(17.3, 9.1)) - 0.5; float l = lum(c); c *= 1 + g * p6.w * 2 * (0.4 + 0.6 * saturate(1 - l / (lm * 2))); }
+	if (k_gr > 0) { float g = bruit(uv * p2.xy + p7.w * float2(17.3, 9.1)) - 0.5; float l = lum(c); c *= 1 + g * k_gr * 2 * (0.4 + 0.6 * saturate(1 - l / (lm * 2))); }
 	c = lerp(col, c, saturate(k));
 	if (any(isnan(c)) || any(isinf(c))) return col;
 	return min(max(c, 0), 65504);
 }
+
+// ---------- eau sur la vitre (0.6) : seulement en vue cabine, sur ce qu'on voit A TRAVERS le pare-brise ----------
+// Regle du socle 0.9h : la cabine est la couche de profondeur > 0,9 ; ce qui est en dessous est vu a travers les vitres.
+float h21(float2 p) { return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+float2 h22(float2 p) { return frac(sin(float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)))) * 43758.5453); }
+bool vue_cabine() {
+	int n = 0;
+	[unroll] for (int y = 0; y < 4; y++) [unroll] for (int x = 0; x < 4; x++) { float d = tProf.SampleLevel(sPt, float2(0.125 + x * 0.25, 0.125 + y * 0.25), 0); if (cabine(d)) n++; }
+	return n >= 2;
+}
+float3 vitre(float2 uv, float3 col) {
+	float amt = p9.x * max(p9.z, saturate(p0.y));
+	if (amt <= 0.01) return col;
+	float d = tProf.SampleLevel(sPt, uv, 0);
+	if (cabine(d) || !vue_cabine()) return col;
+	float2 px = uv * p2.xy;
+	// film d'eau : leger flou de tout ce qui est vu a travers la vitre
+	float3 flou = tCouleur.SampleLevel(sLin, uv, min(1.5, p5.w)).rgb;
+	float3 c = lerp(col, flou, 0.3 * amt);
+	// deux couches de gouttes (cellules), qui se renouvellent lentement
+	[unroll] for (int L = 0; L < 2; L++) {
+		float s = (L == 0 ? 26.0 : 13.0) * max(p9.y, 0.2);
+		float2 cell = floor(px / s);
+		float2 cid = cell + L * 71.0;
+		float vie = floor(p9.w / (5 + 4 * h21(cid)) + h21(cid + 3.1));
+		float2 rnd = h22(cid + vie * 13.7);
+		if (h21(cid + vie) > 0.55 * amt + 0.25) continue;      // densite selon la pluie
+		float2 ctr = (cell + 0.2 + 0.6 * rnd) * s;
+		float r = s * (0.18 + 0.27 * h21(cid * 1.7 + vie));
+		float2 v = (px - ctr) / r; float q = dot(v, v);
+		if (q < 1) {
+			// la goutte agit comme une lentille : image inversee et nette du decor, bord sombre, petit reflet
+			float2 ur = (ctr - v * r * 2.5) * p2.zw;
+			float3 g = tCouleur.SampleLevel(sLin, saturate(ur), 0.5).rgb;
+			float bord = smoothstep(0.55, 1.0, q);
+			g = lerp(g * 1.05, g * 0.45, bord);
+			g += lum(g) * 0.6 * saturate(1 - length(v - float2(-0.35, -0.35)) * 3);
+			c = lerp(c, g, saturate((1 - q) * 6) * 0.9);
+		}
+	}
+	return c;
+}
 float4 ps_principal(VSO i) : SV_Target {
 	float4 r = route(i);
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
-	return float4(camera(i.uv, r.rgb), r.a);
+	float3 v = vitre(i.uv, r.rgb);
+	return float4(camera(i.uv, v), r.a);
 }

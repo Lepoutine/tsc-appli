@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.5.0"
+#define VERSION "tsc-graphics 0.6.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -88,10 +88,13 @@ struct Reglages {
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
 	float camera = 1, brouillard = 0.25f, diffusion = 0.6f, grain = 0.012f, sat_hautes = 0.3f, ext_desat = 0.25f, ombres = 0.5f;   /* camera v1 (0.5) */
+	/* 0.6 : modes (0 personnalise, 1 performance extreme, 2 photorealisme optimise), budget GPU, ambiances, eau sur vitre */
+	float mode = 2, budget_ms = 2.5f, ambiance_auto = 1, nuit_lum = 0.02f, jour_lum = 0.25f, vitre = 1, gouttes_taille = 1;
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
 static Reglages R; static u64 g_ini_hash;
+static float g_qualite = 1;   /* 0.6 : gestionnaire de budget GPU (0,4 a 1), ajuste toutes les 2 s */
 static double nombre(const char *&p) { double s = 1, v = 0, d = 0.1; while (*p == ' ' || *p == '\t') p++; if (*p == '-') { s = -1; p++; }
 	while (*p >= '0' && *p <= '9') v = v * 10 + (*p++ - '0'); if (*p == '.' || *p == ',') { p++; while (*p >= '0' && *p <= '9') { v += (*p++ - '0') * d; d *= 0.1; } } return v * s; }
 static bool cle(const char *l, const char *k) { int i = 0; while (k[i] && l[i] == k[i]) i++; if (k[i]) return false; while (l[i] == ' ') i++; return l[i] == '='; }
@@ -106,7 +109,9 @@ static void lire_ini(bool force) {
 		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto},
 		{"profil", &R.profil}, {"taille_min", &R.taille_min}, {"trace", &R.trace},
 		{"camera", &R.camera}, {"brouillard", &R.brouillard}, {"diffusion", &R.diffusion}, {"grain", &R.grain}, {"sat_hautes", &R.sat_hautes},
-		{"ext_desat", &R.ext_desat}, {"ombres", &R.ombres} };
+		{"ext_desat", &R.ext_desat}, {"ombres", &R.ombres},
+		{"mode", &R.mode}, {"budget_ms", &R.budget_ms}, {"ambiance_auto", &R.ambiance_auto}, {"nuit_lum", &R.nuit_lum},
+		{"jour_lum", &R.jour_lum}, {"vitre", &R.vitre}, {"gouttes_taille", &R.gouttes_taille} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -302,7 +307,7 @@ static bool init_appareil(void *sc) {
 	int fl = ((int (WINAPI *)(void *))VT(g_dev)[D_GetFeatureLevel])(g_dev), choisi = 0;
 	HRESULT hr = ((HRESULT (WINAPI *)(void *, UINT, const int *, UINT, UINT, const GUIDx *, int *, void **))VT(g_dev1)[D1_CreateDeviceContextState])(g_dev1, 0, &fl, 1, 7, &IID_Dev, &choisi, &g_etat);
 	if (hr < 0 || !g_etat) { logline("CreateDeviceContextState refuse", hr & 0xffffffffLL); g_etat = 0; return false; }
-	BUF_DESC bd = {128, 2, 4, 0x10000, 0, 0};
+	BUF_DESC bd = {192, 2, 4, 0x10000, 0, 0};
 	((HRESULT (WINAPI *)(void *, const BUF_DESC *, const void *, void **))VT(g_dev)[D_CreateBuffer])(g_dev, &bd, 0, &g_cb);
 	SAMP_DESC s = {0x15, 3, 3, 3, 0, 1, 1, {0, 0, 0, 0}, 0, 3.4e38f};
 	((HRESULT (WINAPI *)(void *, const SAMP_DESC *, void **))VT(g_dev)[D_CreateSampler])(g_dev, &s, &g_samp_lin);
@@ -431,15 +436,21 @@ static void passe_vue(void *hdr, void *prof) {
 	void *rtv = rtv_de(hdr); if (!rtv) return;
 	float tan_v; { float a = R.fov_v * 0.5f * 3.14159265f / 180.0f; float a2 = a * a; tan_v = (a * (1 - a2 / 6 + a2 * a2 / 120)) / (1 - a2 / 2 + a2 * a2 / 24 - a2 * a2 * a2 / 720); }
 	float mouille = R.humidite >= 0 ? R.humidite : g_mouille;
-	float cbv[32] = {
+	/* modes : 1 = performance extreme (route mouillee legere, camera reduite), 2 = photorealisme optimise (tout, sous budget),
+	   0 = personnalise (valeurs de l'ini telles quelles) */
+	float m_cam = R.camera, m_omb = R.ombres, m_dif = R.diffusion, m_gr = R.grain, m_vit = R.vitre, q = g_qualite;
+	if ((int)R.mode == 1) { m_omb = 0; m_dif *= 0.5f; m_gr = 0; m_vit = 0; q = q < 0.5f ? q : 0.5f; }
+	float cbv[48] = {
 		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
 		R.proche, R.plage_min, R.plage_max, R.decalage_z,
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
 		R.intensite, R.rugosite, R.flou, R.trainees,
 		R.etirement, R.pas, R.epaisseur, R.f0,
 		(float)g_vues_traitees, R.assombrir, R.peinture, (float)(g_coul_mips - 1),
-		R.camera, R.brouillard, R.diffusion, R.grain,
-		R.sat_hautes, R.ext_desat, R.ombres, (float)((GetTickCount64() / 16) % 997) };
+		m_cam, R.brouillard, m_dif, m_gr,
+		R.sat_hautes, R.ext_desat, m_omb, (float)((GetTickCount64() / 16) % 997),
+		q, R.ambiance_auto, R.nuit_lum, R.jour_lum,
+		m_vit, R.gouttes_taille, g_pluie ? 1.0f : 0.0f, (float)((GetTickCount64() / 1000) % 100000) };
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);
@@ -800,6 +811,11 @@ static void apres_image(void *sc) {
 		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
 		prof_rapport(l, g_n_img);
 		journal(l);
+		if (g_n_gpu && (int)R.mode != 0) {   /* gestionnaire de budget : garder le cout TSC sous budget_ms */
+			double c = g_gpu_ms / g_n_gpu;
+			if (c > R.budget_ms && g_qualite > 0.4f) { g_qualite *= 0.85f; if (g_qualite < 0.4f) g_qualite = 0.4f; Ligne b; b.s("budget : TSC GPU "); b.f(c, 2); b.s(" ms > "); b.f(R.budget_ms, 2); b.s(" ms -> qualite "); b.f(g_qualite, 2); journal(b); }
+			else if (c < R.budget_ms * 0.6 && g_qualite < 1) { g_qualite *= 1.05f; if (g_qualite > 1) g_qualite = 1; }
+		}
 		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_petites = 0; g_n_omsrt = g_n_dessins = 0;
 	}
 	if (g_trace) {
