@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.3 « route mouillee v1 » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.4.2 « route mouillee v1 » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -59,6 +59,7 @@ float4 ps_principal(VSO i) : SV_Target {
 		float z = lineaire(d); return float4(lerp(float3(1, 0.9, 0.2), float3(0.1, 0.9, 0.3), saturate(log2(z) / 9)) * (0.5 + 0.5 * frac(log2(z))), 1);
 	}
 	if (ciel(d) || cabine(d)) return src;
+	if (any(isnan(col)) || any(isinf(col))) return src;
 	float3 P = posVue(i.uv);
 	float3 N = normale(i.uv, P);
 	if (vue == 2) return float4(N * 0.5 + 0.5, 1);
@@ -133,6 +134,12 @@ float4 ps_principal(VSO i) : SV_Target {
 	float3 base = col * (1 - p5.y * mouille * (1 - 0.6 * peinture));
 	float gris = lc * (1 - p5.y * mouille);
 	base = max(0, lerp(float3(gris, gris, gris), base, 1 + 0.15 * mouille));
+	// 0.4.2 (test T1b) : taches bleues/violettes = valeurs HDR invalides (NaN/infini) propagees par les mips ou lues
+	// sur les gouttes de la vitre : on ne garde qu'un reflet fini et borne, sinon le pixel du jeu tel quel
+	if (any(isnan(refl)) || any(isinf(refl))) { refl = 0; poids = 0; }
+	refl = clamp(refl, 0, 64);
 	float3 res = base + refl * poids * F * spec * p3.x;
+	if (any(isnan(res)) || any(isinf(res))) return src;
+	res = min(max(res, 0), 65504);   // en D3D11 min/max renvoient l'operande valide : un NaN restant devient 0
 	return float4(res, src.a);
 }

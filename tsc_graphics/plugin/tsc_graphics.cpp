@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.4.1"
+#define VERSION "tsc-graphics 0.4.2"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -87,6 +87,7 @@ struct Reglages {
 	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
+	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
 static Reglages R; static u64 g_ini_hash;
@@ -102,7 +103,7 @@ static void lire_ini(bool force) {
 		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
 		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues},
 		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto},
-		{"profil", &R.profil}, {"taille_min", &R.taille_min} };
+		{"profil", &R.profil}, {"taille_min", &R.taille_min}, {"trace", &R.trace} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -409,6 +410,7 @@ static void passe_vue(void *hdr, void *prof) {
 	REL(old);
 	g_nous--;
 	g_vues_traitees++;
+	if (g_trace) { Ligne l; l.s("  >>> passe TSC sur la vue "); l.i(g_vues_traitees); l.s(" : "); dire_tex(l, hdr); trace_txt(l); }
 }
 static void fin_mesure_gpu() {
 	if (!g_ctx || !g_q_ouvert) return;
@@ -708,6 +710,7 @@ static void apres_image(void *sc) {
 	} else t_bascule = 0;
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) compiler(); if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
+	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
 	if (!g_trace_auto_fait && n_total > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }
 
 	init_appareil(sc);
