@@ -104,6 +104,19 @@ def allumage(x, sr, cylindres):
     return float(f), float(tr_min)
 
 
+def craquements(x, sr, k=4.0):
+    if len(x) < sr // 10:
+        return 0.0
+    e = np.diff(x, prepend=x[:1]) ** 2
+    w = max(int(0.005 * sr), 1)
+    st = np.convolve(e, np.ones(w) / w, "same")[::w]
+    L = 40
+    pad = np.pad(st, (L // 2, L // 2), mode="edge")
+    med = np.median(np.lib.stride_tricks.sliding_window_view(pad, L + 1), axis=1)[: len(st)]
+    haut = st > k * med + 1e-12
+    return float(np.count_nonzero(haut[1:] & ~haut[:-1])) / (len(x) / sr)
+
+
 def mesurer(x, sr, cylindres=8):
     r = {"duree_s": round(len(x) / sr, 2), "frequence_echantillonnage": sr}
     rms = float(np.sqrt(np.mean(x ** 2))) if len(x) else 0.0
@@ -135,14 +148,10 @@ def mesurer(x, sr, cylindres=8):
             pics = np.array(pics)
             r["irregularite_pct"] = round(100.0 * float(pics.std() / max(pics.mean(), 1e-12)), 1)
 
-    # craquements : pics de l'aigu (> 2 kHz par difference) bien au-dessus de la mediane
-    hp = np.diff(x, prepend=x[:1]) if len(x) else x
-    ea = enveloppe(hp, sr, 500.0)
-    if len(ea):
-        seuil = 6.0 * float(np.median(ea) + 1e-9)
-        haut = ea > seuil
-        fronts = int(np.count_nonzero(haut[1:] & ~haut[:-1]))
-        r["craquements_par_s"] = round(fronts / max(len(x) / sr, 1e-9), 2)
+    # craquements : trames de 5 ms dont l'energie aigue (derivee) depasse 4 x la mediane locale (200 ms).
+    # Relatif au voisinage : un moteur aigu en continu ne compte pas, une petarade si (verifie le 03/11 :
+    # claquant_1-3 = 16-18/s, boucles de ralenti = 0-0,3/s).
+    r["craquements_par_s"] = round(craquements(x, sr), 2)
 
     # jonction de boucle : saut d'echantillon et ecart de niveau entre la fin et le debut
     n50 = int(0.05 * sr)
@@ -178,18 +187,27 @@ def diagnostic(mien, ref):
         d.append("Son trop compresse, sans punch (facteur de crete %.1f dB contre %.1f dB)." % (mien["facteur_crete_db"], ref["facteur_crete_db"]))
     if mien.get("jonction_saut_x_pente_mediane", 0) > 20 or abs(mien.get("jonction_ecart_niveau_db", 0)) > 2:
         d.append("La jonction de boucle s'entend (saut %.0f x, ecart %.1f dB)." % (mien.get("jonction_saut_x_pente_mediane", 0), mien.get("jonction_ecart_niveau_db", 0)))
-    if mien.get("regime_estime_tr_min") and ref.get("regime_estime_tr_min"):
-        if abs(mien["regime_estime_tr_min"] - ref["regime_estime_tr_min"]) > 0.15 * ref["regime_estime_tr_min"]:
-            d.append("Regimes differents (%d contre %d tr/min estimes) : comparer a regime egal." % (mien["regime_estime_tr_min"], ref["regime_estime_tr_min"]))
+    # le regime estime n'est qu'indicatif sur de vrais sons (essai du 03/11 sur les sons de Mendy : erreurs d'octave
+    # frequentes) ; on ne compare que le regime nominal (nom du fichier ou --regime)
+    if mien.get("regime_nominal") and ref.get("regime_nominal"):
+        if abs(mien["regime_nominal"] - ref["regime_nominal"]) > 0.15 * ref["regime_nominal"]:
+            d.append("Regimes differents (%d contre %d tr/min) : comparer a regime egal." % (mien["regime_nominal"], ref["regime_nominal"]))
     if not d:
         d.append("Aucun ecart net sur les mesures : la difference est ailleurs (dynamique des coups de gaz, mixage en jeu). Ecouter la vraie banque dans TSCF_Lab.")
     return d
 
 
+def regime_du_nom(nom):
+    """'1500_op_idle.wav' ou 'rv8op 900ex.wav' -> 1500 / 900 (regime auquel le mod joue la couche)."""
+    import re
+    m = re.search(r"(?<!\d)(\d{3,4})(?!\d)", nom)
+    return int(m.group(1)) if m and 300 <= int(m.group(1)) <= 3000 else None
+
+
 def mesurer_dossier(dossier, csv_chemin, cylindres=8):
     import csv
     import os
-    cols = ["fichier", "duree_s", "regime_estime_tr_min", "niveau_rms_dbfs", "crete_dbfs", "facteur_crete_db", "ecretage_pct",
+    cols = ["fichier", "duree_s", "regime_nominal", "regime_estime_tr_min", "niveau_rms_dbfs", "crete_dbfs", "facteur_crete_db", "ecretage_pct",
             "grave", "corps", "medium", "rauque", "aigu", "rondeur_demi_ordre_db", "irregularite_pct", "craquements_par_s",
             "jonction_saut_x_pente_mediane", "jonction_ecart_niveau_db", "erreur"]
     n = 0
@@ -205,6 +223,7 @@ def mesurer_dossier(dossier, csv_chemin, cylindres=8):
                 try:
                     x, sr = lire_wav(chemin)
                     r = mesurer(x, sr, cylindres)
+                    r["regime_nominal"] = regime_du_nom(nom)
                     lig.update({k: v for k, v in r.items() if k != "bandes_pct"})
                     lig.update(r["bandes_pct"])
                 except Exception as e:  # un fichier illisible ne bloque pas les autres
