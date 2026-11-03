@@ -26,3 +26,6 @@ Le mod « Scania R770 Valve Exhaust » de Mendy (scania_ng_v8.bank) contient :
 - les sons ponctuels `valve open`, `rv8op valve`, `rv8op exstop`, `rv8op 1170bov` et `rv8op eb shift 1-3`.
 
 La banque est en Vorbis (code FSB5 15) : elle se décode avec vgmstream, sur une copie.
+
+## Niveaux mesurés (03/11/2026)
+Les couches `rv8op <rpm>ex` d'origine ont des niveaux très inégaux : environ −34 dB RMS à 550 tr/min et −12 dB à 2000, soit un écart de 12 fois. Dans l'aperçu, elles sont égalisées sur une cible qui monte de −17 dB à 600 tr/min jusqu'à −13 dB à 2000. Les couches clapet fermé (`rv8 exl`) sont égalisées 3 dB plus bas. Les sons d'ouverture et de fermeture ont leur crête ramenée à −3 dB.
