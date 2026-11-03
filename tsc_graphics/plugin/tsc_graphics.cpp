@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.6.0"
+#define VERSION "tsc-graphics 0.7.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -87,9 +87,11 @@ struct Reglages {
 	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
-	float camera = 1, brouillard = 0.25f, diffusion = 0.6f, grain = 0.012f, sat_hautes = 0.3f, ext_desat = 0.25f, ombres = 0.5f;   /* camera v1 (0.5) */
+	float camera = 1, brouillard = 0, diffusion = 0.3f, grain = 0.012f, sat_hautes = 0.3f, ext_desat = 0.1f, ombres = 0.8f;   /* camera v1 (0.5) */
 	/* 0.6 : modes (0 personnalise, 1 performance extreme, 2 photorealisme optimise), budget GPU, ambiances, eau sur vitre */
-	float mode = 2, budget_ms = 2.5f, ambiance_auto = 1, nuit_lum = 0.02f, jour_lum = 0.25f, vitre = 1, gouttes_taille = 1;
+	float mode = 2, budget_ms = 4, ambiance_auto = 1, nuit_lum = 0.02f, jour_lum = 0.25f, vitre = 1, gouttes_taille = 1;
+	/* 0.7 : T2 a montre une image quasi inchangee (< 1 point de luminosite) : devoile du jeu, contraste local, noirs, lumiere du soleil, vegetation */
+	float devoile = 0.5f, clarte = 0.35f, noirs = 0.3f, chaleur = 0.3f, vegetation = 0.6f;
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -111,7 +113,8 @@ static void lire_ini(bool force) {
 		{"camera", &R.camera}, {"brouillard", &R.brouillard}, {"diffusion", &R.diffusion}, {"grain", &R.grain}, {"sat_hautes", &R.sat_hautes},
 		{"ext_desat", &R.ext_desat}, {"ombres", &R.ombres},
 		{"mode", &R.mode}, {"budget_ms", &R.budget_ms}, {"ambiance_auto", &R.ambiance_auto}, {"nuit_lum", &R.nuit_lum},
-		{"jour_lum", &R.jour_lum}, {"vitre", &R.vitre}, {"gouttes_taille", &R.gouttes_taille} };
+		{"jour_lum", &R.jour_lum}, {"vitre", &R.vitre}, {"gouttes_taille", &R.gouttes_taille},
+		{"devoile", &R.devoile}, {"clarte", &R.clarte}, {"noirs", &R.noirs}, {"chaleur", &R.chaleur}, {"vegetation", &R.vegetation} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -219,6 +222,8 @@ static float g_val_effacement = -1;
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
+/* 0.7 : cible 2 du G-buffer de la vue (albedo RGB, alpha = masque du feuillage, audit socle v0.3) et sa copie */
+static void *g_gb2_tex, *g_gb2, *g_gb2_srv; static UINT g_gb2_w, g_gb2_h, g_gb2_fmt; static bool g_gb2_valide;
 struct Rtv { void *tex, *rtv; }; static Rtv g_rtv[8]; static int g_nrtv;
 #define NQ 4
 #define QV 4
@@ -307,7 +312,7 @@ static bool init_appareil(void *sc) {
 	int fl = ((int (WINAPI *)(void *))VT(g_dev)[D_GetFeatureLevel])(g_dev), choisi = 0;
 	HRESULT hr = ((HRESULT (WINAPI *)(void *, UINT, const int *, UINT, UINT, const GUIDx *, int *, void **))VT(g_dev1)[D1_CreateDeviceContextState])(g_dev1, 0, &fl, 1, 7, &IID_Dev, &choisi, &g_etat);
 	if (hr < 0 || !g_etat) { logline("CreateDeviceContextState refuse", hr & 0xffffffffLL); g_etat = 0; return false; }
-	BUF_DESC bd = {192, 2, 4, 0x10000, 0, 0};
+	BUF_DESC bd = {224, 2, 4, 0x10000, 0, 0};
 	((HRESULT (WINAPI *)(void *, const BUF_DESC *, const void *, void **))VT(g_dev)[D_CreateBuffer])(g_dev, &bd, 0, &g_cb);
 	SAMP_DESC s = {0x15, 3, 3, 3, 0, 1, 1, {0, 0, 0, 0}, 0, 3.4e38f};
 	((HRESULT (WINAPI *)(void *, const SAMP_DESC *, void **))VT(g_dev)[D_CreateSampler])(g_dev, &s, &g_samp_lin);
@@ -374,13 +379,30 @@ static bool copies_pretes(void *hdr, void *prof) {
 		g_vram = (u64)h.Width * h.Height * 8 * (g_coul_mips > 1 ? 4 : 3) / 3 + (u64)d.Width * d.Height * 8;
 		Ligne l; l.s("copies creees : HDR "); dire_tex(l, g_coul); l.s(" ; profondeur "); dire_tex(l, g_prof); l.s(" ; memoire video ajoutee ~"); l.i((i64)(g_vram >> 20)); l.s(" Mo"); journal(l);
 	}
+	/* 0.7 : copie de l'albedo + masque du feuillage ; sans elle, la couche vegetation est simplement coupee (t2 vide) */
+	g_gb2_valide = false;
+	if (g_gb2_tex) {
+		TEX2D_DESC g; desc_tex(g_gb2_tex, g);
+		if (g.SampleCount > 1 || g.Width != h.Width || g.Height != h.Height) { /* pas la meme vue : on n'utilise pas */ }
+		else if (!g_gb2 || g_gb2_w != g.Width || g_gb2_h != g.Height || g_gb2_fmt != g.Format) {
+			REL(g_gb2_srv); REL(g_gb2);
+			TEX2D_DESC n = {g.Width, g.Height, 1, 1, g.Format, 1, 0, 0, 8, 0, 0};
+			if (dev_tex(&n, &g_gb2) < 0) g_gb2 = 0;
+			else {
+				((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_gb2, 0, &g_gb2_srv);
+				g_gb2_w = g.Width; g_gb2_h = g.Height; g_gb2_fmt = g.Format;
+				Ligne l; l.s("copie du G-buffer (albedo + feuillage) creee : "); dire_tex(l, g_gb2); journal(l);
+			}
+		}
+		if (g_gb2 && g_gb2_srv && g_gb2_w == g.Width && g_gb2_h == g.Height && g_gb2_fmt == g.Format && g.SampleCount <= 1) g_gb2_valide = true;
+	}
 	return g_coul_srv && g_prof_srv;
 }
 
 
 /* ---------- 0.4.3 : etat du jeu sauve puis remis a l'identique autour de la passe TSC ---------- */
 struct EtatJeu {
-	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[2], *smp[2], *cb;
+	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[3], *smp[2], *cb;
 	float bf[4]; UINT masque, sref, topo, nvp, nsc; VIEWPORT vp[16]; long sc[16][4];
 };
 typedef void (WINAPI *GetSh)(void *, void **, void **, UINT *);
@@ -401,7 +423,7 @@ static void sauver(EtatJeu &e) {
 	((void (WINAPI *)(void *, void **))VT(c)[C_RSGetState])(c, &e.rs);
 	e.nvp = 16; ((void (WINAPI *)(void *, UINT *, VIEWPORT *))VT(c)[C_RSGetViewports])(c, &e.nvp, e.vp);
 	e.nsc = 16; ((void (WINAPI *)(void *, UINT *, void *))VT(c)[C_RSGetScissor])(c, &e.nsc, e.sc);
-	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 2, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 3, e.srv);
 	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSamplers])(c, 0, 2, e.smp);
 	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetCB])(c, 0, 1, &e.cb);
 }
@@ -422,12 +444,12 @@ static void remettre(EtatJeu &e) {
 	/* cibles d'abord, puis ressources (sinon le pilote delie une SRV encore liee en cible) */
 	UINT nrt = 0; for (UINT k = 0; k < 8; k++) if (e.rtv[k]) nrt = k + 1;
 	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(c)[C_OMSetRT])(c, nrt, e.rtv, e.dsv);
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 2, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 3, e.srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSamplers])(c, 0, 2, e.smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetCB])(c, 0, 1, &e.cb);
 	for (int k = 0; k < 8; k++) REL(e.rtv[k]);
 	REL(e.dsv); REL(e.vs); REL(e.ps); REL(e.gs); REL(e.hs); REL(e.ds); REL(e.il); REL(e.bl); REL(e.dss); REL(e.rs);
-	REL(e.srv[0]); REL(e.srv[1]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
+	REL(e.srv[0]); REL(e.srv[1]); REL(e.srv[2]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
 }
 /* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
 static void passe_vue(void *hdr, void *prof) {
@@ -440,7 +462,9 @@ static void passe_vue(void *hdr, void *prof) {
 	   0 = personnalise (valeurs de l'ini telles quelles) */
 	float m_cam = R.camera, m_omb = R.ombres, m_dif = R.diffusion, m_gr = R.grain, m_vit = R.vitre, q = g_qualite;
 	if ((int)R.mode == 1) { m_omb = 0; m_dif *= 0.5f; m_gr = 0; m_vit = 0; q = q < 0.5f ? q : 0.5f; }
-	float cbv[48] = {
+	float m_veg = R.vegetation; if ((int)R.mode == 1) m_veg *= 0.5f;
+	const bool gb2_ok = g_gb2_valide;
+	float cbv[56] = {
 		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
 		R.proche, R.plage_min, R.plage_max, R.decalage_z,
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
@@ -450,7 +474,9 @@ static void passe_vue(void *hdr, void *prof) {
 		m_cam, R.brouillard, m_dif, m_gr,
 		R.sat_hautes, R.ext_desat, m_omb, (float)((GetTickCount64() / 16) % 997),
 		q, R.ambiance_auto, R.nuit_lum, R.jour_lum,
-		m_vit, R.gouttes_taille, g_pluie ? 1.0f : 0.0f, (float)((GetTickCount64() / 1000) % 100000) };
+		m_vit, R.gouttes_taille, g_pluie ? 1.0f : 0.0f, (float)((GetTickCount64() / 1000) % 100000),
+		R.devoile, R.clarte, R.noirs, R.chaleur,
+		gb2_ok ? m_veg : 0.0f, 0, 0, 0 };
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);
@@ -472,6 +498,7 @@ static void passe_vue(void *hdr, void *prof) {
 		((void (WINAPI *)(void *, void *))VT(g_ctx)[C_GenerateMips])(g_ctx, g_coul_srv);
 	} else ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
 	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
+	if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
 	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
 	VIEWPORT vp = {0, 0, (float)g_coul_w, (float)g_coul_h, 0, 1};
@@ -480,12 +507,12 @@ static void passe_vue(void *hdr, void *prof) {
 	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps, 0, 0);
-	void *srv[2] = {g_coul_srv, g_prof_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 2, srv);
+	void *srv[3] = {g_coul_srv, g_prof_srv, gb2_ok ? g_gb2_srv : 0}; void *smp[2] = {g_samp_lin, g_samp_pt};
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
 	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
-	void *nul[2] = {0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 2, nul);
+	void *nul[3] = {0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	if (qv < QV && g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_b[qi][qv]); g_q_n[qi] = qv + 1; }
 	remettre(sv);
@@ -526,7 +553,15 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 			quitter_vue();
 		}
 		const bool grande = rt0 && d0.Width >= (UINT)R.taille_min && d0.Height >= (UINT)R.taille_min;
-		if (n >= 4 && rt0 && d0.Format == 10 && pt) { quitter_vue(); if (grande) { g_etape = E_GBUF; g_vues_image++; } else g_n_petites++; g_n_gbuf++; }
+		if (n >= 4 && rt0 && d0.Format == 10 && pt) {
+			quitter_vue();
+			if (grande) {
+				g_etape = E_GBUF; g_vues_image++;
+				/* 0.7 : garder la cible 2 (albedo + masque du feuillage) de cette vue pour la couche vegetation */
+				REL(g_gb2_tex); g_gb2_tex = rtv[2] ? ressource(rtv[2]) : 0;
+			} else g_n_petites++;
+			g_n_gbuf++;
+		}
 		else if (n == 1 && grande && d0.Format == 10 && pt && g_etape == E_GBUF) {
 			TEX2D_DESC dp; desc_tex(pt, dp);
 			if (dp.Width == d0.Width && dp.Height == d0.Height) {

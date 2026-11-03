@@ -1,9 +1,10 @@
-// TSC Neural Graphics 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
 Texture2D tCouleur : register(t0);
 Texture2D<float> tProf : register(t1);
+Texture2D tGb2 : register(t2);   // 0.7 : cible 2 du G-buffer (albedo RGB, alpha = masque du feuillage) ; absente = vegetation coupee
 SamplerState sLin : register(s0);
 SamplerState sPt : register(s1);
 cbuffer P : register(b0) {
@@ -17,6 +18,8 @@ cbuffer P : register(b0) {
 	float4 p7; // saturation des hautes lumieres, desaturation du lointain, ombres de contact, numero d'image (grain anime)
 	float4 p8; // 0.6 : qualite (budget GPU, 0,4-1), ambiance automatique, luminance moyenne de nuit, de jour (a caler)
 	float4 p9; // 0.6 : eau sur vitre (force), taille des gouttes, pluie detectee par le jeu, secondes
+	float4 p10; // 0.7 : devoile (retire la brume du jeu), clarte (contraste local), noirs, chaleur (soleil chaud / ombres froides)
+	float4 p11; // 0.7 : vegetation (0 si pas de copie du G-buffer), reserve
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -171,16 +174,29 @@ float3 camera(float2 uv, float3 col) {
 		// ombres de contact : creux et pieds d'objets, depuis la profondeur reelle (8 directions, ~0,5 m)
 		if (p7.z > 0 && p8.x > 0.55) {
 			float pxm = p2.y / (2 * p0.z * max(z, p1.x)); float r = clamp(0.5 * pxm, 2, 40);
-			float occ = 0;
+			float occ = 0, occ2 = 0; float3 rebond = 0;
+			// 0.7 : deux anneaux (contact ~0,5 m et occlusion ambiante ~2 m) + lumiere indirecte (couleur des occulteurs proches)
 			[unroll] for (int a = 0; a < 8; a++) {
 				float ang = a * 0.785398 + bruit(uv * p2.xy) * 0.785398;
-				float2 u2 = uv + float2(cos(ang), sin(ang)) * r * p2.zw;
+				float2 dir = float2(cos(ang), sin(ang));
+				float2 u2 = uv + dir * r * p2.zw;
 				float ds = tProf.SampleLevel(sPt, u2, 0);
-				if (ciel(ds) || cabine(ds)) continue;
-				float dz = z - lineaire(ds);
-				occ += saturate(dz / (0.5 + 0.02 * z)) * saturate(1 - dz / (3 + 0.1 * z));
+				if (!(ciel(ds) || cabine(ds))) {
+					float dz = z - lineaire(ds);
+					occ += saturate(dz / (0.5 + 0.02 * z)) * saturate(1 - dz / (3 + 0.1 * z));
+				}
+				float2 u3 = uv + dir * min(r * 4, 160) * p2.zw;
+				float ds3 = tProf.SampleLevel(sPt, u3, 0);
+				if (!(ciel(ds3) || cabine(ds3))) {
+					float dz3 = z - lineaire(ds3);
+					float w3 = saturate(dz3 / (1.5 + 0.03 * z)) * saturate(1 - dz3 / (8 + 0.2 * z));
+					occ2 += w3;
+					rebond += tCouleur.SampleLevel(sLin, u3, min(2, p5.w)).rgb * w3;
+				}
 			}
-			c *= 1 - p7.z * 0.45 * saturate(occ / 8 * 1.6);
+			float ao = saturate(occ / 8 * 1.6) * 0.5 + saturate(occ2 / 8 * 1.4) * 0.35;
+			float3 alb = max(tGb2.SampleLevel(sPt, uv, 0).rgb, 0);
+			c = c * (1 - p7.z * ao) + rebond / 8 * (alb + 0.15) * p7.z * 0.25;
 		}
 		// perspective aerienne : le lointain se voile vers la couleur moyenne du ciel et se delave
 		float b = 1 - exp(-max(z - 20, 0) * k_br * 0.002);
@@ -192,8 +208,8 @@ float3 camera(float2 uv, float3 col) {
 	// diffusion de l'optique : les lumieres fortes bavent (mips de la copie HDR, au-dessus de 3x la moyenne)
 	if (k_dif > 0) {
 		float3 h = 0;
-		[unroll] for (int m = 2; m <= 5; m++) { float3 s = tCouleur.SampleLevel(sLin, uv, min((float)m, p5.w)).rgb; h += max(s - lm * 3, 0) * (0.5 / (m - 1)); }
-		c += h * k_dif * 0.35;
+		[unroll] for (int m = 2; m <= 5; m++) { float3 s = tCouleur.SampleLevel(sLin, uv, min((float)m, p5.w)).rgb; h += max(s - lm * 5, 0) * (0.5 / (m - 1)); }
+		c += h * k_dif * 0.2;
 	}
 	// hautes lumieres plus saturees (comme la camera), sans toucher aux tons moyens
 	if (k_sat > 0) { float l = lum(c); float w = saturate((l / lm - 1.5) / 3); c = max(0, l + (c - l) * (1 + k_sat * w)); }
@@ -214,7 +230,7 @@ bool vue_cabine() {
 	return n >= 2;
 }
 float3 vitre(float2 uv, float3 col) {
-	float amt = p9.x * max(p9.z, saturate(p0.y));
+	float amt = p9.x * saturate(p9.z) * max(saturate(p0.y), 0.5);   // 0.7 : seulement quand le jeu fait vraiment pleuvoir
 	if (amt <= 0.01) return col;
 	float d = tProf.SampleLevel(sPt, uv, 0);
 	if (cabine(d) || !vue_cabine()) return col;
@@ -229,9 +245,9 @@ float3 vitre(float2 uv, float3 col) {
 		float2 cid = cell + L * 71.0;
 		float vie = floor(p9.w / (5 + 4 * h21(cid)) + h21(cid + 3.1));
 		float2 rnd = h22(cid + vie * 13.7);
-		if (h21(cid + vie) > 0.55 * amt + 0.25) continue;      // densite selon la pluie
-		float2 ctr = (cell + 0.2 + 0.6 * rnd) * s;
-		float r = s * (0.18 + 0.27 * h21(cid * 1.7 + vie));
+		if (h21(cid + vie) > 0.35 * amt + 0.05) continue;      // densite selon la pluie (0.7 : bien moins de gouttes)
+		float2 ctr = (cell + 0.05 + 0.9 * rnd) * s;           // placement libre dans la cellule : plus de grille visible
+		float r = s * (0.08 + 0.32 * h21(cid * 1.7 + vie) * h21(cid * 2.3 + vie));   // surtout des petites, quelques grosses
 		float2 v = (px - ctr) / r; float q = dot(v, v);
 		if (q < 1) {
 			// la goutte agit comme une lentille : image inversee et nette du decor, bord sombre, petit reflet
@@ -245,9 +261,75 @@ float3 vitre(float2 uv, float3 col) {
 	}
 	return c;
 }
+
+// ---------- 0.7 : photo (T2 : l'image changeait de moins d'un point ; ici on agit franchement) ----------
+// devoile : le jeu ajoute une brume claire qui croit avec la distance ; on la retire (inverse du melange de brouillard)
+// vegetation : feuillage (alpha de la cible 2 du G-buffer) moins criard, plus profond, translucide au soleil
+float3 monde_photo(float2 uv, float3 c, float lm, float nuit) {
+	float d = tProf.SampleLevel(sPt, uv, 0);
+	if (ciel(d) || cabine(d)) return c;
+	float z = lineaire(d);
+	if (p10.x > 0) {
+		float3 moy = tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb;
+		float3 A = lum(moy) * float3(1.0, 1.02, 1.06) * 1.25;          // couleur de la brume : grise legerement bleutee
+		float a = saturate(p10.x) * 0.55 * (1 - exp(-max(z - 8, 0) / 450)) * (1 - 0.6 * nuit);
+		float3 j = (c - A * a) / max(1 - a, 0.3);
+		c = max(j, c * 0.3);
+	}
+	if (p11.x > 0) {
+		float4 g = tGb2.SampleLevel(sPt, uv, 0);
+		float f = saturate(g.a * 2.5) * saturate(p11.x);
+		if (f > 0.01) {
+			float l = lum(c);
+			float3 v = c;
+			// verts du jeu trop saturés et trop jaunes : vers un vert olive / bleu-vert naturel
+			v = lerp(float3(l, l, l), v, 0.78);
+			v *= float3(0.96, 1.0, 0.97);
+			// profondeur du feuillage : les parties sombres s'assombrissent (ombre interne des houppiers)
+			float x = l / max(lm, 1e-4);
+			v *= lerp(0.72, 1.0, saturate(x * 1.2));
+			// translucidite : le soleil traverse les feuilles fines, lueur chaude jaune-vert
+			float3 alb = max(g.rgb, 0);
+			v += alb * float3(0.9, 1.0, 0.45) * lm * 0.35 * (1 - nuit) * saturate(1 - x);
+			c = lerp(c, v, f);
+		}
+	}
+	return c;
+}
+// finition : contraste local (clarte), noirs profonds (pied de courbe), soleil chaud / ombres froides
+float3 finition(float2 uv, float3 c, float lm, float nuit) {
+	float l = max(lum(c), 1e-6);
+	if (p10.y > 0) {
+		float lb = max(lum(tCouleur.SampleLevel(sLin, uv, min(4, p5.w)).rgb), 1e-6);
+		c *= clamp(pow(l / lb, p10.y * 0.7), 0.6, 1.7);
+		l = max(lum(c), 1e-6);
+	}
+	if (p10.z > 0) {
+		float x = l / lm;
+		float k = p10.z * 0.35;
+		c *= x / (x + k) * (1 + k);          // ombres plus profondes, hautes lumieres conservees
+		l = max(lum(c), 1e-6);
+	}
+	if (p10.w > 0) {
+		float w = saturate((l / lm - 0.6) / 1.5) * 2 - 1;     // -1 ombres, +1 lumieres
+		float k = p10.w * 0.12 * (1 - nuit);
+		c *= 1 + k * w * float3(0.6, 0.1, -0.7);
+	}
+	return c;
+}
+float nuit_de(float lm) {
+	return p8.y > 0.5 ? saturate((log2(max(p8.w, 1e-5)) - log2(lm)) / max(log2(max(p8.w, 1e-5)) - log2(max(p8.z, 1e-6)), 0.1)) : 0;
+}
 float4 ps_principal(VSO i) : SV_Target {
 	float4 r = route(i);
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
-	float3 v = vitre(i.uv, r.rgb);
-	return float4(camera(i.uv, v), r.a);
+	float lm = max(lum(tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb), 1e-4);
+	float nt = nuit_de(lm);
+	float3 v = monde_photo(i.uv, r.rgb, lm, nt);
+	v = vitre(i.uv, v);
+	v = camera(i.uv, v);
+	float3 f = finition(i.uv, v, lm, nt);
+	f = lerp(v, f, saturate(p6.x));
+	if (any(isnan(f)) || any(isinf(f))) f = v;
+	return float4(min(max(f, 0), 65504), r.a);
 }

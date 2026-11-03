@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.6 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.7 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -35,3 +35,8 @@ Comprend le correctif 0.4.3 (3 vues, etat du jeu remis a l'identique).
 0.6 (version complete, a corriger ensuite) : ambiances automatiques jour/nuit/pluie, eau sur le pare-brise en vue
 cabine (gouttes-lentilles + film d'eau, regle cabine > 0,9 du socle 0.9h), modes performance extreme / photorealisme
 optimise / personnalise, gestionnaire de budget GPU (budget_ms, qualite 0,4-1 notee dans le log).
+0.7 (apres T2 : 3 vues OK, ~2 ms GPU, mais image presque inchangee) : photo franche. Devoile (retire la brume du jeu
+avec la distance), contraste local (clarte), noirs profonds, soleil chaud / ombres froides, couche vegetation (masque
+du feuillage = alpha de la cible 2 du G-buffer : verts moins criards, feuillage plus profond, translucide au soleil),
+ombres de contact + occlusion ambiante ~2 m + lumiere indirecte, gouttes SEULEMENT quand le jeu fait pleuvoir (moins
+nombreuses, sans grille), halo et brouillard reduits de jour, budget 4 ms. Cles devoile, clarte, noirs, chaleur, vegetation.
