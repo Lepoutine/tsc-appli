@@ -75,3 +75,8 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
 - 0.10.2 ajoute : contextes differes (CreateDeferredContext + crochets sur leur table si differente, ExecuteCommandList),
   ID3D11Device3 CreateTexture2D1 / WriteToSubresource, detail des textures vides (usage, BC, niveaux, acces CPU). Ligne « (vides) » toutes les 30 s.
 - Seule la DLL change. Rien n'est remplace.
+
+0.10.3 (03/11/2026) - diagnostic du chemin cache
+- 0.10.2 : 2 860 textures de decor (DEFAULT, BC, avec niveaux) creees vides ; 0 remplissage vu, pas de contexte differe.
+- 0.10.3 ecrit une fois les 32 premiers octets de Map/Unmap/Copy*/UpdateSubresource(1) (prologues, pour un crochet en ligne exact)
+  et, toutes les 30 s, quelles entrees de table sont remises par quelqu'un d'autre. Seule la DLL change.

@@ -54,7 +54,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.10.2"
+#define VERSION "tsc-graphics 0.10.3"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -897,7 +897,24 @@ static void accrocher_contexte() {
 		Ligne l; l.s("contexte du jeu different de l'appareil jetable : crochets poses sur sa table ("); l.s(ok ? "ok" : "partiel"); l.s(") ; module "); module_de(l, g_vt_ctx[C_OMSetRT]); journal(l);
 	} else { Ligne l; l.s("contexte du jeu = table deja accrochee ; module "); module_de(l, (void *)o_omsrt); journal(l); }
 }
-static i64 g_reposes;
+static i64 g_reposes, g_repose_i[140];
+/* 0.10.3 : diagnostic du chemin de remplissage cache. Ecrit une fois : les 32 premiers octets du code de chaque fonction
+   d'ecriture du contexte (pour preparer un crochet en ligne exact) et le module ; puis, toutes les 30 s, quelles entrees de table
+   sont remises par quelqu'un d'autre (et combien de fois). */
+static void octets_de(Ligne &l, const void *f) {
+	const unsigned char *p = (const unsigned char *)f; static const char hx[] = "0123456789abcdef";
+	for (int i = 0; i < 32; i++) { char b[3] = {hx[p[i] >> 4], hx[p[i] & 15], 0}; l.s(b); }
+}
+static void journal_prologues() {
+	if (!g_vt_ctx) return;
+	struct { int i; const char *n; } t[] = { {C_Map, "Map"}, {C_Unmap, "Unmap"}, {C_CopySubresourceRegion, "CopySubresourceRegion"}, {C_CopyResource, "CopyResource"},
+		{C_UpdateSubresource, "UpdateSubresource"}, {115, "CopySubresourceRegion1"}, {116, "UpdateSubresource1"} };
+	for (auto &e : t) {
+		Crochet *c = 0; for (auto &k : g_cr) if (k.i == e.i) c = &k;
+		void *f = c && *c->o ? *c->o : g_vt_ctx[e.i];
+		Ligne l; l.s("prologue "); l.s(e.n); l.s(" "); l.x((u64)f); l.s(" "); module_de(l, f); l.s(" : "); octets_de(l, f); journal(l);
+	}
+}
 /* profileur : creations sur la table du VRAI appareil du jeu (prise dans init_appareil), appelees depuis tous les fils */
 typedef HRESULT (WINAPI *PFN_CTEX)(void *, const TEX2D_DESC *, const void *, void **);
 typedef HRESULT (WINAPI *PFN_CPS)(void *, const void *, SIZE_T, void *, void **);
@@ -1013,7 +1030,7 @@ static void accrocher_dev3() {
 }
 static Crochet g_cr_dev[] = { {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps}, {27 /*CreateDeferredContext*/, (void *)h_cdef, (void **)&o_cdef} };
 static void reposer() {
-	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) g_reposes++; }
+	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) { g_reposes++; if (c.i < 140) g_repose_i[c.i]++; } }
 	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] != c.f) { if (poser(g_vt_dev, c.i, c.f, c.o)) g_reposes++; }
 }
 
@@ -1198,7 +1215,9 @@ static void apres_image(void *sc) {
 		Ligne v; v.s("TSC Textures (vides) : usage default/immutable/dynamic/staging "); v.i(g_vide_usage[0]); v.s("/"); v.i(g_vide_usage[1]); v.s("/"); v.i(g_vide_usage[2]); v.s("/"); v.i(g_vide_usage[3]);
 		v.s(" ; compressees BC "); v.i(g_vide_bc); v.s(" ; avec niveaux "); v.i(g_vide_mips); v.s(" ; acces CPU "); v.i(g_vide_cpu);
 		v.s(" ; contextes differes crees "); v.i(g_cdef_n); v.s(" (autre table "); v.i(g_cdef_autre_table); v.s(") appels "); v.i(g_d_appels); v.s(" Update2D "); v.i(g_d_upd2); v.s(" MapW "); v.i(g_d_map_w); v.s(" Copy decor "); v.i(g_d_copy_decor);
-		v.s(" ; ExecuteCommandList "); v.i(g_exec_n); v.s(" ; CreateTexture2D1 "); v.i(g_ctex1_n); v.s(" (avec donnees "); v.i(g_ctex1_data); v.s(") ; WriteToSubresource "); v.i(g_w2s_n); journal(v); } }
+		v.s(" ; ExecuteCommandList "); v.i(g_exec_n); v.s(" ; CreateTexture2D1 "); v.i(g_ctex1_n); v.s(" (avec donnees "); v.i(g_ctex1_data); v.s(") ; WriteToSubresource "); v.i(g_w2s_n); journal(v);
+		static int prol; if (!prol) { prol = 1; journal_prologues(); }
+		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
