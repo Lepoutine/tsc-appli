@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""TSC Sound Engineering : mesure d'un son moteur et comparaison avec une reference.
+
+Python 3 + numpy seulement (pas de scipy : absent du Shadow). Lecture seule : aucun son n'est modifie.
+
+  python3 mesure_son.py mesurer son.wav [--cylindres 8] [--json rapport.json]
+  python3 mesure_son.py comparer mon_son.wav reference.wav [--cylindres 8] [--debut 10.8 --fin 12.2]
+
+Ce que l'outil mesure (et pourquoi) :
+- niveaux (RMS, crete, ecretage) : un son ecrete gresille ;
+- frequence d'allumage -> regime estime : pour un 4 temps, f = tr/min / 60 * cylindres / 2 ;
+- energie par bandes : grave (<80 Hz) = « gras », corps 80-250, medium, rauque 1-4 kHz, aigu >4 kHz (souffle, gresillement) ;
+- rondeur V8 (demi-ordre f/2) : un V8 a vilebrequin croise allume de facon inegale, ce qui donne le « borborygme » ;
+- irregularite des coups d'allumage : un ralenti trop regulier sonne synthetique ;
+- craquements (transitoires aigus par seconde) : petards de decel ;
+- jonction de boucle : saut entre la fin et le debut, qui s'entend a chaque tour de boucle.
+"""
+import argparse
+import json
+import sys
+import wave
+
+import numpy as np
+
+BANDES = [("grave", 20, 80), ("corps", 80, 250), ("medium", 250, 1000), ("rauque", 1000, 4000), ("aigu", 4000, 16000)]
+
+
+def lire_wav(chemin, debut=None, fin=None):
+    with wave.open(chemin, "rb") as w:
+        n, sr, larg, nb = w.getnchannels(), w.getframerate(), w.getsampwidth(), w.getnframes()
+        brut = w.readframes(nb)
+    if larg == 2:
+        x = np.frombuffer(brut, dtype="<i2").astype(np.float64) / 32768.0
+    elif larg == 3:
+        b = np.frombuffer(brut, dtype=np.uint8).reshape(-1, 3)
+        v = (b[:, 0].astype(np.int32) | (b[:, 1].astype(np.int32) << 8) | (b[:, 2].astype(np.int32) << 16))
+        v = np.where(v >= 1 << 23, v - (1 << 24), v)
+        x = v.astype(np.float64) / float(1 << 23)
+    elif larg == 4:
+        x = np.frombuffer(brut, dtype="<i4").astype(np.float64) / 2147483648.0
+    elif larg == 1:
+        x = (np.frombuffer(brut, dtype=np.uint8).astype(np.float64) - 128) / 128.0
+    else:
+        raise ValueError("format WAV non gere (%d octets)" % larg)
+    x = x.reshape(-1, n).mean(axis=1)
+    if debut is not None or fin is not None:
+        a = int((debut or 0) * sr)
+        z = int(fin * sr) if fin is not None else len(x)
+        x = x[a:z]
+    return x, sr
+
+
+def db(v):
+    return float(20 * np.log10(max(v, 1e-9)))
+
+
+def spectre(x, sr):
+    taille = 1 << 15
+    if len(x) < taille:
+        taille = 1 << int(np.floor(np.log2(max(len(x), 256))))
+    pas = taille // 2
+    fen = np.hanning(taille)
+    acc = np.zeros(taille // 2 + 1)
+    k = 0
+    for a in range(0, max(len(x) - taille, 0) + 1, pas):
+        acc += np.abs(np.fft.rfft(x[a:a + taille] * fen)) ** 2
+        k += 1
+    return np.fft.rfftfreq(taille, 1.0 / sr), acc / max(k, 1)
+
+
+def enveloppe(x, sr, fc=40.0):
+    """Enveloppe d'amplitude lissee (moyenne glissante ~ 1/fc)."""
+    n = max(int(sr / fc), 1)
+    return np.convolve(np.abs(x), np.ones(n) / n, mode="same")
+
+
+def allumage(x, sr, cylindres):
+    """Frequence d'allumage par autocorrelation de l'enveloppe (plus fiable que le pic du spectre au ralenti)."""
+    e = enveloppe(x, sr, 400.0)
+    e = e - e.mean()
+    pas = max(sr // 2000, 1)
+    e = e[::pas]
+    sr2 = sr / pas
+    n = 1 << int(np.ceil(np.log2(2 * len(e))))
+    ac = np.fft.irfft(np.abs(np.fft.rfft(e, n)) ** 2)[: len(e)]
+    if ac[0] <= 0:
+        return None, None
+    ac = ac / ac[0]
+    # allumage entre 15 Hz (V8 ~ 225 tr/min) et 250 Hz : on cherche le 1er pic fort
+    lo, hi = int(sr2 / 250), int(sr2 / 15)
+    seg = ac[lo:hi]
+    if len(seg) < 3:
+        return None, None
+    # 1er pic local qui atteint 30 % du plus fort : evite de prendre 2 coups d'allumage
+    # pour un seul quand l'allumage est inegal (V8 a vilebrequin croise)
+    fort = float(seg.max())
+    i = int(np.argmax(seg)) + lo
+    for j in range(1, len(seg) - 1):
+        if seg[j] >= seg[j - 1] and seg[j] >= seg[j + 1] and seg[j] >= 0.3 * fort:
+            i = j + lo
+            break
+    f = sr2 / i
+    tr_min = f * 60.0 / (cylindres / 2.0)
+    return float(f), float(tr_min)
+
+
+def mesurer(x, sr, cylindres=8):
+    r = {"duree_s": round(len(x) / sr, 2), "frequence_echantillonnage": sr}
+    rms = float(np.sqrt(np.mean(x ** 2))) if len(x) else 0.0
+    crete = float(np.max(np.abs(x))) if len(x) else 0.0
+    r["niveau_rms_dbfs"] = round(db(rms), 1)
+    r["crete_dbfs"] = round(db(crete), 1)
+    r["facteur_crete_db"] = round(db(crete) - db(rms), 1)
+    r["ecretage_pct"] = round(100.0 * float(np.mean(np.abs(x) >= 0.999)), 3)
+
+    f, p = spectre(x, sr)
+    total = float(p[(f >= 20) & (f < 16000)].sum()) or 1e-12
+    r["bandes_pct"] = {nom: round(100.0 * float(p[(f >= a) & (f < b)].sum()) / total, 1) for nom, a, b in BANDES}
+    r["centroide_hz"] = round(float((f * p).sum() / max(p.sum(), 1e-12)), 0)
+
+    fa, tr = allumage(x, sr, cylindres)
+    r["allumage_hz"] = round(fa, 1) if fa else None
+    r["regime_estime_tr_min"] = round(tr) if tr else None
+    if fa:
+        def autour(fc, larg=0.08):
+            m = (f >= fc * (1 - larg)) & (f <= fc * (1 + larg))
+            return float(p[m].sum()) if m.any() else 0.0
+        e1, e_demi = autour(fa), autour(fa / 2)
+        r["rondeur_demi_ordre_db"] = round(float(10 * np.log10(max(e_demi, 1e-12) / max(e1, 1e-12))), 1)
+        # irregularite : variation des pics d'enveloppe d'un coup d'allumage a l'autre
+        per = int(sr / fa)
+        e = enveloppe(x, sr, fa * 4)
+        pics = [float(e[a:a + per].max()) for a in range(0, len(e) - per, per)]
+        if len(pics) > 4:
+            pics = np.array(pics)
+            r["irregularite_pct"] = round(100.0 * float(pics.std() / max(pics.mean(), 1e-12)), 1)
+
+    # craquements : pics de l'aigu (> 2 kHz par difference) bien au-dessus de la mediane
+    hp = np.diff(x, prepend=x[:1]) if len(x) else x
+    ea = enveloppe(hp, sr, 500.0)
+    if len(ea):
+        seuil = 6.0 * float(np.median(ea) + 1e-9)
+        haut = ea > seuil
+        fronts = int(np.count_nonzero(haut[1:] & ~haut[:-1]))
+        r["craquements_par_s"] = round(fronts / max(len(x) / sr, 1e-9), 2)
+
+    # jonction de boucle : saut d'echantillon et ecart de niveau entre la fin et le debut
+    n50 = int(0.05 * sr)
+    if len(x) > 4 * n50:
+        saut = abs(float(x[-1] - x[0]))
+        pente = float(np.median(np.abs(np.diff(x)))) + 1e-9
+        r["jonction_saut_x_pente_mediane"] = round(saut / pente, 1)
+        r["jonction_ecart_niveau_db"] = round(db(float(np.sqrt(np.mean(x[-n50:] ** 2)))) - db(float(np.sqrt(np.mean(x[:n50] ** 2)))), 1)
+    return r
+
+
+def diagnostic(mien, ref):
+    """Ecarts mesures -> phrases claires. Seuils prudents : on ne dit que ce que les chiffres montrent."""
+    d = []
+    bm, br = mien["bandes_pct"], ref["bandes_pct"]
+    if bm["grave"] + bm["corps"] < br["grave"] + br["corps"] - 8:
+        d.append("Pas assez gras : %.0f %% d'energie sous 250 Hz contre %.0f %% dans la reference." % (bm["grave"] + bm["corps"], br["grave"] + br["corps"]))
+    if bm["aigu"] > br["aigu"] + 5:
+        d.append("Trop d'aigu (souffle ou gresillement) : %.0f %% au-dessus de 4 kHz contre %.0f %%." % (bm["aigu"], br["aigu"]))
+    if bm["rauque"] < br["rauque"] - 6:
+        d.append("Manque de rauque (1-4 kHz) : %.0f %% contre %.0f %%." % (bm["rauque"], br["rauque"]))
+    if mien.get("rondeur_demi_ordre_db") is not None and ref.get("rondeur_demi_ordre_db") is not None:
+        if mien["rondeur_demi_ordre_db"] < ref["rondeur_demi_ordre_db"] - 4:
+            d.append("Pas assez de « borborygme » V8 (demi-ordre %.1f dB contre %.1f dB) : allumage trop regulier." % (mien["rondeur_demi_ordre_db"], ref["rondeur_demi_ordre_db"]))
+    if mien.get("irregularite_pct") is not None and ref.get("irregularite_pct") is not None:
+        if mien["irregularite_pct"] < 0.6 * ref["irregularite_pct"]:
+            d.append("Ralenti trop regulier, il sonne synthetique (irregularite %.0f %% contre %.0f %%)." % (mien["irregularite_pct"], ref["irregularite_pct"]))
+    if mien.get("craquements_par_s", 0) < 0.5 * ref.get("craquements_par_s", 0):
+        d.append("Moins de craquements que la reference (%.1f/s contre %.1f/s)." % (mien.get("craquements_par_s", 0), ref.get("craquements_par_s", 0)))
+    if mien["ecretage_pct"] > 0.01:
+        d.append("Ecretage : %.3f %% des echantillons au maximum, cela gresille." % mien["ecretage_pct"])
+    if mien["facteur_crete_db"] < ref["facteur_crete_db"] - 4:
+        d.append("Son trop compresse, sans punch (facteur de crete %.1f dB contre %.1f dB)." % (mien["facteur_crete_db"], ref["facteur_crete_db"]))
+    if mien.get("jonction_saut_x_pente_mediane", 0) > 20 or abs(mien.get("jonction_ecart_niveau_db", 0)) > 2:
+        d.append("La jonction de boucle s'entend (saut %.0f x, ecart %.1f dB)." % (mien.get("jonction_saut_x_pente_mediane", 0), mien.get("jonction_ecart_niveau_db", 0)))
+    if mien.get("regime_estime_tr_min") and ref.get("regime_estime_tr_min"):
+        if abs(mien["regime_estime_tr_min"] - ref["regime_estime_tr_min"]) > 0.15 * ref["regime_estime_tr_min"]:
+            d.append("Regimes differents (%d contre %d tr/min estimes) : comparer a regime egal." % (mien["regime_estime_tr_min"], ref["regime_estime_tr_min"]))
+    if not d:
+        d.append("Aucun ecart net sur les mesures : la difference est ailleurs (dynamique des coups de gaz, mixage en jeu). Ecouter la vraie banque dans TSCF_Lab.")
+    return d
+
+
+def mesurer_dossier(dossier, csv_chemin, cylindres=8):
+    import csv
+    import os
+    cols = ["fichier", "duree_s", "regime_estime_tr_min", "niveau_rms_dbfs", "crete_dbfs", "facteur_crete_db", "ecretage_pct",
+            "grave", "corps", "medium", "rauque", "aigu", "rondeur_demi_ordre_db", "irregularite_pct", "craquements_par_s",
+            "jonction_saut_x_pente_mediane", "jonction_ecart_niveau_db", "erreur"]
+    n = 0
+    with open(csv_chemin, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(cols)
+        for racine, _, noms in os.walk(dossier):
+            for nom in sorted(noms):
+                if not nom.lower().endswith(".wav"):
+                    continue
+                chemin = os.path.join(racine, nom)
+                lig = {"fichier": os.path.relpath(chemin, dossier)}
+                try:
+                    x, sr = lire_wav(chemin)
+                    r = mesurer(x, sr, cylindres)
+                    lig.update({k: v for k, v in r.items() if k != "bandes_pct"})
+                    lig.update(r["bandes_pct"])
+                except Exception as e:  # un fichier illisible ne bloque pas les autres
+                    lig["erreur"] = str(e) or type(e).__name__
+                w.writerow([lig.get(c, "") for c in cols])
+                n += 1
+    print("%d sons mesures -> %s" % (n, csv_chemin))
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="TSC Sound Engineering : mesure de sons moteur")
+    sp = ap.add_subparsers(dest="cmd", required=True)
+    m = sp.add_parser("mesurer")
+    m.add_argument("wav")
+    c = sp.add_parser("comparer")
+    c.add_argument("wav")
+    c.add_argument("reference")
+    for s in (m, c):
+        s.add_argument("--cylindres", type=int, default=8)
+        s.add_argument("--debut", type=float)
+        s.add_argument("--fin", type=float)
+        s.add_argument("--json")
+    dd = sp.add_parser("dossier", help="mesure tous les .wav d'un dossier (lecture seule) -> CSV")
+    dd.add_argument("dossier")
+    dd.add_argument("--cylindres", type=int, default=8)
+    dd.add_argument("--csv", required=True)
+    a = ap.parse_args(argv)
+    if a.cmd == "dossier":
+        return mesurer_dossier(a.dossier, a.csv, a.cylindres)
+    x, sr = lire_wav(a.wav, a.debut, a.fin)
+    r = {"son": a.wav, "mesures": mesurer(x, sr, a.cylindres)}
+    if a.cmd == "comparer":
+        y, sr2 = lire_wav(a.reference, a.debut, a.fin)
+        r["reference"] = {"son": a.reference, "mesures": mesurer(y, sr2, a.cylindres)}
+        r["diagnostic"] = diagnostic(r["mesures"], r["reference"]["mesures"])
+    print(json.dumps(r, ensure_ascii=False, indent=1))
+    if a.json:
+        with open(a.json, "w", encoding="utf-8") as f:
+            json.dump(r, f, ensure_ascii=False, indent=1)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

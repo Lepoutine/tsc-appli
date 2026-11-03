@@ -254,6 +254,16 @@
    "preuve_niveau": "generateur Forge et DSP du clapet codes ; mesures acoustiques prevues mais pas encore faites ; rien d'ecoute en jeu",
    "outils": [
     {
+     "nom": "mesure et comparaison de sons moteur (diagnostic en clair)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/mesure_son.py"
+    },
+    {
+     "nom": "methode son truck ultime",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/METHODE_SON_TRUCK.md"
+    },
+    {
      "nom": "generateur de sons",
      "lieu": "depot",
      "chemin": "sound_forge/ui/forge_gen.js"
@@ -272,6 +282,16 @@
      "nom": "clapet d'echappement (DSP)",
      "lieu": "code",
      "chemin": "Tete_Pilote_TSC/ui/echap_dsp.js"
+    },
+    {
+     "nom": "360 sons de Mendy ranges + INDEX",
+     "lieu": "pc",
+     "chemin": "Bureau\\TSC_Sound_Forge\\Mes_sons"
+    },
+    {
+     "nom": "projet V8 de Mendy (FMOD 2.03, script, build)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\soundforge\\projets\\tsc_v8_mendy"
     }
    ],
    "connaissances": [
@@ -281,12 +301,13 @@
     "tsc_clapet"
    ],
    "manque": [
-    "module 'Analyse de reference' (harmoniques par regime, timbre, grain) annonce le 03/11, pas code",
+    "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
     "detection automatique des points de boucle",
     "test d'ecoute en jeu d'un son TSC"
    ],
    "demande_avant": "mesurer le son (spectre, niveaux, regimes) avant de proposer un reglage",
-   "fil": "Créer TSC Sound Forge pour ETS2"
+   "fil": "Créer TSC Sound Forge pour ETS2",
+   "priorite": "1re tache : son truck ultime V8 Scania R/S 2016 (demande de Mendy 03/11 19:13)"
   },
   {
    "id": "forge",
