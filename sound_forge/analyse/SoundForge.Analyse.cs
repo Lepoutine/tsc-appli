@@ -355,7 +355,8 @@ public static class SfAnalyse {
       if (!v.StartsWith("/")) v = "/" + (dossier.Length > 0 ? dossier + "/" : "") + v;                   // chemin relatif au fichier
       if (vus.Add(v)) refs.Add(new string[] { p, v });
     }
-    if (unites.Count == 0 && refs.Count == 0 && !l.EndsWith(".sui") && !l.EndsWith(".soundref")) return;   // ni moteur ni son : ignore
+    bool suiSon = l.EndsWith(".sui") && l.Substring(l.LastIndexOf('/') + 1).Contains("sound");
+    if (unites.Count == 0 && refs.Count == 0 && !suiSon && !l.EndsWith(".soundref")) return;   // ni moteur ni son : ignore
     s.Fichiers.Add(new string[] { p, nat, taille }); s.Unites.AddRange(unites); s.Refs.AddRange(refs);
     foreach (Match m in RxInclude.Matches(t)) s.Includes.Add(new string[] { p, m.Groups[1].Value });
   }
@@ -427,7 +428,7 @@ public static class SfAnalyse {
     foreach (var s in sources) {
       if (!first) J.Append(",\n"); first = false;
       J.Append("{\"id\":" + Json(s.Id) + ",\"nom\":" + Json(s.Nom) + ",\"chemin\":" + Json(s.Chemin) + ",\"role\":" + Json(s.Role) + ",\"priorite\":" + s.Priorite + ",\"format\":" + s.Format +
-        ",\"etat\":" + Json(s.Etat) + ",\"message\":" + Json(s.Message) + ",\"camions\":" + s.Camions.Count + ",\"fichiers_son\":" + s.Fichiers.Count + ",\"banques\":" + s.Banques.Count +
+        ",\"etat\":" + Json(s.Etat) + ",\"message\":" + Json(s.Message) + ",\"camions\":" + s.Camions.Count + ",\"fichiers_son\":" + s.Fichiers.Count + ",\"banques\":" + s.Banques.Count + ",\"references\":" + s.Refs.Count +
         ",\"chiffres\":" + s.Fichiers.FindAll(x => x[1] == "chiffre" || x[1] == "brouille" || x[1] == "binaire").Count + "}");
     }
     J.Append("\n],\n");
@@ -466,12 +467,14 @@ public static class SfAnalyse {
           refs.Add(new string[] { r[0], r[1], s.Nom });
         }
       }
-      if (moteurs.Count == 0 && sons.Count == 0 && refs.Count == 0) { nIgnores++; continue; }   // dossier d'accessoires d'un mod, pas un camion
+      bool structure = sons.Exists(x => { var q = x.ToLowerInvariant().Substring(pre.Length); return q.StartsWith("engine/") || q.StartsWith("cabin/") || q.StartsWith("chassis/") || q.StartsWith("interior/"); });
+      if (moteurs.Count == 0 && !structure) { nIgnores++; continue; }   // dossier d'accessoires ou de sons d'un mod, pas un camion
       // verification de chaque reference son
-      int ok = 0, manque = 0, nonverif = 0; var details = new StringBuilder(); bool fd = true;
+      int ok = 0, manque = 0, nonverif = 0, accManque = 0; var details = new StringBuilder(); bool fd = true;
       foreach (var r in refs) {
         string etat, raison; Verifier(r[1], vfs, evts, sources, out etat, out raison);
-        if (etat == "ok") ok++; else if (etat == "manquant") manque++; else nonverif++;
+        bool acc = r[0].ToLowerInvariant().Substring(pre.Length).StartsWith("accessory/");      // klaxons et accessoires optionnels
+        if (etat == "ok") ok++; else if (acc) accManque++; else if (etat == "manquant") manque++; else nonverif++;
         if (!fd) details.Append(","); fd = false;
         details.Append("{\"fichier\":" + Json(r[0]) + ",\"reference\":" + Json(r[1]) + ",\"source\":" + Json(r[2]) + ",\"etat\":" + Json(etat) + ",\"raison\":" + Json(raison) + "}");
       }
@@ -484,11 +487,12 @@ public static class SfAnalyse {
       else if (nonverif > 0) { compat = "partiel"; pourquoi = nonverif + " reference(s) son non verifiable(s) (banque sans .bank.guids lisible)."; }
       else if (chiffres.Count > 0) { compat = "partiel"; pourquoi = "Certaines definitions sont chiffrees : " + chiffres.Count + " fichier(s)."; }
       else { compat = "compatible"; pourquoi = "Moteurs et references son trouves, banques et evenements presents (verification statique ; a confirmer en jeu)."; }
+      if (accManque > 0) pourquoi += " " + accManque + " reference(s) d'accessoires optionnels (klaxons...) introuvable(s) : sans effet tant que l'accessoire n'est pas monte.";
       if (compat == "compatible") nCompat++; else if (compat == "partiel") nPartiel++; else if (compat == "non_pris_en_charge") nNon++; else nNonVerif++;
       nMoteurs += moteurs.Count; nCamions++;
       if (!first) J.Append(",\n"); first = false;
       J.Append("{\"id\":" + Json(id) + ",\"origine\":" + Json(jeu ? "jeu (" + origine.Nom + ")" : "mod (" + origine.Nom + ")") + ",\"actif\":" + (actif ? "true" : "false") +
-        ",\"compatibilite\":" + Json(compat) + ",\"raison\":" + Json(pourquoi) + ",\"moteurs\":[" + string.Join(",", moteurs.ConvertAll(Json).ToArray()) + "]" +
+        ",\"compatibilite\":" + Json(compat) + ",\"refs_ok\":" + ok + ",\"refs_manquantes\":" + manque + ",\"refs_non_verifiees\":" + nonverif + ",\"refs_accessoires_manquantes\":" + accManque + ",\"raison\":" + Json(pourquoi) + ",\"moteurs\":[" + string.Join(",", moteurs.ConvertAll(Json).ToArray()) + "]" +
         ",\"fichiers_son\":[" + string.Join(",", sons.ConvertAll(Json).ToArray()) + "],\"chiffres\":[" + string.Join(",", chiffres.ConvertAll(Json).ToArray()) + "]" +
         ",\"illisibles\":[" + string.Join(",", illisibles.ConvertAll(Json).ToArray()) + "],\"references\":[" + details + "]" +
         ",\"sources\":[" + string.Join(",", kv.Value.ConvertAll(x => Json(x.Nom)).ToArray()) + "]}");
@@ -512,8 +516,9 @@ public static class SfAnalyse {
     J.Append("\"conflits\": [\n"); first = true; int nConf = 0, nRemp = 0;
     foreach (var e in vfs.Values) {
       var mods = e.Sources.FindAll(x => x.Role == "actif"); bool base_ = e.Sources.Exists(x => x.Role == "jeu");
-      if (mods.Count == 0 || (mods.Count < 2 && !base_)) continue;
-      string type = mods.Count >= 2 ? "plusieurs_mods" : "remplace_le_jeu";
+      var prios = new HashSet<int>(); foreach (var m in mods) prios.Add(m.Priorite);       // plusieurs archives d'un meme mod = un seul mod
+      if (prios.Count == 0 || (prios.Count < 2 && !base_)) continue;
+      string type = prios.Count >= 2 ? "plusieurs_mods" : "remplace_le_jeu";
       if (type == "plusieurs_mods") nConf++; else if (++nRemp > 3000) continue;
       if (!first) J.Append(",\n"); first = false;
       J.Append("{\"chemin\":" + Json(e.Chemin) + ",\"type\":" + Json(type) + ",\"gagnant\":" + Json(e.Gagnant.Nom) + ",\"sources\":[" + string.Join(",", e.Sources.ConvertAll(x => Json(x.Nom)).ToArray()) + "]}");
@@ -531,7 +536,7 @@ public static class SfAnalyse {
     }
     J.Append("\n],\n");
 
-    J.Append("\"resume\": {\"camions\":" + nCamions + ",\"dossiers_accessoires_ignores\":" + nIgnores + ",\"moteurs\":" + nMoteurs + ",\"banques\":" + nBanques + ",\"mods_audio\":" + sources.FindAll(x => x.Role != "jeu" && x.Banques.Count + x.Refs.Count > 0).Count +
+    J.Append("\"resume\": {\"camions\":" + nCamions + ",\"dossiers_accessoires_ignores\":" + nIgnores + ",\"moteurs\":" + nMoteurs + ",\"banques\":" + nBanques + ",\"mods_audio\":" + sources.FindAll(x => x.Role != "jeu" && x.Banques.Count + x.Refs.Count > 0).Count + ",\"mods_audio_actifs\":" + sources.FindAll(x => x.Role == "actif" && x.Banques.Count + x.Refs.Count > 0).Count +
       ",\"conflits\":" + nConf + ",\"remplacements_du_jeu\":" + nRemp + ",\"compatibles\":" + nCompat + ",\"partiels\":" + nPartiel + ",\"non_pris_en_charge\":" + nNon + ",\"non_verifies\":" + nNonVerif + "}\n}\n");
     return J.ToString();
   }

@@ -10,7 +10,7 @@ if (-not $Sortie) { $Sortie = Join-Path $env:LOCALAPPDATA 'TruckSoCleanFrance\TS
 $cacheDir = Join-Path $Sortie 'cache'
 foreach ($d in $Sortie, $cacheDir) { if (-not (Test-Path -LiteralPath $d)) { [void](New-Item -ItemType Directory -Path $d) } }
 $debut = Get-Date
-$versionAnalyseur = '0.3'   # a changer a chaque modification de l'analyse : le cache des versions precedentes est alors relu
+$versionAnalyseur = '0.4'   # a changer a chaque modification de l'analyse : le cache des versions precedentes est alors relu
 function Note([string]$m) { Write-Host ('[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $m) }
 
 if (-not ('TscSoundForge.SfAnalyse' -as [type])) {
@@ -171,12 +171,12 @@ L ('- FMOD du jeu : ' + $(if ($jeu -and $jeu.fmod_du_jeu.Count) { $jeu.fmod_du_j
 L ('- FMOD Studio : ' + $(if ($fmod.Count) { ($fmod | ForEach-Object { $_.nom + ' ' + $_.version }) -join ', ' } else { 'non installe (necessaire seulement pour compiler, phase 3)' }))
 L ('- ATS : ' + $(if ($ats.Count) { $ats[0].version_exe } else { 'non installe' }))
 L ('- Camions identifies : ' + $Resume.camions + ' ; moteurs : ' + $Resume.moteurs + ' ; banques FMOD visibles : ' + $Resume.banques + ' (dossiers d''accessoires de mods ignores : ' + $Resume.dossiers_accessoires_ignores + ')')
-L ('- Mods audio : ' + $Resume.mods_audio + ' ; conflits potentiels : ' + $Resume.conflits + ' ; fichiers son ou moteur du jeu remplaces par des mods : ' + $Resume.remplacements_du_jeu)
+L ('- Mods audio : ' + $Resume.mods_audio_actifs + ' actifs (' + $Resume.mods_audio + ' presents) ;' + ' ; conflits potentiels : ' + $Resume.conflits + ' ; fichiers son ou moteur du jeu remplaces par des mods : ' + $Resume.remplacements_du_jeu)
 L ('- Compatibilite : ' + $Resume.compatibles + ' compatibles, ' + $Resume.partiels + ' partiels, ' + $Resume.non_pris_en_charge + ' non pris en charge, ' + $Resume.non_verifies + ' non verifies')
 L ('- Profils : ' + $profils.Count + ' ; mods actifs (game.log) : ' + $actifs.Count + ' ; Workshop installes : ' + $ws.Count)
 L ''; L '## Camions'
-L '| Camion | Origine | Moteurs | Etat | Raison |'; L '|---|---|---|---|---|'
-foreach ($c in $Kb.camions) { L ('| ' + $c.id + ' | ' + $c.origine + ' | ' + @($c.moteurs).Count + ' | ' + $c.compatibilite + ' | ' + $c.raison + ' |') }
+L '| Camion | Origine | Moteurs | Refs ok / manquantes | Etat | Raison |'; L '|---|---|---|---|---|---|'
+foreach ($c in $Kb.camions) { L ('| ' + $c.id + ' | ' + $c.origine + ' | ' + @($c.moteurs).Count + ' | ' + $c.refs_ok + ' / ' + $c.refs_manquantes + ' | ' + $c.compatibilite + ' | ' + $c.raison + ' |') }
 L ''; L '## Detail des camions de test'
 foreach ($id in $Echantillons) { $c = $Kb.camions | Where-Object { $_.id -eq $id } | Select-Object -First 1; if (-not $c) { continue }
   L ''; L ('### ' + $id + ' : ' + $c.compatibilite + ' (' + $c.origine + ')'); L $c.raison
