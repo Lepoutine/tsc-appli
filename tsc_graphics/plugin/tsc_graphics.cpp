@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.9.1"
+#define VERSION "tsc-graphics 0.9.2"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -100,6 +100,8 @@ struct Reglages {
 	/* valeurs de depart d'apres mesures_reel_v2 (jour) contre le jeu : p50 0,49 -> 0,61, p99 0,84 -> 0,99, vegetation trop sombre et
 	   trop saturee (75/94/40 contre 132/152/112), hautes lumieres PLUS saturees que le reel (0,26-0,29 contre 0,19 en HSV) */
 	float ldr = 1, ldr_expo = 1.5f, ldr_contraste = 1, ldr_epaule = 0.75f, ldr_sat = 0.88f, ldr_sat_hautes = -0.3f, ldr_temperature = 0, ldr_teinte = 0, ldr_noirs = 0, ldr_verts = 0.4f;
+	/* 0.9.2 : table de couleurs 3D apprise sur les videos reelles (tsc-graphics-lut.bin, 32x32x32 RGBA 16 bits), force 0-1 */
+	float ldr_lut = 1;
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -126,7 +128,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -232,7 +234,8 @@ static float g_val_effacement = -1;
 
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
-static void *g_ps_lm, *g_lm, *g_lm_srv, *g_lm_rtv;   /* 0.9.1 : reference de lumiere partagee par les 3 vues */
+static void *g_ps_lm, *g_lm, *g_lm_srv, *g_lm_rtv;
+static void *g_lut, *g_lut_srv; static u64 g_lut_hash;   /* 0.9.2 : table de couleurs 3D */   /* 0.9.1 : reference de lumiere partagee par les 3 vues */
 static void *g_ps_ldr, *g_ldr, *g_ldr_srv, *g_ldr_tex; static UINT g_ldr_w, g_ldr_h, g_ldr_fmt; static int g_ldr_n; static i64 g_n_ldr;   /* 0.9 */
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
@@ -283,6 +286,25 @@ static void compter() {
 static HRESULT dev_tex(const TEX2D_DESC *d, void **out) {   /* g_nous : nos creations ne comptent pas dans le profileur */
 	g_nous++; HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, d, 0, out); g_nous--; return hr; }
 
+/* 0.9.2 : table de couleurs 3D relue a chaud (comme l'ini) ; absente = etage sans table */
+struct TEX3D_DESC { UINT Width, Height, Depth, MipLevels, Format, Usage, BindFlags, CPUAccessFlags, MiscFlags; };
+struct SUBRES { const void *p; UINT pitch, slice; };
+static void charger_lut() {
+	enum { N = 32, TAILLE = N * N * N * 8 };
+	static char b[TAILLE + 16]; int n = lire_fichier("tsc-graphics-lut.bin", b, sizeof b);
+	if (n != TAILLE) { if (g_lut && n < 0) { REL(g_lut_srv); REL(g_lut); g_lut_hash = 0; logline("table de couleurs retiree"); } return; }
+	u64 h = 1469598103934665603ULL; for (int i = 0; i < n; i++) h = (h ^ (unsigned char)b[i]) * 1099511628211ULL;
+	if (h == g_lut_hash) return; g_lut_hash = h;
+	REL(g_lut_srv); REL(g_lut);
+	TEX3D_DESC d = {N, N, N, 1, 11 /*R16G16B16A16_UNORM*/, 0, 8, 0, 0};
+	SUBRES sr = {b, N * 8, N * N * 8};
+	g_nous++;
+	HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX3D_DESC *, const SUBRES *, void **))VT(g_dev)[6 /*CreateTexture3D*/])(g_dev, &d, &sr, &g_lut);
+	if (hr >= 0 && g_lut) ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_lut, 0, &g_lut_srv);
+	g_nous--;
+	if (hr < 0 || !g_lut_srv) { REL(g_lut); logline("table de couleurs refusee", hr); return; }
+	logline("table de couleurs chargee (tsc-graphics-lut.bin, 32x32x32)");
+}
 static void compiler() {
 	static char src[65536]; int n = lire_fichier("tsc-graphics.hlsl", src, sizeof src);
 	if (n <= 0) { if (g_hlsl_hash != 1) logline("tsc-graphics.hlsl introuvable : effet coupe"); g_hlsl_hash = 1; g_shaders_ok = 0; return; }
@@ -445,7 +467,7 @@ static bool copies_pretes(void *hdr, void *prof) {
 
 /* ---------- 0.4.3 : etat du jeu sauve puis remis a l'identique autour de la passe TSC ---------- */
 struct EtatJeu {
-	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[4], *smp[2], *cb;
+	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[5], *smp[2], *cb;
 	float bf[4]; UINT masque, sref, topo, nvp, nsc; VIEWPORT vp[16]; long sc[16][4];
 };
 typedef void (WINAPI *GetSh)(void *, void **, void **, UINT *);
@@ -466,7 +488,7 @@ static void sauver(EtatJeu &e) {
 	((void (WINAPI *)(void *, void **))VT(c)[C_RSGetState])(c, &e.rs);
 	e.nvp = 16; ((void (WINAPI *)(void *, UINT *, VIEWPORT *))VT(c)[C_RSGetViewports])(c, &e.nvp, e.vp);
 	e.nsc = 16; ((void (WINAPI *)(void *, UINT *, void *))VT(c)[C_RSGetScissor])(c, &e.nsc, e.sc);
-	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 4, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 5, e.srv);
 	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSamplers])(c, 0, 2, e.smp);
 	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetCB])(c, 0, 1, &e.cb);
 }
@@ -487,12 +509,12 @@ static void remettre(EtatJeu &e) {
 	/* cibles d'abord, puis ressources (sinon le pilote delie une SRV encore liee en cible) */
 	UINT nrt = 0; for (UINT k = 0; k < 8; k++) if (e.rtv[k]) nrt = k + 1;
 	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(c)[C_OMSetRT])(c, nrt, e.rtv, e.dsv);
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 4, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 5, e.srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSamplers])(c, 0, 2, e.smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetCB])(c, 0, 1, &e.cb);
 	for (int k = 0; k < 8; k++) REL(e.rtv[k]);
 	REL(e.dsv); REL(e.vs); REL(e.ps); REL(e.gs); REL(e.hs); REL(e.ds); REL(e.il); REL(e.bl); REL(e.dss); REL(e.rs);
-	REL(e.srv[0]); REL(e.srv[1]); REL(e.srv[2]); REL(e.srv[3]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
+	REL(e.srv[0]); REL(e.srv[1]); REL(e.srv[2]); REL(e.srv[3]); REL(e.srv[4]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
 }
 /* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
 static void passe_vue(void *hdr, void *prof) {
@@ -599,6 +621,7 @@ static void passe_ldr(void *tex) {
 	cbv[8] = (float)d.Width; cbv[9] = (float)d.Height; cbv[10] = 1.0f / d.Width; cbv[11] = 1.0f / d.Height;
 	cbv[52] = R.ldr_expo; cbv[53] = R.ldr_contraste; cbv[54] = R.ldr_epaule; cbv[55] = R.ldr_sat;
 	cbv[56] = R.ldr_sat_hautes; cbv[57] = R.ldr_temperature; cbv[58] = R.ldr_teinte; cbv[59] = R.ldr_noirs; cbv[60] = R.ldr_verts;
+	cbv[62] = R.ldr_lut; cbv[63] = g_lut_srv ? 32.0f : 0.0f;
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);
@@ -618,12 +641,12 @@ static void passe_ldr(void *tex) {
 	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps_ldr, 0, 0);
-	void *srv[3] = {g_ldr_srv, 0, 0}; void *smp[2] = {g_samp_lin, g_samp_pt};
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, srv);
+	void *srv[5] = {g_ldr_srv, 0, 0, 0, g_lut_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 5, srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
 	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
-	void *nul[3] = {0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, nul);
+	void *nul[5] = {0, 0, 0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 5, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	remettre(sv);
 	g_nous--;
@@ -943,7 +966,7 @@ static void apres_image(void *sc) {
 		if (!t_bascule) t_bascule = now;
 		if (now - t_bascule >= (u64)(R.bascule_auto * 1000)) { t_bascule = now; g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE (bascule auto)" : "effet TSC : ARRET (bascule auto)"); }
 	} else t_bascule = 0;
-	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) compiler(); if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
+	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
 	if (!g_trace_auto_fait && n_total > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }

@@ -1,11 +1,12 @@
-// TSC Neural Graphics 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
 Texture2D tCouleur : register(t0);
 Texture2D<float> tProf : register(t1);
 Texture2D<float> tLm : register(t3);   // 0.9.1 : luminance moyenne de l'image, mesuree une fois (vue 1) et partagee par les 3 vues
-Texture2D tGb2 : register(t2);   // 0.7 : cible 2 du G-buffer (albedo RGB, alpha = masque du feuillage) ; absente = vegetation coupee
+Texture2D tGb2 : register(t2);
+Texture3D tLut : register(t4);   // 0.9.2 : table de couleurs 32x32x32 (entree/sortie en sRGB), apprise jeu -> videos reelles   // 0.7 : cible 2 du G-buffer (albedo RGB, alpha = masque du feuillage) ; absente = vegetation coupee
 SamplerState sLin : register(s0);
 SamplerState sPt : register(s1);
 cbuffer P : register(b0) {
@@ -24,7 +25,7 @@ cbuffer P : register(b0) {
 	float4 p12; // 0.8 : exposition, gamma du monde (eclaircit les tons sombres), hautes lumieres, saturation globale
 	float4 p13; // 0.9 apres tone mapping : exposition, contraste, epaule (debut de la compression des blancs), saturation
 	float4 p14; // 0.9 : saturation des hautes lumieres (negatif = moins), temperature, teinte (vert/magenta), point noir
-	float4 p15; // 0.9 : verts (desature les verts jaunes trop vifs du jeu) ; 0.9.1 : y = reference partagee presente
+	float4 p15; // 0.9 : verts ; 0.9.1 : y = reference partagee presente ; 0.9.2 : z = force de la table de couleurs, w = taille (0 = absente)
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -394,6 +395,13 @@ float4 ps_ldr(VSO i) : SV_Target {
 	float w = smoothstep(0.35, 0.85, l);
 	c = l + (c - l) * max(1 + p14.x * w, 0);
 	c = saturate(c);
+	// 0.9.2 : table de couleurs apprise (en sRGB), appliquee en dernier
+	if (p15.w > 1 && p15.z > 0) {
+		float3 e = pow(c, 1 / 2.2);
+		float3 uvw = (e * (p15.w - 1) + 0.5) / p15.w;
+		float3 o = pow(saturate(tLut.SampleLevel(sLin, uvw, 0).rgb), 2.2);
+		c = lerp(c, o, saturate(p15.z));
+	}
 	if (any(isnan(c))) c = t.rgb;
 	return float4(c, t.a);
 }
