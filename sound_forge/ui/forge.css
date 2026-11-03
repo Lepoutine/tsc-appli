@@ -125,3 +125,7 @@ select{cursor:pointer}
 .diag .ref{padding:6px 8px;border-radius:8px;background:#0d0e12;border:1px solid var(--line2);font:500 11.5px var(--mono);overflow-wrap:anywhere}
 .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#1a0b0e;border:1px solid var(--red);border-radius:10px;padding:9px 14px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.6);z-index:9}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.libre{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px;font-size:12px}
+.libre>b{width:100%;font-size:12.5px}.libre>span{width:100%;margin-bottom:2px}
+.libre .b{padding:6px 10px;font-size:12px;text-decoration:none}
+.it small.lic{color:var(--warn)}

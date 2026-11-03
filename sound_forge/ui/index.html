@@ -31,6 +31,11 @@
     <h3>Mes sons</h3>
     <label class="drop" id="drop" tabindex="0"><b>Importer des sons</b>Glisse tes fichiers ici ou clique (WAV, OGG, MP3, FLAC)<input type="file" id="fic" accept=".wav,.ogg,.mp3,.flac,audio/*" multiple hidden></label>
     <div class="lib" id="lib"></div>
+    <div class="libre"><b>Sons libres de droit</b><span class="mut">Prends seulement du CC0 ou du CC-BY. Le non commercial (NC) est refusé, parce que TSC est vendu.</span>
+     <a class="b" href="https://freesound.org/search/?q=truck+engine&amp;f=license:%22Creative+Commons+0%22" target="_blank" rel="noopener">Freesound (CC0)</a>
+     <a class="b" href="https://opengameart.org/art-search-advanced?field_art_type_tid%5B%5D=13&amp;field_art_licenses_tid%5B%5D=4" target="_blank" rel="noopener">OpenGameArt (CC0)</a>
+     <a class="b" href="https://pixabay.com/sound-effects/search/truck%20engine/" target="_blank" rel="noopener">Pixabay</a>
+    </div>
    </div>
    <div class="card">
     <h3>Rôles du moteur</h3>
@@ -64,6 +69,13 @@
       <div class="ctl"><span>Fondu boucle</span><input type="range" id="eFondu" min="0" max="400" step="10"><output id="oFondu"></output></div>
       <label class="chk"><input type="checkbox" id="eBoucle"> Se répète en boucle (moteur)</label>
       <label class="chk"><input type="checkbox" id="eNorm"> Volume égalisé (normalisé)</label>
+      <div class="ctl"><span>Licence</span><select id="eLic">
+       <option value="perso">Mon enregistrement</option>
+       <option value="cc0">CC0 / domaine public</option>
+       <option value="ccby">CC-BY (citer l'auteur)</option>
+       <option value="refus">Non commercial, sans licence, extrait d'un jeu</option>
+      </select></div>
+      <div class="ctl"><span>Auteur, lien</span><input type="text" id="eSrc" placeholder="ex. Jean D. · freesound.org/s/123" style="grid-column:2/4" maxlength="160"></div>
      </div>
     </div>
     <div class="vide" id="edVide">Importe un son puis clique dessus pour le régler.</div>

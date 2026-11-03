@@ -66,7 +66,7 @@
         const c = { id, fichier: f.name, nom: f.name.replace(/\.[^.]+$/, ''), role, rpm: devineRpm(f.name, role),
           gain: 0, bas: 0, haut: 0, fondu: 150, boucle: SF.ROLES[role].boucle, norm: false,
           debut: 0, fin: b.duration, duree: b.duration, sr: b.sampleRate, canaux: b.numberOfChannels,
-          couleur: COUL[P.couches.length % COUL.length] };
+          licence: 'perso', source: '', couleur: COUL[P.couches.length % COUL.length] };
         bufs[id] = b; P.couches.push(c); dbPut(id, ab); ok++;
         if (!sel) sel = id;
       } catch (e) { toast('« ' + f.name + ' » n\'a pas pu être lu (format non pris en charge).'); }
@@ -103,7 +103,7 @@
     const L = $('lib');
     if (!P.couches.length) { L.innerHTML = '<div class="vide">Aucun son pour l\'instant.</div>'; return; }
     L.innerHTML = P.couches.map(c => '<button type="button" class="it' + (c.id === sel ? ' on' : '') + '" data-id="' + c.id + '"><i style="background:' + c.couleur + '"></i><b>' + esc(c.fichier) + '</b><small>' +
-      (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + '</small></button>').join('');
+      (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + '</small>' + (c.licence === 'refus' ? '<small class="lic">licence refusée : non exporté</small>' : c.licence === 'ccby' && !c.source ? '<small class="lic">CC-BY : auteur à indiquer</small>' : '') + '</button>').join('');
   }
   function rendPistes() {
     const T = $('pistes');
@@ -118,7 +118,7 @@
     ['bJoue', 'bStop', 'bBoucle', 'bAvant', 'bSuppr'].forEach(id => { $(id).disabled = !c; });
     if (!c) return;
     $('eRole').value = c.role; $('eRpm').value = c.rpm; $('eGain').value = c.gain; $('eBas').value = c.bas; $('eHaut').value = c.haut;
-    $('eFondu').value = c.fondu; $('eBoucle').checked = !!c.boucle; $('eNorm').checked = !!c.norm;
+    $('eFondu').value = c.fondu; $('eBoucle').checked = !!c.boucle; $('eNorm').checked = !!c.norm; $('eLic').value = c.licence || 'perso'; $('eSrc').value = c.source || '';
     $('eRpm').disabled = !(c.role === 'charge' || c.role === 'sans' || c.role === 'ralenti');
     $('eFondu').disabled = !c.boucle;
     sorties(); onde($('wvc'), c, { edit: true });
@@ -227,7 +227,11 @@
   /* ---------- export ---------- */
   function telecharge(blob, nom) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
   async function exporteWav() {
-    const L = P.couches.filter(c => bufs[c.id] && c.role !== 'autre');
+    const refus = P.couches.filter(c => c.licence === 'refus').length;
+    const sansAuteur = P.couches.filter(c => c.licence === 'ccby' && !c.source && c.role !== 'autre');
+    if (sansAuteur.length) { toast('Indique l\'auteur et le lien de : ' + sansAuteur.map(c => c.fichier).join(', ') + ' (licence CC-BY).'); sel = sansAuteur[0].id; rendTout(); return; }
+    const L = P.couches.filter(c => bufs[c.id] && c.role !== 'autre' && c.licence !== 'refus');
+    if (refus) toast(refus + ' son(s) à licence refusée laissé(s) de côté.');
     if (!L.length) { toast('Rien à exporter.'); return; }
     $('bExportWav').disabled = true;
     try {
@@ -239,6 +243,9 @@
         telecharge(SF.wav(r), n + '.wav');
         await new Promise(ok => setTimeout(ok, 250));
       }
+      const LIC = { perso: 'enregistrement personnel', cc0: 'CC0 (domaine public)', ccby: 'CC-BY' };
+      const cr = ['Projet ' + P.nom + ' - TSC Sound Forge', 'Sons utilisés :', ''].concat(L.map(c => '- ' + c.fichier + ' : ' + (LIC[c.licence] || c.licence) + (c.source ? ' - ' + c.source : ''))).join('\r\n') + '\r\n';
+      telecharge(new Blob([cr], { type: 'text/plain' }), 'CREDITS_sons.txt');
       majProjet.exporte = true; majProjet(); toast(L.length + ' couche' + (L.length > 1 ? 's exportées' : ' exportée') + ' en WAV 48 kHz 24 bits.');
     } catch (e) { toast('Export impossible : ' + e.message); }
     $('bExportWav').disabled = false;
@@ -340,6 +347,8 @@
     const champ = (id, k, num) => $(id).addEventListener('input', () => { const c = couche(); if (!c) return; c[k] = num ? +$(id).value : $(id).checked; sorties(); simMaj(); if (k === 'fondu' || k === 'boucle') onde($('wvc'), c, { edit: true }); });
     champ('eRpm', 'rpm', 1); champ('eGain', 'gain', 1); champ('eBas', 'bas', 1); champ('eHaut', 'haut', 1); champ('eFondu', 'fondu', 1); champ('eBoucle', 'boucle', 0); champ('eNorm', 'norm', 0);
     ['eRpm', 'eGain', 'eBas', 'eHaut', 'eFondu', 'eBoucle', 'eNorm'].forEach(id => $(id).addEventListener('change', () => { sauve(); rendPistes(); rendRoles(); if (id === 'eBoucle') rendEd(); }));
+    $('eLic').addEventListener('change', () => { const c = couche(); if (!c) return; c.licence = $('eLic').value; sauve(); rendLib(); });
+    $('eSrc').addEventListener('change', () => { const c = couche(); if (!c) return; c.source = $('eSrc').value.trim(); sauve(); rendLib(); });
     $('eRole').addEventListener('change', () => { const c = couche(); if (!c) return; c.role = $('eRole').value; c.boucle = SF.ROLES[c.role].boucle; if (SF.ROLES[c.role].rpm && (c.role === 'ralenti')) c.rpm = 600; if (moteur.marche) moteur.demarre(P.couches, bufs); sauve(); rendTout(); });
     $('rpm').addEventListener('input', () => { arreteAccel(); simMaj(); }); $('load').addEventListener('input', () => { arreteAccel(); simMaj(); });
     $('bMoteur').onclick = moteurOnOff; $('bAccel').onclick = accel;

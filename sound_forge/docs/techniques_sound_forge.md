@@ -128,3 +128,12 @@ Repères du style existant :
   - .stats : 4 colonnes, qui passent à 2.
   - .kv, .tg, et .hint (--mut, 12px).
   - Icônes SVG en ligne dans les h3.
+
+## 6bis. Ressources libres de droit (sons, modèles, textures) [règle Mendy, 2026-11-03]
+
+- Acceptées : CC0 / domaine public (Poly Haven, ambientCG, Kenney, Freesound filtré CC0, OpenGameArt filtré CC0), et CC-BY à condition de citer l'auteur dans les crédits.
+- Refusées : non commercial (NC), sans modification (ND), « gratuit » sans licence écrite, fichiers extraits d'autres jeux, modèles qui reproduisent les logos et marques (Scania, Volvo...).
+- Poly Haven : API publique utilisable même en commercial, avec la mention « Powered by Poly Haven » si l'appli l'utilise en direct.
+- Freesound : l'API n'est pas libre pour une appli vendue (accord commercial à négocier avec l'UPF). Le joueur télécharge lui-même ses sons CC0 sur le site, puis les importe.
+- Dans Sound Forge, chaque son porte sa licence et sa source. Un son à licence refusée n'est jamais exporté. Un son CC-BY sans auteur bloque l'export. L'export écrit CREDITS_sons.txt.
+- Bibliothèque de départ sur le PC de Mendy : Outils admin\soundforge\bibliotheque_libre\ (modeles, textures, sons), avec un LICENCE.txt par ressource et INDEX.csv.
