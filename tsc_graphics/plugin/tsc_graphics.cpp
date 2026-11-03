@@ -1,6 +1,8 @@
 /* tsc-graphics.dll : TSC Neural Graphics, rendu temps reel dans ETS2 (DirectX 11). Plugin SDK SCS charge par le jeu
    (bin/win_x64/plugins). Copyright (c) 2026 Truck So Clean France. Sans CRT, sans SDK Windows (clang + lld).
 
+   0.3 : route mouillee v1, calee sur les videos reelles (reflets en colonnes verticales floues, flou qui grandit avec la
+         distance du rayon, asphalte mouille plus sombre, marquages mats) : copie HDR avec chaine de mips (GenerateMips).
    0.2 : branche sur le pipeline reel d'ETS2 1.61 releve par l'audit (sonde + RenderDoc, 03/11/2026) :
    rendu differe par vue (multi-ecran mode 4 = 3 vues 1280x1080) : G-buffer (4 cibles, la 1re RGBA16F), profondeur D32S8 en
    Z inverse (monde dans 0,01-0,9, cabine dans 0,9-1, ciel 0), eclairage dans une cible HDR RGBA16F, gouttes de pluie
@@ -47,7 +49,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.2.0"
+#define VERSION "tsc-graphics 0.3.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -78,6 +80,7 @@ static int lire_fichier(const char *nom, char *buf, int max) {
 struct Reglages {
 	float actif = 1, humidite = -1 /* -1 = auto (pluie du jeu) */, fov_v = 43, proche = 0.2f, plage_min = 0.01f, plage_max = 0.9f;
 	float intensite = 1, rugosite = 0.12f, trainees = 1.5f, pas = 0.12f, epaisseur = 0.5f, f0 = 0.04f, assombrir = 0.35f;
+	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 };
 static Reglages R; static u64 g_ini_hash;
@@ -91,7 +94,8 @@ static void lire_ini(bool force) {
 	struct { const char *k; float *v; } t[] = { {"actif", &R.actif}, {"humidite", &R.humidite}, {"fov_v", &R.fov_v}, {"proche", &R.proche},
 		{"plage_min", &R.plage_min}, {"plage_max", &R.plage_max}, {"intensite", &R.intensite}, {"rugosite", &R.rugosite}, {"trainees", &R.trainees},
 		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
-		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues} };
+		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues},
+		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -124,7 +128,7 @@ enum { D_CreateBuffer = 3, D_CreateTexture2D = 5, D_CreateSRV = 7, D_CreateRTV =
 	D_CreateSampler = 23, D_CreateQuery = 24, D_GetFeatureLevel = 37, D1_CreateDeviceContextState = 47 };
 enum { C_VSSetCB = 7, C_PSSetSRV = 8, C_PSSetShader = 9, C_PSSetSamplers = 10, C_VSSetShader = 11, C_DrawIndexed = 12, C_Draw = 13, C_Map = 14, C_Unmap = 15,
 	C_PSSetCB = 16, C_DrawIndexedInstanced = 20, C_DrawInstanced = 21, C_IASetTopology = 24, C_Begin = 27, C_End = 28, C_GetData = 29,
-	C_OMSetRT = 33, C_RSSetViewports = 44, C_CopyResource = 47, C_UpdateSubresource = 48, C_ClearRTV = 50, C_ClearDSV = 53, C1_SwapState = 131 };
+	C_OMSetRT = 33, C_RSSetViewports = 44, C_CopySubresourceRegion = 46, C_CopyResource = 47, C_UpdateSubresource = 48, C_ClearRTV = 50, C_ClearDSV = 53, C_GenerateMips = 54, C1_SwapState = 131 };
 enum { S_GetDevice = 7, S_Present = 8, S_GetBuffer = 9, S_ResizeBuffers = 13, S1_Present1 = 22 };
 enum { V_GetResource = 7, V_GetDesc = 8, T_GetDesc = 10 };
 
@@ -191,7 +195,7 @@ static float g_val_effacement = -1;
 
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
-static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt;
+static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
 struct Rtv { void *tex, *rtv; }; static Rtv g_rtv[8]; static int g_nrtv;
 #define NQ 4
@@ -284,8 +288,14 @@ static bool copies_pretes(void *hdr, void *prof) {
 	if (h.SampleCount > 1 || d.SampleCount > 1) { static int dit; if (!dit++) logline("cible MSAA : passe TSC sautee"); return false; }
 	if (!g_coul || g_coul_w != h.Width || g_coul_h != h.Height || g_coul_fmt != h.Format) {
 		REL(g_coul_srv); REL(g_coul);
-		TEX2D_DESC n = {h.Width, h.Height, 1, 1, h.Format, 1, 0, 0, 8, 0, 0};
-		if (dev_tex(&n, &g_coul) < 0) { g_coul = 0; return false; }
+		/* copie HDR avec 6 niveaux de mips (SRV + RTV, GENERATE_MIPS) pour les reflets flous ; a defaut, un seul niveau */
+		TEX2D_DESC n = {h.Width, h.Height, 6, 1, h.Format, 1, 0, 0, 8 | 32, 0, 1};
+		g_coul_mips = 6;
+		if (dev_tex(&n, &g_coul) < 0) {
+			g_coul = 0; g_coul_mips = 1; logline("copie HDR avec mips refusee : reflets sans flou (un seul niveau)");
+			TEX2D_DESC n1 = {h.Width, h.Height, 1, 1, h.Format, 1, 0, 0, 8, 0, 0};
+			if (dev_tex(&n1, &g_coul) < 0) { g_coul = 0; return false; }
+		}
 		((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_coul, 0, &g_coul_srv);
 		g_coul_w = h.Width; g_coul_h = h.Height; g_coul_fmt = h.Format;
 	}
@@ -297,7 +307,7 @@ static bool copies_pretes(void *hdr, void *prof) {
 		SRV_DESC sd = {fs, 4, 0, 1, {0, 0}};
 		((HRESULT (WINAPI *)(void *, void *, const SRV_DESC *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_prof, &sd, &g_prof_srv);
 		g_prof_w = d.Width; g_prof_h = d.Height; g_prof_fmt = ft;
-		g_vram = (u64)h.Width * h.Height * 8 + (u64)d.Width * d.Height * 8;
+		g_vram = (u64)h.Width * h.Height * 8 * (g_coul_mips > 1 ? 4 : 3) / 3 + (u64)d.Width * d.Height * 8;
 		Ligne l; l.s("copies creees : HDR "); dire_tex(l, g_coul); l.s(" ; profondeur "); dire_tex(l, g_prof); l.s(" ; memoire video ajoutee ~"); l.i((i64)(g_vram >> 20)); l.s(" Mo"); journal(l);
 	}
 	return g_coul_srv && g_prof_srv;
@@ -310,14 +320,13 @@ static void passe_vue(void *hdr, void *prof) {
 	void *rtv = rtv_de(hdr); if (!rtv) return;
 	float tan_v; { float a = R.fov_v * 0.5f * 3.14159265f / 180.0f; float a2 = a * a; tan_v = (a * (1 - a2 / 6 + a2 * a2 / 120)) / (1 - a2 / 2 + a2 * a2 / 24 - a2 * a2 * a2 / 720); }
 	float mouille = R.humidite >= 0 ? R.humidite : g_mouille;
-	static float t; t += 0.016f;
 	float cbv[32] = {
 		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
-		R.proche, R.plage_min, R.plage_max, t,
+		R.proche, R.plage_min, R.plage_max, R.decalage_z,
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
-		R.intensite, R.rugosite, 1, R.trainees,
-		0, R.pas, R.epaisseur, R.f0,
-		(float)g_vues_traitees, R.assombrir, 0, 0 };
+		R.intensite, R.rugosite, R.flou, R.trainees,
+		R.etirement, R.pas, R.epaisseur, R.f0,
+		(float)g_vues_traitees, R.assombrir, R.peinture, (float)(g_coul_mips - 1) };
 	void *old = 0;
 	g_nous++;
 	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, g_etat, &old);
@@ -326,7 +335,10 @@ static void passe_vue(void *hdr, void *prof) {
 		if (!g_q_ouvert) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_Begin])(g_ctx, g_q_dis[qi]); g_q_ouvert = 1; }
 		((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_a[qi][qv]);
 	}
-	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
+	if (g_coul_mips > 1) {
+		((void (WINAPI *)(void *, void *, UINT, UINT, UINT, UINT, void *, UINT, const void *))VT(g_ctx)[C_CopySubresourceRegion])(g_ctx, g_coul, 0, 0, 0, 0, hdr, 0, 0);
+		((void (WINAPI *)(void *, void *))VT(g_ctx)[C_GenerateMips])(g_ctx, g_coul_srv);
+	} else ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
 	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
 	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }

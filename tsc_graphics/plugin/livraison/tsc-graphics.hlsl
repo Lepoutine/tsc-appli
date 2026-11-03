@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.2 : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.3 « route mouillee v1 » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -8,22 +8,24 @@ SamplerState sLin : register(s0);
 SamplerState sPt : register(s1);
 cbuffer P : register(b0) {
 	float4 p0; // vue de controle (0..3), humidite 0..1, tan(fov_v/2), largeur/hauteur
-	float4 p1; // plan proche (m), debut et fin de la plage du monde dans la profondeur (cabine au-dela), temps
+	float4 p1; // plan proche (m), debut et fin de la plage du monde dans la profondeur (cabine au-dela), decalage z
 	float4 p2; // largeur, hauteur, 1/largeur, 1/hauteur
-	float4 p3; // intensite, rugosite, -, trainees
-	float4 p4; // -, pas de marche (m), epaisseur (m), f0
-	float4 p5; // index de la vue, assombrissement de l'asphalte mouille
+	float4 p3; // intensite, rugosite, flou (largeur du lobe brillant), trainees (bruit d'axe)
+	float4 p4; // etirement vertical des reflets, pas de marche (m), epaisseur (m), f0
+	float4 p5; // index de la vue, assombrissement de l'asphalte mouille, attenuation sur la peinture, dernier niveau de mip
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
 	VSO o; float2 uv = float2((id << 1) & 2, id & 2);
 	o.uv = uv; o.pos = float4(uv * float2(2, -2) + float2(-1, 1), 0, 1); return o;
 }
-// Z inverse a plan lointain infini, ramene a la plage du monde : z = proche / ndc
+// Projection du jeu relevee par l'audit (socle v0.4) : P00 2,1445, P11 2,5416 (43 deg vertical), ndc_z = decalage + 0,2 / z
+// (Z inverse, plan lointain infini), ecrite dans la plage du viewport du monde (0,01-0,9) ; la cabine utilise 0,9-1.
+// Decalage mesure le 03/11 sur un vidage reel (profondeur D32 contre distance du G-buffer, 614 000 pixels) : -0,000194.
 bool cabine(float d) { return d > p1.z; }
 bool ciel(float d) { return d <= 1e-7; }
 float lineaire(float d) {
-	float ndc = saturate((d - p1.y) / max(p1.z - p1.y, 1e-6));
+	float ndc = (d - p1.y) / max(p1.z - p1.y, 1e-6) - p1.w;
 	return p1.x / max(ndc, 1e-7);
 }
 float3 posVue(float2 uv) {
@@ -69,12 +71,16 @@ float4 ps_principal(VSO i) : SV_Target {
 	float3 V = normalize(P);
 	float2 px = i.uv * p2.xy;
 	float h1 = bruit(px), h2 = bruit(px + float2(37, 11));
-	// rugosite de l'asphalte : normale perturbee, surtout dans l'axe de la route (trainees des lumieres)
-	float3 Nr = normalize(N + float3((h1 - 0.5) * p3.y * 0.3, 0, (h2 - 0.5) * p3.y * p3.w));
+	// Calage sur les videos reelles (nuit et pluie, Norvege) : la route mouillee n'est pas un miroir. Les lumieres s'y
+	// etirent en colonnes verticales douces vers le conducteur, d'autant plus longues que la surface est loin ; les
+	// immeubles et les arbres n'y laissent qu'une trace floue ; au loin la route prend un voile clair (ciel, Fresnel) ;
+	// les marquages restent mats. On garde donc le rayon reflechi (position physique du reflet), mais on lit la couleur
+	// touchee dans une version floutee de l'image (mips) dont le flou grandit avec la distance parcourue par le rayon.
+	float3 Nr = normalize(N + float3((h1 - 0.5) * p3.y * 0.15, 0, (h2 - 0.5) * p3.y * p3.w * 0.3));
 	float3 R = reflect(V, Nr);
 	float3 pos = P + N * 0.03;
 	float pas = p4.y * (0.5 + h1);       // depart decale par pixel : pas de « traits multiplies »
-	float3 refl = 0; float poids = 0;
+	float3 refl = 0; float poids = 0; float2 libre = -1;
 	[loop] for (int k = 0; k < 64; k++) {
 		pos += R * pas; pas *= 1.06;
 		if (pos.z < p1.x) break;
@@ -84,23 +90,49 @@ float4 ps_principal(VSO i) : SV_Target {
 		if (cabine(ds)) continue;                         // la cabine ne se reflete pas dans la route
 		float zs = ciel(ds) ? 1e9 : lineaire(ds);
 		float dz = pos.z - zs;
+		if (dz <= 0) libre = uv;                          // point du rayon encore visible
 		if (dz > 0 && dz < p4.z + pas * 2) {
 			float3 a = pos - R * pas, b = pos;
 			[unroll] for (int j = 0; j < 6; j++) { float3 m = (a + b) * 0.5; float dm = tProf.SampleLevel(sPt, versUV(m), 0); if (m.z - (ciel(dm) ? 1e9 : lineaire(dm)) > 0) b = m; else a = m; }
 			uv = versUV(b);
-			refl = tCouleur.SampleLevel(sLin, uv, 0).rgb;
+			// largeur du lobe brillant a l'endroit touche, en pixels : rugosite x longueur du rayon, projetee a l'ecran
+			float l = length(b - P);
+			float pxm = p2.y / (2 * p0.z * max(b.z, p1.x));          // pixels par metre a la distance touchee
+			float lobe = max(1, p3.z * p3.y * l * pxm);
+			float lod = clamp(log2(lobe), 0, p5.w);
+			// etirement vertical : plus fort en regard rasant (cosv petit), comme sur les videos
+			float cosv0 = saturate(dot(-V, N));
+			float ext = min(p4.x * lobe * p2.w / (cosv0 + 0.15), 0.06);   // videos : colonnes jusqu'a ~11 % de la hauteur
+			float3 acc = 0; float wt = 0;
+			[unroll] for (int t = -3; t <= 3; t++) {
+				float o = t / 3.0; float2 ut = uv + float2(0, o * ext);
+				float dt = tProf.SampleLevel(sPt, ut, 0), zt = ciel(dt) ? 1e9 : lineaire(dt);
+				float w = exp(-o * o * 2) * exp(-abs(zt - b.z) / (0.03 * b.z));   // pas de fuite a travers les silhouettes
+				acc += tCouleur.SampleLevel(sLin, ut, lod).rgb * w; wt += w;
+			}
+			refl = acc / max(wt, 1e-6);
 			float2 e = abs(uv - 0.5) * 2;
 			poids = saturate(1 - pow(max(e.x, e.y), 6)) * saturate(1.2 - k / 64.0);
 			break;
 		}
 	}
-	// rayon parti vers le ciel sans rien toucher : reflet du ciel (premier pixel de ciel au-dessus, meme colonne)
+	// rayon sorti de l'image sans impact : dernier point encore visible, poids 0,35 (jamais un point cache)
+	if (poids == 0 && libre.x >= 0) { refl = tCouleur.SampleLevel(sLin, libre, max(p5.w - 1, 0)).rgb; poids = 0.35; }
+	// rayon parti vers le ciel sans rien toucher : voile du ciel, tres flou (premier pixel de ciel au-dessus, meme colonne)
 	if (poids == 0 && R.y > 0) {
-		[loop] for (int s = 1; s <= 16; s++) { float2 u2 = float2(i.uv.x, i.uv.y * (1 - s / 16.0)); if (ciel(tProf.SampleLevel(sPt, u2, 0))) { refl = tCouleur.SampleLevel(sLin, u2, 0).rgb; poids = 0.5; break; } }
+		[loop] for (int s = 1; s <= 16; s++) { float2 u2 = float2(i.uv.x, i.uv.y * (1 - s / 16.0)); if (ciel(tProf.SampleLevel(sPt, u2, 0))) { refl = tCouleur.SampleLevel(sLin, u2, p5.w).rgb; poids = 0.6; break; } }
 	}
 	float cosv = saturate(dot(-V, N));
 	float F = p4.w + (1 - p4.w) * pow(1 - cosv, 5);
-	float3 base = col * (1 - p5.y * mouille);
-	float3 res = base + refl * poids * F * mouille * p3.x;
+	// marquages au sol : plus clairs que l'asphalte autour (niveau de mip 3) -> peinture, reflet attenue
+	float lc = dot(col, float3(0.2126, 0.7152, 0.0722));
+	float lm = dot(tCouleur.SampleLevel(sLin, i.uv, min(3, p5.w)).rgb, float3(0.2126, 0.7152, 0.0722));
+	float peinture = saturate((lc / max(lm, 1e-4) - 1.3) * 2.5);
+	float spec = mouille * (1 - p5.z * peinture) * saturate(1 - (P.z - 150) / 150);   // fondu de 150 a 300 m
+	// asphalte mouille : plus sombre et un peu plus sature (l'eau remplit les pores)
+	float3 base = col * (1 - p5.y * mouille * (1 - 0.6 * peinture));
+	float gris = lc * (1 - p5.y * mouille);
+	base = max(0, lerp(float3(gris, gris, gris), base, 1 + 0.15 * mouille));
+	float3 res = base + refl * poids * F * spec * p3.x;
 	return float4(res, src.a);
 }
