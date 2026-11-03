@@ -208,6 +208,24 @@
     "https://freesound.org/help/tos_api"
    ],
    "statut": "verifie_partiel"
+  },
+  {
+   "id": "tsc_clapet",
+   "titre": "TSC Clapet : clapet d'échappement sur touche",
+   "domaine": "fmod",
+   "fichier": "fmod/06_tsc_clapet.md",
+   "mots_cles": [
+    "clapet",
+    "valve",
+    "open pipe",
+    "touche",
+    "multijoueur",
+    "plugin"
+   ],
+   "sources": [
+    "mod Scania R770 Valve Exhaust (Mendy)"
+   ],
+   "statut": "concu"
   }
  ]
 }
