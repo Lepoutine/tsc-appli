@@ -1,0 +1,9 @@
+TSC Textures IA - version GPU (PyTorch). Etat au 03/11/2026 19:10.
+- Ecrite dans le depot : modele.py (TSCTex x4, detail sur base bicubique), degradation.py (photo reelle -> texture facon jeu, BC1 simule),
+  donnees.py (photos CC0 + images de conduite), mesures.py (psnr, grain, motifs inventes, correlation), entrainer.py, appliquer.py,
+  boucle_auto.py + regles.json (une version n'entre que si elle bat le champion sur un jeu de test fixe ; sauvegarde de chaque champion).
+- Teste ici seulement a blanc (CPU, donnees synthetiques, 1 000 iterations : le code tourne). JAMAIS lance sur le Shadow.
+- Sur le Shadow : torch absent, 8,2 Go libres sur C:. Pour l'utiliser : place disque + installation de torch lancees par Mendy (.bat),
+  car la session PC ne peut pas executer du code venu du depot.
+- En attendant, la session PC fait tourner sa propre TSC-IA (numpy, ecrite sur place) : v1 entrainee le 03/11 (motifs inventes 1/117
+  contre 18/117 pour realesrgan-x4plus). Cette version GPU servira quand il faudra un reseau plus gros que ce que numpy permet.
