@@ -62,7 +62,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.14.1"
+#define VERSION "tsc-graphics 0.14.2"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -128,6 +128,7 @@ struct Reglages {
 	   table de couleurs de pluie (tsc-graphics-lut-pluie.bin) melangee a celle du jour. Tout a chaud ; meteo = 0 coupe tout. */
 	float meteo = 1, brume_sol = 0.5f, brume_hauteur = 6, oeil = 2.6f, rideau = 0.6f, pluie_vitesse = 1, pluie_incl = 0.15f, nuages = 0.5f;
 	float pluie_delave = 0.25f, pluie_froid = 0.3f, pluie_contraste = 0.9f, ldr_lut_pluie = 1, pluie_montee_s = 15, pluie_fin_s = 90;
+	float optique = 0;   /* 0.14.2 : douceur d'objectif (retire le pique de synthese, plus fort au loin), 0 = coupe */
 	float hd_budget_mo = 6000;   /* 0.13.1 : memoire video maximale des textures HD (Mo) ; au-dela, les suivantes restent celles du jeu */
 	float textures_hd = 1;   /* 0.13 : remplacement a la volee par plugins\\tsc_textures_hd\\<empreinte>.dds (1 = marche, 0 = textures du jeu) */
 	float vider_textures = 0;   /* 0.12 : TSC Textures, extraction du niveau 0 des textures de decor en .dds (Mo maximum ; 0 = coupe) -> plugins\\tsc_textures_brut */
@@ -160,7 +161,7 @@ static void lire_ini(bool force) {
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
 		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"hd_budget_mo", &R.hd_budget_mo},
 		{"meteo", &R.meteo}, {"brume_sol", &R.brume_sol}, {"brume_hauteur", &R.brume_hauteur}, {"oeil", &R.oeil}, {"rideau", &R.rideau}, {"pluie_vitesse", &R.pluie_vitesse},
-		{"pluie_incl", &R.pluie_incl}, {"nuages", &R.nuages}, {"pluie_delave", &R.pluie_delave}, {"pluie_froid", &R.pluie_froid}, {"pluie_contraste", &R.pluie_contraste},
+		{"pluie_incl", &R.pluie_incl}, {"nuages", &R.nuages}, {"pluie_delave", &R.pluie_delave}, {"pluie_froid", &R.pluie_froid}, {"pluie_contraste", &R.pluie_contraste}, {"optique", &R.optique},
 		{"ldr_lut_pluie", &R.ldr_lut_pluie}, {"pluie_montee_s", &R.pluie_montee_s}, {"pluie_fin_s", &R.pluie_fin_s} };
 	const char *p = b;
 	while (*p) {
@@ -349,7 +350,7 @@ static void meteo_cb(float *c) {
 	c[64] = on; c[65] = R.brume_sol; c[66] = R.brume_hauteur > 0.5f ? R.brume_hauteur : 0.5f; c[67] = R.oeil;
 	c[68] = R.rideau; c[69] = R.pluie_vitesse; c[70] = R.pluie_incl; c[71] = (float)(GetTickCount64() % 1000000) / 1000.0f;
 	c[72] = R.nuages; c[73] = pa; c[74] = R.pluie_delave; c[75] = R.pluie_froid;
-	c[76] = R.pluie_contraste; c[77] = R.ldr_lut_pluie; c[78] = g_lutp_srv ? 32.0f : 0.0f; c[79] = 0;
+	c[76] = R.pluie_contraste; c[77] = R.ldr_lut_pluie; c[78] = g_lutp_srv ? 32.0f : 0.0f; c[79] = R.optique;
 }
 /* 0.9.3 : copie GPU -> disque d'une texture (niveau 0), en-tete 32 octets : "TSCN", largeur, hauteur, format DXGI, pas de ligne */
 static void vider_tex(void *src, const char *quoi, int vue) {

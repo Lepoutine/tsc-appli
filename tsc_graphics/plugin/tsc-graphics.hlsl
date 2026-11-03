@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -30,7 +30,7 @@ cbuffer P : register(b0) {
 	float4 p16; // 0.14 meteo : marche, brume au sol (force), hauteur de la brume (m), hauteur de l'oeil (m)
 	float4 p17; // 0.14 : rideau de pluie (force), vitesse de chute, inclinaison, temps (s, continu)
 	float4 p18; // 0.14 : nuages de pluie (force), ambiance pluie lissee 0-1, delavage, froid
-	float4 p19; // 0.14 : contraste sous la pluie, force de la table de pluie, taille de la table de pluie (0 = absente), libre
+	float4 p19; // 0.14 : contraste sous la pluie, force de la table de pluie, taille de la table de pluie (0 = absente) ; 0.14.2 : w = optique
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -434,6 +434,26 @@ float3 meteo(float2 uv, float3 c, float lm, float nuit) {
 	}
 	return c;
 }
+// ---------- 0.14.2 : optique (juge v2 du 03/11 : ce qui fait « jeu » = micro-contraste de synthese +7 a +12 sigma contre le reel,
+// SnowyMoon +3 a +5) : une vraie camera ne rend pas le detail d'un pixel a 100 %, et le transfert baisse avec la distance
+// (objectif + air). On retire une part du detail fin (1 px) et moyen (~3 px) mesure sur la copie HDR du jeu, plus au loin. ----------
+float3 optique(float2 uv, float3 c) {
+	float k = p19.w; if (k <= 0) return c;
+	float2 t = p2.zw;
+	float3 s = tCouleur.SampleLevel(sPt, uv, 0).rgb;
+	float3 b1 = (tCouleur.SampleLevel(sLin, uv + t * float2(0.5, 0.5), 0).rgb + tCouleur.SampleLevel(sLin, uv + t * float2(-0.5, 0.5), 0).rgb
+	           + tCouleur.SampleLevel(sLin, uv + t * float2(0.5, -0.5), 0).rgb + tCouleur.SampleLevel(sLin, uv + t * float2(-0.5, -0.5), 0).rgb) * 0.25;
+	float3 b2 = (tCouleur.SampleLevel(sLin, uv + t * float2(1.5, 1.5), 0).rgb + tCouleur.SampleLevel(sLin, uv + t * float2(-1.5, 1.5), 0).rgb
+	           + tCouleur.SampleLevel(sLin, uv + t * float2(1.5, -1.5), 0).rgb + tCouleur.SampleLevel(sLin, uv + t * float2(-1.5, -1.5), 0).rgb) * 0.25;
+	b2 = (b2 + b1) * 0.5;
+	if (any(isnan(b2)) || any(isinf(b2)) || any(isnan(s))) return c;
+	float d = tProf.SampleLevel(sPt, uv, 0);
+	float z = ciel(d) ? 3000 : (cabine(d) ? 1 : lineaire(d));
+	float w = saturate(k) * (0.45 + 0.55 * saturate(z / 150));
+	float r = lum(c) / max(lum(s), 1e-5); r = clamp(r, 0, 4);          // le detail suit l'exposition deja appliquee
+	float3 o = c - ((s - b1) * 0.8 + (b1 - b2) * 0.35) * w * r;
+	return min(max(o, 0), 65504);
+}
 float4 ps_principal(VSO i) : SV_Target {
 	float4 r = route(i);
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
@@ -445,6 +465,7 @@ float4 ps_principal(VSO i) : SV_Target {
 	v = camera(i.uv, v);
 	float3 f = finition(i.uv, v, lm, nt);
 	f = lerp(v, f, saturate(p6.x));
+	f = optique(i.uv, f);
 	if (any(isnan(f)) || any(isinf(f))) f = v;
 	return float4(min(max(f, 0), 65504), r.a);
 }
