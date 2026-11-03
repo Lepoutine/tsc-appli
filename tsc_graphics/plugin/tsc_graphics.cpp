@@ -57,7 +57,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.11.3"
+#define VERSION "tsc-graphics 0.12"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -109,6 +109,7 @@ struct Reglages {
 	/* 0.9.3 : TSC Neural, donnees d'entrainement : changer ce nombre (N) = N images enregistrees, une toutes les 2 s, image du jeu
 	   SANS effet TSC (HDR, profondeur, albedo+feuillage, vue 8 bits du jeu) dans plugins\\tsc_neural */
 	float enregistre = 0;
+	float vider_textures = 0;   /* 0.12 : TSC Textures, extraction du niveau 0 des textures de decor en .dds (Mo maximum ; 0 = coupe) -> plugins\\tsc_textures_brut */
 	float sonde_textures = 1;   /* 0.10 : TSC Textures, releve des textures chargees par le jeu (empreinte + format) -> tsc-textures.csv */
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
@@ -136,7 +137,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -879,6 +880,37 @@ static void copie_vers(void *dst, UINT dsub, void *src, UINT ssub, const char *c
 /* 0.11.1 : la 0.11 a vu 43 733 UpdateSubresource1 2D sans aucune ligne : la condition « pas de boite » etait trop stricte.
    On accepte une boite qui couvre tout le niveau 0, et les 300 premiers appels sont notes BRUTS (description, boite, pas) pour comprendre. */
 struct BOXx { UINT l, t, f, r, b, k; };
+/* 0.12 : extraction. Pour fabriquer les versions HD, il faut l'image d'origine de chaque texture : a son premier remplissage
+   (niveau 0 complet), on l'ecrit telle quelle (compressee BC ou 8 bits) en .dds nomme par son empreinte. Une seule fois par empreinte,
+   plafond en Mo par la cle vider_textures. Usage prive (fabrication du cache HD), jamais redistribue. */
+static bool format_bloc(UINT f, UINT &octets);
+static u64 g_vu_h[16384]; static volatile long g_vu_verrou; static i64 g_vide_octets, g_vide_n, g_vide_refus;
+static bool deja_vu(u64 h) {
+	if (!h) h = 1; unsigned i = (unsigned)(h ^ (h >> 32)) & 16383; bool r = false;
+	while (__atomic_exchange_n(&g_vu_verrou, 1, __ATOMIC_ACQUIRE)) {}
+	for (int k = 0; k < 64; k++) { unsigned j = (i + k) & 16383; if (g_vu_h[j] == h) { r = true; break; } if (!g_vu_h[j]) { g_vu_h[j] = h; break; } }
+	__atomic_store_n(&g_vu_verrou, 0, __ATOMIC_RELEASE); return r;
+}
+static UINT octets_pixel(UINT f) { switch (f) { case 28: case 29: case 87: case 88: case 91: case 24: case 26: case 41: return 4; case 49: case 54: case 56: return 2; case 61: case 65: return 1; case 10: case 34: return 8; default: return 0; } }
+static void vider_dds(u64 h, const TEX2D_DESC &d, const void *data, UINT rp) {
+	if (R.vider_textures <= 0 || d.ArraySize != 1) return;
+	UINT ob, lignes, serre; if (format_bloc(d.Format, ob)) { lignes = (d.Height + 3) / 4; serre = ((d.Width + 3) / 4) * ob; } else { UINT b = octets_pixel(d.Format); if (!b) { g_vide_refus++; return; } lignes = d.Height; serre = d.Width * b; }
+	if (serre > rp) return;
+	i64 total = (i64)serre * lignes;
+	if (g_vide_octets + total > (i64)R.vider_textures * 1048576) return;
+	if (deja_vu(h)) return;
+	__atomic_fetch_add(&g_vide_octets, total, __ATOMIC_RELAXED);
+	char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_textures_brut"); CreateDirectoryA(p, 0); cat(p, "\\");
+	char nom[24]; static const char hx[] = "0123456789abcdef"; for (int k = 0; k < 16; k++) nom[k] = hx[(h >> (60 - 4 * k)) & 15]; nom[16] = 0; cat(p, nom); cat(p, ".dds");
+	HANDLE f = CreateFileA(p, 0x40000000 /*GENERIC_WRITE*/, 0, 0, 1 /*CREATE_NEW*/, 0x80, 0); if (f == INVALID) return;
+	UINT e[32 + 5]; memset(e, 0, sizeof e);
+	e[0] = 0x20534444; e[1] = 124; e[2] = 0x1 | 0x2 | 0x4 | 0x1000 | 0x80000; e[3] = d.Height; e[4] = d.Width; e[5] = (UINT)total; e[7] = 1;
+	e[19] = 32; e[20] = 0x4; e[21] = 0x30315844 /*DX10*/; e[27] = 0x1000;
+	e[32] = d.Format; e[33] = 3; e[34] = 0; e[35] = 1; e[36] = 0;
+	DWORD w; WriteFile(f, e, sizeof e, &w, 0);
+	const unsigned char *q = (const unsigned char *)data; for (UINT y = 0; y < lignes; y++) WriteFile(f, q + (u64)y * rp, serre, &w, 0);
+	CloseHandle(f); __atomic_fetch_add(&g_vide_n, 1, __ATOMIC_RELAXED);
+}
 static i64 g_brut, g_upd_decor, g_upd_boite_part, g_upd_niv;
 static void releve_upd(void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, const char *chemin) {
 	if (R.sonde_textures <= 0 || !data || !rp) return;
@@ -895,6 +927,7 @@ static void releve_upd(void *r, UINT sub, const void *box, const void *data, UIN
 	if (niv) { __atomic_fetch_add(&g_upd_niv, 1, __ATOMIC_RELAXED); return; }
 	if (d.Width < 16 || d.Height < 16) return;
 	SUBRES m = {data, rp, dp}; u64 taille; u64 hh = empreinte(&m, &d, taille);
+	vider_dds(hh, d, data, rp);
 	Ligne l; l.s(chemin); l.s(";"); l.x(hh); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
 static void WINAPI h_copyres(void *c, void *dst, void *src) {
@@ -1372,7 +1405,7 @@ static void apres_image(void *sc) {
 			for (int j = 0; j < g_var_n[k]; j++) { q.s(" "); q.x((u64)g_var[k][j]); q.s(g_var[k][j] == (void *)g_el[k].cible ? "(=accrochee)" : "(AUTRE)"); } } journal(q);
 		{ Ligne z; z.s("etage apres tone mapping : images avec les 3 ecrans "); z.i(g_ldr_img3); z.s(", images incompletes "); z.i(g_ldr_imgpas3); z.s(", autres cibles 8 bits ignorees "); z.i(g_ldr_saut); journal(z); }
 		Ligne u; u.s("TSC Textures (tri) : updates vers decor "); u.i(g_upd_decor); u.s(", dont boite partielle "); u.i(g_upd_boite_part); u.s(", niveaux >0 "); u.i(g_upd_niv);
-		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); journal(u);
+		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); u.s(" ; extraites "); u.i(g_vide_n); u.s(" ("); u.i(g_vide_octets >> 20); u.s(" Mo, formats refuses "); u.i(g_vide_refus); u.s(")"); journal(u);
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
