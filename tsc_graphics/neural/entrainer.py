@@ -119,8 +119,12 @@ def main():
     champion_f = os.path.join(o.sortie, "champion.json")
     champion = json.load(open(champion_f)) if os.path.exists(champion_f) else None
     base = ecart(None, tj, ref, appareil)
+    # plancher = ecart entre deux lots d'images REELLES (le reel ne peut pas faire mieux que lui-meme)
+    plancher = ecart(None, [charger(p, o.hauteur) for p in train_r[:min(40, len(train_r))]], ref, appareil)
+    pct = lambda e: 100 * max(e - plancher, 0) / max(base - plancher, 1e-6)
+    # regle Mendy 03/11 23:45 : ecart au reel restant <= 10 % (du chemin jeu brut -> reel) pour parler de photorealisme
     meilleur = champion["ecart"] if champion else base
-    print(f"ecart au reel : jeu brut {base:.4f}" + (f", champion {meilleur:.4f}" if champion else ""))
+    print(f"ecart au reel : jeu brut {base:.4f} (100 %), reel contre reel {plancher:.4f} (0 %)" + (f", champion {meilleur:.4f} ({pct(meilleur):.0f} %)" if champion else ""))
     journal = open(os.path.join(o.sortie, "journal.txt"), "a", encoding="utf-8")
     t0 = time.time()
     for it in range(1, o.iterations + 1):
@@ -143,13 +147,13 @@ def main():
             G.eval(); e = ecart(G, tj, ref, appareil); G.train()
             nom = os.path.join(o.sortie, f"modele_{it:06d}.pt")
             torch.save({"modele": G.state_dict(), "ecart": e, "iteration": it}, nom)
-            ligne = f"== {it} : ecart au reel {e:.4f} (jeu brut {base:.4f}, meilleur {meilleur:.4f})"
+            ligne = f"== {it} : ecart au reel {e:.4f} = {pct(e):.0f} % restant (objectif <= 10 %) ; jeu brut {base:.4f}, meilleur {meilleur:.4f}"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
             if e < meilleur:
                 meilleur = e
                 torch.save({"modele": G.state_dict(), "ecart": e, "iteration": it}, os.path.join(o.sortie, "champion.pt"))
                 exporter.ecrire(G, o.hlsl, os.path.join(o.sortie, "tsc-graphics.hlsl"), note=f"iteration {it}, ecart {e:.4f}")
-                json.dump({"ecart": e, "iteration": it, "jeu_brut": base, "fichier": nom}, open(champion_f, "w"), indent=1)
+                json.dump({"ecart": e, "pourcent_restant": pct(e), "objectif_10pc": pct(e) <= 10, "iteration": it, "jeu_brut": base, "plancher_reel": plancher, "fichier": nom}, open(champion_f, "w"), indent=1)
                 apercu(G, tj[:3], appareil, os.path.join(o.sortie, f"apercu_{it:06d}.png"))
                 print("   -> nouveau champion, HLSL ecrit dans", o.sortie)
     print("fini. meilleur ecart", meilleur, "(jeu brut", base, ")")
