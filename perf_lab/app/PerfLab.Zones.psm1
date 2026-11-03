@@ -110,14 +110,16 @@ function Get-PLHeavyZones {
 }
 
 function Get-PLQuickLoad {
-  # Charge instantanee du Shadow, sans droits administrateur (carte graphique 3D, processeur)
+  # Charge instantanee du Shadow, sans droits administrateur (carte graphique 3D, processeur, images/s du plugin TSC)
   $gpu = $null; $cpu = $null
   $g = Get-Counter -Counter '\GPU Engine(*engtype_3D)\Utilization Percentage' -MaxSamples 1 -ErrorAction SilentlyContinue
   if ($g) { $sum = 0.0; foreach ($c in $g.CounterSamples) { $sum += $c.CookedValue }; $gpu = [math]::Round([math]::Min(100, $sum), 1) }
   if (-not $script:CpuPath) { $script:CpuPath = Get-PLCpuCounterPath }
   $p = Get-Counter -Counter $script:CpuPath -MaxSamples 1 -ErrorAction SilentlyContinue
   if ($p) { $cpu = [math]::Round($p.CounterSamples[0].CookedValue, 1) }
-  [pscustomobject]@{ Gpu = $gpu; Cpu = $cpu; Fps = $null }
+  # images/s reelles mesurees dans le jeu par le plugin TSC Graphics (fiable derriere ReShade) ; $null sans le plugin
+  $fps = $null; try { $fps = Get-PLTscFps } catch { }
+  [pscustomobject]@{ Gpu = $gpu; Cpu = $cpu; Fps = $fps }
 }
 
 # --- mode zone chargee : actions cote Windows, toutes reversibles

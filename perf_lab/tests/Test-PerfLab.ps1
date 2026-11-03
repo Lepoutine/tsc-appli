@@ -83,6 +83,33 @@ Check 'format v1 lu' ($st1.ColonneTrame -eq 'msBetweenPresents' -and $st1.FpsMoy
 Check 'aucune saccade sur rythme regulier' ($st1.Saccades -eq 0 -and $st1.EcartTypeMs -eq 0)
 Check 'limite indeterminee sans colonnes CPU/GPU' ($st1.Limite -eq 'Indetermine')
 
+# --- mesure par le plugin TSC Graphics (tsc-profil.csv), fiable derriere ReShade
+$tp = Join-Path $tmp 'tsc-profil.csv'
+$sbt = New-Object Text.StringBuilder
+[void]$sbt.Append("# tsc-graphics 0.14 ; session demarree au tick 1 ms ; QPC 10000000 Hz`r`n")
+[void]$sbt.Append("image;t_ms;image_ms;gpu_ms;dessins;cibles;vues_gbuffer;vues_tsc;map_lect;map_ms;getdata_jeu;getdata_ms;shaders_crees;textures_creees;creation_ms;vram_mo;effet`r`n")
+$t = 0.0
+for ($i = 1; $i -le 600; $i++) { $ft = $(if ($i % 100 -eq 0) { 60 } else { 25 }); $t += $ft; [void]$sbt.Append("$i;$($t.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture));$ft.000;9.500;1200;14;3;3;0;0.000;0;0.000;0;0;0.000;9000;1`r`n") }
+[IO.File]::WriteAllText($tp, $sbt.ToString())
+$fr = @(Read-PLTscProfil -Path $tp)
+Check 'plugin : 600 images lues, en-tetes ignores' ($fr.Count -eq 600 -and $fr[0].ImageMs -eq 25 -and $fr[0].GpuMs -eq 9.5 -and $fr[0].Effet)
+$off = (Get-Item -LiteralPath $tp).Length
+[IO.File]::AppendAllText($tp, "601;15235.0;25.000;;1200;14;3;3;0;0.000;0;0.000;0;0;0.000;;0`r`n")
+$fr2 = @(Read-PLTscProfil -Path $tp -Offset $off)
+Check 'plugin : lecture apres le decalage seulement, gpu vide accepte' ($fr2.Count -eq 1 -and [double]::IsNaN($fr2[0].GpuMs) -and -not $fr2[0].Effet)
+$fr3 = @(Read-PLTscProfil -Path $tp -Offset ($off + 999999))
+Check 'plugin : fichier recree (decalage trop grand) = tout relire' ($fr3.Count -eq 601)
+$tcsv = Join-Path $tmp 'tsc_images.csv'
+ConvertTo-PLFrameCsv -Frames $fr -CsvPath $tcsv
+$stt = Get-PLFrameStats -CsvPath $tcsv -SkipSeconds 0
+# (594*25 + 6*60)/600 = 25,35 ms -> 39,4 images/s ; GPU 9,5 ms << 25 ms : la carte graphique attend
+Check 'plugin : images/s et 1 % bas' ($stt.Images -eq 600 -and $stt.FpsMoyen -eq 39.4 -and $stt.Fps1PctBas -eq 16.7)
+Check 'plugin : limite processeur ou limiteur (GPU seul connu)' ($stt.Limite -eq 'Processeur ou limiteur (la carte graphique attend)')
+(Get-Item -LiteralPath $tp).LastWriteTime = Get-Date
+Check 'plugin : images/s des 2 dernieres secondes' ((Get-PLTscFps -Path $tp) -eq 39.3)
+(Get-Item -LiteralPath $tp).LastWriteTime = (Get-Date).AddMinutes(-1)
+Check 'plugin : fichier fige (jeu en pause) = pas de mesure' ($null -eq (Get-PLTscFps -Path $tp))
+
 # --- comparaison
 $a = [pscustomobject]@{ Stats = $st }; $b = [pscustomobject]@{ Stats = $st1 }
 $cmp = @(Compare-PLRuns -Avant $a -Apres $b)

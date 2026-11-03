@@ -602,6 +602,11 @@ function Get-PLFrameStats {
     elseif ($cpuMed -ge 0.9 * $ftMed) { $limit = 'Processeur' }
     else { $limit = 'Ni l''un ni l''autre (attente : synchro, limite ou affichage)' }
   }
+  elseif ($null -ne $gpuMed) {
+    # mesure du plugin TSC : temps GPU de l'image seulement
+    if ($gpuMed -ge 0.9 * $ftMed) { $limit = 'Carte graphique' }
+    elseif ($gpuMed -le 0.7 * $ftMed) { $limit = 'Processeur ou limiteur (la carte graphique attend)' }
+  }
   [pscustomobject]@{
     Images         = $arr.Count
     DureeS         = [math]::Round($dur, 1)
@@ -625,33 +630,122 @@ function Get-PLFrameStats {
   }
 }
 
+# ---------------------------------------------------------------- mesure par le plugin TSC Graphics (fiable derriere ReShade)
+# Le plugin tsc-graphics.dll mesure chaque image DANS le jeu, a son Present, et ecrit tsc-profil.csv dans son dossier plugins
+# (image;t_ms;image_ms;gpu_ms;...). Les couches DXGI (ReShade dxgi.dll + dxgi2.dll) ne le trompent pas : c'est le jeu lui-meme
+# qui est mesure, sans droits administrateur et sans PresentMon.
+
+function Find-PLTscProfil {
+  # Chemin de tsc-profil.csv du jeu en cours (copie TSCF_Lab comprise), sinon de l'installation Steam
+  $cands = @()
+  foreach ($p in @(Get-Process -Name eurotrucks2 -ErrorAction SilentlyContinue)) { try { if ($p.Path) { $cands += Join-Path (Split-Path $p.Path) 'plugins\tsc-profil.csv' } } catch { } }
+  $g = Find-PLGame
+  if ($g.GameDir) { $cands += Join-Path $g.GameDir 'bin\win_x64\plugins\tsc-profil.csv' }
+  $cands += Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'TSCF_Lab\ets2\bin\win_x64\plugins\tsc-profil.csv'
+  $cands | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+
+function Test-PLTscProfilActif {
+  # Vrai si le plugin ecrit en ce moment (le fichier grossit en moins de 3 s ; il est vide environ 1 fois par seconde)
+  param([string]$Path = (Find-PLTscProfil))
+  if (-not $Path) { return $false }
+  $a = (Get-Item -LiteralPath $Path).Length
+  for ($i = 0; $i -lt 6; $i++) { Start-Sleep -Milliseconds 500; if ((Get-Item -LiteralPath $Path).Length -ne $a) { return $true } }
+  $false
+}
+
+function Read-PLTscProfil {
+  # Lit les images ecrites apres l'octet Offset. Rend des objets { Image; TMs; ImageMs; GpuMs; Effet }.
+  param([Parameter(Mandatory)][string]$Path, [long]$Offset = 0)
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  $fs = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+  try {
+    if ($Offset -gt $fs.Length) { $Offset = 0 }   # nouveau fichier (jeu relance) : tout relire
+    [void]$fs.Seek($Offset, 'Begin')
+    $txt = (New-Object IO.StreamReader($fs, [Text.Encoding]::ASCII)).ReadToEnd()
+  } finally { $fs.Dispose() }
+  $out = New-Object System.Collections.Generic.List[object]
+  foreach ($l in $txt -split "`r?`n") {
+    if (-not $l -or $l[0] -lt [char]'0' -or $l[0] -gt [char]'9') { continue }   # en-tetes, commentaires, ligne coupee au debut
+    $c = $l.Split(';')
+    if ($c.Count -lt 4) { continue }
+    $im = 0.0; $t = 0.0; $gp = [double]::NaN
+    if (-not [double]::TryParse($c[2], [Globalization.NumberStyles]::Float, $inv, [ref]$im)) { continue }
+    [void][double]::TryParse($c[1], [Globalization.NumberStyles]::Float, $inv, [ref]$t)
+    $g0 = 0.0; if ($c[3] -and [double]::TryParse($c[3], [Globalization.NumberStyles]::Float, $inv, [ref]$g0)) { $gp = $g0 }
+    $out.Add([pscustomobject]@{ Image = $c[0]; TMs = $t; ImageMs = $im; GpuMs = $gp; Effet = $(if ($c.Count -ge 17) { $c[16] -eq '1' } else { $null }) })
+  }
+  $out.ToArray()
+}
+
+function ConvertTo-PLFrameCsv {
+  # Ecrit les images du plugin au format colonnes PresentMon (Application, FrameTime, GPUBusy) pour Get-PLFrameStats
+  param([Parameter(Mandatory)]$Frames, [Parameter(Mandatory)][string]$CsvPath)
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  $sb = New-Object Text.StringBuilder
+  [void]$sb.AppendLine('Application,FrameTime,GPUBusy')
+  foreach ($f in $Frames) {
+    $g = $(if ([double]::IsNaN($f.GpuMs)) { '' } else { $f.GpuMs.ToString('0.###', $inv) })
+    [void]$sb.AppendLine("eurotrucks2.exe,$($f.ImageMs.ToString('0.###', $inv)),$g")
+  }
+  [IO.File]::WriteAllText($CsvPath, $sb.ToString())
+}
+
+function Get-PLTscFps {
+  # Images/s des 2 dernieres secondes, lues a la fin de tsc-profil.csv (pour le mode zones). $null si le plugin n'ecrit pas.
+  param([string]$Path = (Find-PLTscProfil), [double]$FenetreS = 2)
+  if (-not $Path) { return $null }
+  $it = Get-Item -LiteralPath $Path
+  if (((Get-Date) - $it.LastWriteTime).TotalSeconds -gt 5) { return $null }   # jeu en pause, au menu ou ferme
+  $fr = @(Read-PLTscProfil -Path $Path -Offset ([math]::Max(0, $it.Length - 16384)))
+  if ($fr.Count -lt 5) { return $null }
+  $fin = $fr[-1].TMs; $s = 0.0; $n = 0
+  for ($i = $fr.Count - 1; $i -ge 0 -and ($fin - $fr[$i].TMs) -le $FenetreS * 1000; $i--) { if ($fr[$i].ImageMs -gt 0) { $s += $fr[$i].ImageMs; $n++ } }
+  if ($n -lt 5 -or $s -le 0) { return $null }
+  [math]::Round(1000 * $n / $s, 1)
+}
+
 function Start-PLCapture {
-  # Lance PresentMon (ETW, sans injection) sur eurotrucks2.exe et echantillonne CPU/GPU/RAM en parallele.
-  # PresentMon demande les droits administrateur : Windows affiche une confirmation.
-  param([int]$Seconds = 180, [Parameter(Mandatory)][string]$Label, [string]$Zone = '', [string]$Profil = '')
+  # Mesure de N secondes. Source 'auto' : le plugin TSC Graphics s'il ecrit (fiable derriere ReShade, sans droits
+  # administrateur), sinon PresentMon (ETW, sans injection ; demande les droits administrateur).
+  param([int]$Seconds = 180, [Parameter(Mandatory)][string]$Label, [string]$Zone = '', [string]$Profil = '',
+        [ValidateSet('auto', 'tsc', 'presentmon')][string]$Source = 'auto')
   if (-not (Get-Process -Name eurotrucks2 -ErrorAction SilentlyContinue)) { throw 'ETS2 n''est pas lance.' }
-  $pm = Get-PLPresentMon
+  $tscPath = Find-PLTscProfil
+  if ($Source -eq 'auto') { $Source = $(if ($tscPath -and (Test-PLTscProfilActif -Path $tscPath)) { 'tsc' } else { 'presentmon' }) }
+  if ($Source -eq 'tsc' -and -not $tscPath) { throw 'tsc-profil.csv introuvable : le plugin TSC Graphics est-il installe (cle profil = 1) ?' }
   $id = Get-Date -Format 'yyyyMMdd_HHmmss'
   $dir = Join-Path (Join-Path (Get-PLDataRoot) 'mesures') $id
   New-Item -ItemType Directory -Path $dir -Force | Out-Null
-  $csv = Join-Path $dir 'presentmon.csv'
-  # pas de filtre par processus : avec des couches DXGI (ReShade...), la chaine du jeu peut etre mal attribuee ;
-  # le tri par processus et par chaine se fait ensuite dans Get-PLFrameStats
-  $args = @('--output_file', "`"$csv`"", '--timed', $Seconds, '--terminate_after_timed', '--no_console_stats', '--stop_existing_session', '--session_name', 'TSCPerfLab')
-  $p = Start-Process -FilePath $pm -ArgumentList $args -Verb RunAs -WindowStyle Hidden -PassThru
-  $samples = Measure-PLLoad -Seconds $Seconds
-  $p.WaitForExit(($Seconds + 30) * 1000) | Out-Null
+  if ($Source -eq 'tsc') {
+    $offset = (Get-Item -LiteralPath $tscPath).Length
+    $samples = Measure-PLLoad -Seconds $Seconds
+    Start-Sleep -Seconds 2   # le plugin vide son tampon environ 1 fois par seconde
+    $frames = @(Read-PLTscProfil -Path $tscPath -Offset $offset)
+    $csv = Join-Path $dir 'tsc_images.csv'
+    ConvertTo-PLFrameCsv -Frames $frames -CsvPath $csv
+    $stats = Get-PLFrameStats -CsvPath $csv
+  } else {
+    $pm = Get-PLPresentMon
+    $csv = Join-Path $dir 'presentmon.csv'
+    # pas de filtre par processus : avec des couches DXGI (ReShade...), la chaine du jeu peut etre mal attribuee ;
+    # le tri par processus et par chaine se fait ensuite dans Get-PLFrameStats
+    $args = @('--output_file', "`"$csv`"", '--timed', $Seconds, '--terminate_after_timed', '--no_console_stats', '--stop_existing_session', '--session_name', 'TSCPerfLab')
+    $p = Start-Process -FilePath $pm -ArgumentList $args -Verb RunAs -WindowStyle Hidden -PassThru
+    $samples = Measure-PLLoad -Seconds $Seconds
+    $p.WaitForExit(($Seconds + 30) * 1000) | Out-Null
+    if (-not (Test-Path -LiteralPath $csv)) { throw 'PresentMon n''a rien enregistre (droits administrateur refuses ?).' }
+    $stats = Get-PLFrameStats -CsvPath $csv
+  }
   $samples | Export-Csv -LiteralPath (Join-Path $dir 'charge.csv') -NoTypeInformation -Encoding UTF8
-  if (-not (Test-Path -LiteralPath $csv)) { throw 'PresentMon n''a rien enregistre (droits administrateur refuses ?).' }
-  $stats = Get-PLFrameStats -CsvPath $csv
   $gpuMoy = [math]::Round(($samples | Measure-Object Gpu3D -Average).Average, 1)
   # peu d'images alors que la carte graphique travaille : PresentMon n'a pas suivi la vraie chaine d'affichage
-  $douteuse = ($stats.FpsMoyen -lt 15 -and $gpuMoy -ge 30)
+  $douteuse = ($Source -eq 'presentmon' -and $stats.FpsMoyen -lt 15 -and $gpuMoy -ge 30)
   $run = [pscustomobject]@{
     Id = $id; Date = (Get-Date).ToString('dd/MM/yyyy HH:mm'); Libelle = $Label; Zone = $Zone; Profil = $Profil
-    Machine = $env:COMPUTERNAME; Stats = $stats
+    Machine = $env:COMPUTERNAME; Source = $(if ($Source -eq 'tsc') { 'Plugin TSC Graphics (dans le jeu)' } else { 'PresentMon' }); Stats = $stats
     Douteuse = $douteuse
-    Avertissement = $(if ($douteuse) { "Mesure douteuse : $($stats.FpsMoyen) images/s vues alors que la carte graphique etait a $gpuMoy %. Voir Stats.Chaines." } else { '' })
+    Avertissement = $(if ($douteuse) { "Mesure douteuse : $($stats.FpsMoyen) images/s vues alors que la carte graphique etait a $gpuMoy %. Voir Stats.Chaines ; installez le plugin TSC Graphics pour une mesure fiable derriere ReShade." } else { '' })
     Charge = [pscustomobject]@{
       CpuMoy = [math]::Round(($samples | Measure-Object Cpu -Average).Average, 1)
       CpuMax = ($samples | Measure-Object Cpu -Maximum).Maximum

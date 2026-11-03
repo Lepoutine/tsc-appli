@@ -7,7 +7,7 @@ Le moteur est dans `perf_lab/app/` (PowerShell 5.1, sans interface). La tablette
 ## Ce que fait le « mode zones »
 
 - La tablette lui passe, chaque seconde, la position du camion lue dans la télémétrie scs-telemetry (déjà installée par l'appli).
-- Le moteur mesure la charge du Shadow (carte graphique 3D et processeur, sans droits administrateur) et note chaque case de 500 m comme lourde ou normale. La carte des zones lourdes se construit au fil des trajets et reste dans `Documents\TSC Driver\TSC Performance Lab\zones\carte.json`.
+- Le moteur mesure la charge du Shadow (carte graphique 3D et processeur, sans droits administrateur) et, si le plugin TSC Graphics est installé, les vraies images/s du jeu lues dans `plugins\tsc-profil.csv` (mesurées dans le jeu, donc fiables derrière ReShade). Avec les images/s, un instant est lourd sous 85 % de `ImagesCible`. et note chaque case de 500 m comme lourde ou normale. La carte des zones lourdes se construit au fil des trajets et reste dans `Documents\TSC Driver\TSC Performance Lab\zones\carte.json`.
 - En zone lourde (3 s de charge saturée, ou entrée dans une case déjà connue comme lourde, ou case lourde 15 s devant le camion), si le mode automatique est activé :
   - le jeu passe en priorité « au-dessus de la normale » ;
   - les tâches de fond connues (Steam webhelper, navigateurs, Discord, Razer, OneDrive, Spotify…) passent en priorité « en dessous de la normale » ;
