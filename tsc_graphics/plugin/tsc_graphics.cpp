@@ -1,6 +1,10 @@
 /* tsc-graphics.dll : TSC Neural Graphics, rendu temps reel dans ETS2 (DirectX 11). Plugin SDK SCS charge par le jeu
    (bin/win_x64/plugins). Copyright (c) 2026 Truck So Clean France. Sans CRT, sans SDK Windows (clang + lld).
 
+   0.4 : profileur TSC v1 : par image (Present a Present) temps d'image, temps GPU de toute l'image (requetes horodatees,
+         anneau de 6 images, lecture sans attente), dessins, changements de cibles, vues G-buffer / traitees, lectures CPU
+         bloquantes du jeu (Map en lecture, GetData), creations de shaders et de textures, memoire video (DXGI 1.4), ecrits
+         dans tsc-profil.csv (tampon vide ~1 fois par seconde) ; verdict plafond / GPU / CPU / marge dans la ligne mesure.
    0.3 : route mouillee v1, calee sur les videos reelles (reflets en colonnes verticales floues, flou qui grandit avec la
          distance du rayon, asphalte mouille plus sombre, marquages mats) : copie HDR avec chaine de mips (GenerateMips).
    0.2 : branche sur le pipeline reel d'ETS2 1.61 releve par l'audit (sonde + RenderDoc, 03/11/2026) :
@@ -49,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.3.1"
+#define VERSION "tsc-graphics 0.4.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -82,6 +86,7 @@ struct Reglages {
 	float intensite = 1, rugosite = 0.12f, trainees = 1.5f, pas = 0.12f, epaisseur = 0.5f, f0 = 0.04f, assombrir = 0.35f;
 	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
+	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
 };
 static Reglages R; static u64 g_ini_hash;
 static double nombre(const char *&p) { double s = 1, v = 0, d = 0.1; while (*p == ' ' || *p == '\t') p++; if (*p == '-') { s = -1; p++; }
@@ -95,7 +100,8 @@ static void lire_ini(bool force) {
 		{"plage_min", &R.plage_min}, {"plage_max", &R.plage_max}, {"intensite", &R.intensite}, {"rugosite", &R.rugosite}, {"trainees", &R.trainees},
 		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
 		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues},
-		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto} };
+		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto},
+		{"profil", &R.profil} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -207,13 +213,40 @@ static i64 g_freq, g_t_prec; static double g_somme_ms, g_pire_ms, g_cpu_ms, g_gp
 static u64 g_vram;
 
 static i64 g_n_omsrt, g_n_dessins;
+
+/* ---------- profileur TSC v1 : etat (tout en memoire statique, aucune allocation) ----------
+   Temps GPU de toute l'image : horodatage juste apres le retour du Present (debut de l'image) et juste avant le Present
+   suivant (fin), dans une requete TIMESTAMP_DISJOINT ; anneau de NP images ; lecture sans attente (GetData DONOTFLUSH)
+   des images vieilles d'au moins 3 ; une requete pas encore prete quand son emplacement revient est abandonnee (jamais
+   d'attente). Ce temps va du debut a la fin de l'image cote GPU : les trous ou le GPU attend (CPU en retard, file de
+   presentation pleine sous synchro verticale) y sont inclus : c'est une borne haute de l'occupation du GPU.
+   Les lignes du CSV restent NR images en memoire le temps que le temps GPU arrive, puis vont dans un tampon ecrit ~1 fois
+   par seconde. */
+#define NP 6
+#define NR 8
+struct ProfGpu { void *dis, *a, *b; i64 img; int etat; };   /* etat : 0 libre, 1 ouverte, 2 en attente du GPU */
+static ProfGpu g_pg[NP]; static int g_pg_ok;
+struct ProfLigne { i64 img, dessins, cibles, vues_g, vues_t, map_lect, getdata, ps, tex; double t_ms, image_ms, gpu_ms, map_ms, gd_ms, cree_ms; int vram_mo, effet, pleine; };
+static ProfLigne g_pl[NR];
+static i64 g_p_img = 1, g_p_t0;                                   /* image en cours (ouverte apres le Present precedent) */
+static i64 g_pf_dessins, g_pf_cibles, g_pf_map, g_pf_map_t, g_pf_gd, g_pf_gd_t;   /* image en cours (contexte immediat, ticks QPC) */
+static i64 g_cree_ps, g_cree_tex, g_cree_t;                       /* creations sur l'appareil, tous fils : operations atomiques */
+static void *g_adapt3; static int g_vram_mo = -1, g_vram_budget_mo = -1;
+static char g_csv[65536]; static int g_csv_n, g_csv_entete; static u64 g_csv_t;
+/* fenetre du rapport (2 s) pour le verdict */
+static int g_hist[500];                                           /* temps d'image par pas de 0,2 ms (0-100 ms) */
+static int g_pw_n, g_pw_16, g_pw_33, g_pw_ngpu; static double g_pw_img, g_pw_gpu, g_pw_gpu_img, g_prof_cpu_ms;
+static i64 g_pw_map, g_pw_gd, g_pw_cree; static double g_pw_map_ms, g_pw_gd_ms, g_pw_cree_ms;
+static double ms_de(i64 t) { return g_freq ? (double)t * 1000.0 / (double)g_freq : 0; }
+
 static void compter() {
 	if (g_nous) return;
-	g_n_dessins++;
+	g_n_dessins++; g_pf_dessins++;
 	if (g_trace) g_trace_dessins++;
 	if (g_dans_gouttes) g_gouttes++;
 }
-static HRESULT dev_tex(const TEX2D_DESC *d, void **out) { return ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, d, 0, out); }
+static HRESULT dev_tex(const TEX2D_DESC *d, void **out) {   /* g_nous : nos creations ne comptent pas dans le profileur */
+	g_nous++; HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, d, 0, out); g_nous--; return hr; }
 
 static void compiler() {
 	static char src[65536]; int n = lire_fichier("tsc-graphics.hlsl", src, sizeof src);
@@ -231,14 +264,17 @@ static void compiler() {
 		Ligne l; l.s("erreur shader PS : "); if (err) l.s((const char *)((void *(WINAPI *)(void *))VT(err)[3])(err)); journal(l); REL(err); REL(bv); g_shaders_ok = 0; return; }
 	REL(err);
 	typedef void *(WINAPI *PTR)(void *); typedef SIZE_T (WINAPI *TAILLE)(void *);
+	g_nous++;
 	HRESULT c1 = ((HRESULT (WINAPI *)(void *, const void *, SIZE_T, void *, void **))VT(g_dev)[D_CreateVS])(g_dev, ((PTR)VT(bv)[3])(bv), ((TAILLE)VT(bv)[4])(bv), 0, &vs);
 	HRESULT c2 = ((HRESULT (WINAPI *)(void *, const void *, SIZE_T, void *, void **))VT(g_dev)[D_CreatePS])(g_dev, ((PTR)VT(bp)[3])(bp), ((TAILLE)VT(bp)[4])(bp), 0, &ps);
+	g_nous--;
 	REL(bv); REL(bp);
 	if (c1 < 0 || c2 < 0) { REL(vs); REL(ps); logline("creation des shaders refusee"); g_shaders_ok = 0; return; }
 	REL(g_vs); REL(g_ps); g_vs = vs; g_ps = ps; g_shaders_ok = 1; logline("shaders compiles (tsc-graphics.hlsl)");
 }
 
 static void accrocher_contexte();
+static void prof_init();
 static void module_de(Ligne &l, void *adr) {
 	HMODULE m = 0; char n[300]; n[0] = 0;
 	if (adr && GetModuleHandleExA(6, (const char *)adr, &m) && m) GetModuleFileNameA(m, n, 299);
@@ -250,6 +286,7 @@ static bool init_appareil(void *sc) {
 	((void (WINAPI *)(void *, void **))VT(g_dev)[40])(g_dev, &g_ctx);
 	((HRESULT (WINAPI *)(void *, const GUIDx *, void **))VT(g_dev)[0])(g_dev, &IID_Dev1, &g_dev1);
 	if (g_ctx) ((HRESULT (WINAPI *)(void *, const GUIDx *, void **))VT(g_ctx)[0])(g_ctx, &IID_Ctx1, &g_ctx1);
+	prof_init();   /* profileur : ne depend pas de D3D11.1 */
 	if (!g_dev1 || !g_ctx1) { logline("D3D11.1 indisponible : effet impossible (sonde seule)"); return false; }
 	int fl = ((int (WINAPI *)(void *))VT(g_dev)[D_GetFeatureLevel])(g_dev), choisi = 0;
 	HRESULT hr = ((HRESULT (WINAPI *)(void *, UINT, const int *, UINT, UINT, const GUIDx *, int *, void **))VT(g_dev1)[D1_CreateDeviceContextState])(g_dev1, 0, &fl, 1, 7, &IID_Dev, &choisi, &g_etat);
@@ -380,8 +417,10 @@ static void fin_mesure_gpu() {
 	int r = (g_q_i + 1) % NQ;   /* la plus ancienne */
 	if (g_q_i >= NQ && g_q_n[r]) {
 		typedef HRESULT (WINAPI *GD)(void *, void *, void *, UINT, UINT);
+		g_nous++;   /* GetData est accroche (profileur) : nos lectures ne comptent pas comme celles du jeu */
 		DISJOINT dj; double ms = 0; int ok = ((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_dis[r], &dj, sizeof dj, 1) == 0 && !dj.Disjoint && dj.Frequency;
 		for (int v = 0; ok && v < g_q_n[r]; v++) { u64 a = 0, b = 0; if (((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_a[r][v], &a, 8, 1) || ((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_b[r][v], &b, 8, 1) || b < a) ok = 0; else ms += (double)(b - a) * 1000.0 / (double)dj.Frequency; }
+		g_nous--;
 		if (ok) { g_gpu_ms += ms; g_n_gpu++; }
 		g_q_n[r] = 0;
 	}
@@ -393,7 +432,7 @@ static void quitter_vue() { REL(g_hdr_tex); REL(g_vue_prof); g_etape = E_RIEN; }
 /* ---------- crochets du contexte ---------- */
 static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 	if (!g_nous) {
-		g_n_omsrt++;
+		g_n_omsrt++; g_pf_cibles++;
 		void *rt0 = n && rtv && rtv[0] ? ressource(rtv[0]) : 0;
 		void *pt = dsv ? ressource(dsv) : 0;
 		TEX2D_DESC d0; if (rt0) desc_tex(rt0, d0); else memset(&d0, 0, sizeof d0);
@@ -441,13 +480,28 @@ static void WINAPI h_drawidx(void *c, UINT a, UINT b, int d) { compter(); o_draw
 static void WINAPI h_draw(void *c, UINT a, UINT b) { compter(); o_draw(c, a, b); }
 static void WINAPI h_drawidxi(void *c, UINT a, UINT b, UINT d, int e, UINT f) { compter(); o_drawidxi(c, a, b, d, e, f); }
 static void WINAPI h_drawi(void *c, UINT a, UINT b, UINT d, UINT e) { compter(); o_drawi(c, a, b, d, e); }
+/* profileur : attentes CPU possibles du jeu sur le contexte immediat (Map en lecture : le CPU attend le GPU ; GetData) */
+typedef HRESULT (WINAPI *PFN_MAP)(void *, void *, UINT, UINT, UINT, void *);
+typedef HRESULT (WINAPI *PFN_GETDATA)(void *, void *, void *, UINT, UINT);
+static PFN_MAP o_map; static PFN_GETDATA o_getdata;
+static HRESULT WINAPI h_map(void *c, void *r, UINT sub, UINT type, UINT fl, void *m) {
+	if (g_nous || c != g_ctx || (type != 1 /*READ*/ && type != 3 /*READ_WRITE*/)) return o_map(c, r, sub, type, fl, m);
+	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_map(c, r, sub, type, fl, m); QueryPerformanceCounter(&b);
+	g_pf_map++; g_pf_map_t += b - a; return hr;
+}
+static HRESULT WINAPI h_getdata(void *c, void *q, void *d, UINT n, UINT fl) {
+	if (g_nous || c != g_ctx) return o_getdata(c, q, d, n, fl);
+	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_getdata(c, q, d, n, fl); QueryPerformanceCounter(&b);
+	g_pf_gd++; g_pf_gd_t += b - a; return hr;
+}
 
 /* d'autres couches remettent certaines entrees a chaque image : on les repose (en enchainant sur ce qui est en place) */
 struct Crochet { int i; void *f; void **o; };
 static Crochet g_cr[] = {
 	{C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt}, {C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv}, {C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv},
 	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
-	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi} };
+	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi},
+	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata} };
 static void accrocher_contexte() {
 	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
 		for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
@@ -457,8 +511,168 @@ static void accrocher_contexte() {
 	} else { Ligne l; l.s("contexte du jeu = table deja accrochee ; module "); module_de(l, (void *)o_omsrt); journal(l); }
 }
 static i64 g_reposes;
+/* profileur : creations sur la table du VRAI appareil du jeu (prise dans init_appareil), appelees depuis tous les fils */
+typedef HRESULT (WINAPI *PFN_CTEX)(void *, const TEX2D_DESC *, const void *, void **);
+typedef HRESULT (WINAPI *PFN_CPS)(void *, const void *, SIZE_T, void *, void **);
+static PFN_CTEX o_ctex; static PFN_CPS o_cps; static void **g_vt_dev;
+static void ajouter_creation(i64 *n, i64 t) { __atomic_fetch_add(n, 1, __ATOMIC_RELAXED); __atomic_fetch_add(&g_cree_t, t, __ATOMIC_RELAXED); }
+static HRESULT WINAPI h_ctex(void *d, const TEX2D_DESC *ds, const void *init, void **out) {
+	if (g_nous) return o_ctex(d, ds, init, out);
+	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_ctex(d, ds, init, out); QueryPerformanceCounter(&b);
+	ajouter_creation(&g_cree_tex, b - a); return hr;
+}
+static HRESULT WINAPI h_cps(void *d, const void *code, SIZE_T n, void *lien, void **out) {
+	if (g_nous) return o_cps(d, code, n, lien, out);
+	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_cps(d, code, n, lien, out); QueryPerformanceCounter(&b);
+	ajouter_creation(&g_cree_ps, b - a); return hr;
+}
+static Crochet g_cr_dev[] = { {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps} };
 static void reposer() {
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) g_reposes++; }
+	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] != c.f) { if (poser(g_vt_dev, c.i, c.f, c.o)) g_reposes++; }
+}
+
+/* ---------- profileur TSC v1 ---------- */
+/* DXGI 1.4 (dxgi1_4.h) : IDXGIDevice = 54ec77fa-1377-44e6-8c32-88fd5f44c84c, IDXGIAdapter3 = 645967a4-1392-4310-a798-8053ce3e93fd.
+   Tables : IUnknown 0-2, IDXGIObject 3-6 (SetPrivateData, SetPrivateDataInterface, GetPrivateData, GetParent),
+   IDXGIDevice::GetAdapter 7 (confiance elevee) ; IDXGIAdapter 7-9 (EnumOutputs, GetDesc, CheckInterfaceSupport),
+   IDXGIAdapter1::GetDesc1 10, IDXGIAdapter2::GetDesc2 11, IDXGIAdapter3 : RegisterHardwareContentProtectionTeardownStatusEvent 12,
+   UnregisterHardwareContentProtectionTeardownStatus 13, QueryVideoMemoryInfo 14, SetVideoMemoryReservation 15
+   (confiance elevee : ordre de declaration de dxgi1_4.h ; en cas d'erreur l'appel echoue et le profileur l'ecrit une fois). */
+static const GUIDx IID_DxgiDev = {0x54ec77fa, 0x1377, 0x44e6, {0x8c, 0x32, 0x88, 0xfd, 0x5f, 0x44, 0xc8, 0x4c}};
+static const GUIDx IID_Adapt3 = {0x645967a4, 0x1392, 0x4310, {0xa7, 0x98, 0x80, 0x53, 0xce, 0x3e, 0x93, 0xfd}};
+enum { G_GetAdapter = 7, A3_QueryVideoMemoryInfo = 14 };
+struct MEMVID { u64 Budget, CurrentUsage, AvailableForReservation, CurrentReservation; };
+typedef HRESULT (WINAPI *PFN_QI)(void *, const GUIDx *, void **);
+
+static void prof_init() {
+	static int fait; if (fait || !g_dev || !g_ctx) return; fait = 1;
+	/* requetes GPU de toute l'image (objets distincts de g_q_dis / g_q_a / g_q_b) */
+	int ok = 1;
+	for (int i = 0; i < NP; i++) {
+		QUERY_DESC q0 = {3 /*TIMESTAMP_DISJOINT*/, 0}, q1 = {2 /*TIMESTAMP*/, 0};
+		typedef HRESULT (WINAPI *CQ)(void *, const QUERY_DESC *, void **);
+		if (((CQ)VT(g_dev)[D_CreateQuery])(g_dev, &q0, &g_pg[i].dis) < 0) g_pg[i].dis = 0;
+		if (((CQ)VT(g_dev)[D_CreateQuery])(g_dev, &q1, &g_pg[i].a) < 0) g_pg[i].a = 0;
+		if (((CQ)VT(g_dev)[D_CreateQuery])(g_dev, &q1, &g_pg[i].b) < 0) g_pg[i].b = 0;
+		if (!g_pg[i].dis || !g_pg[i].a || !g_pg[i].b) ok = 0;
+	}
+	if (!ok) { for (int i = 0; i < NP; i++) { REL(g_pg[i].dis); REL(g_pg[i].a); REL(g_pg[i].b); } logline("profileur : requetes GPU refusees, gpu_ms vide"); }
+	g_pg_ok = ok;
+	/* memoire video : IDXGIDevice -> GetAdapter -> IDXGIAdapter3 */
+	void *dx = 0, *ad = 0;
+	if (((PFN_QI)VT(g_dev)[0])(g_dev, &IID_DxgiDev, &dx) >= 0 && dx) {
+		if (((HRESULT (WINAPI *)(void *, void **))VT(dx)[G_GetAdapter])(dx, &ad) >= 0 && ad) {
+			if (((PFN_QI)VT(ad)[0])(ad, &IID_Adapt3, &g_adapt3) < 0) g_adapt3 = 0;
+			REL(ad);
+		}
+		REL(dx);
+	}
+	if (!g_adapt3) logline("profileur : IDXGIAdapter3 indisponible, vram_mo vide");
+	/* creations de shaders et de textures : table du vrai appareil */
+	g_vt_dev = VT(g_dev);
+	int okd = 1; for (auto &c : g_cr_dev) okd &= poser(g_vt_dev, c.i, c.f, c.o);
+	Ligne l; l.s("profileur TSC v1 : requetes GPU "); l.s(g_pg_ok ? "ok" : "non"); l.s(", memoire video "); l.s(g_adapt3 ? "ok" : "non");
+	l.s(", crochets de creation "); l.s(okd ? "ok" : "partiel"); l.s(" ; module de l'appareil "); module_de(l, (void *)o_ctex); journal(l);
+}
+static HRESULT prof_lire(void *q, void *p, UINT n) {   /* jamais d'attente : DONOTFLUSH, S_FALSE (1) = pas pret */
+	g_nous++; HRESULT hr = ((PFN_GETDATA)VT(g_ctx)[C_GetData])(g_ctx, q, p, n, 1 /*D3D11_ASYNC_GETDATA_DONOTFLUSH*/); g_nous--; return hr;
+}
+static void prof_fin_q(void *q) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, q); }
+/* juste apres le retour du Present : debut de l'image g_p_img cote GPU */
+static void prof_debut_image() {
+	if (!g_ctx || !g_pg_ok || g_arret || !g_freq) return;
+	i64 a; QueryPerformanceCounter(&a);
+	ProfGpu &s = g_pg[g_p_img % NP];
+	if (!(s.etat == 1 && s.img == g_p_img)) {   /* une requete encore en attente ici est abandonnee */
+		g_nous++; ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_Begin])(g_ctx, s.dis); prof_fin_q(s.a); g_nous--;
+		s.etat = 1; s.img = g_p_img;
+	}
+	i64 b; QueryPerformanceCounter(&b); double ms = ms_de(b - a); g_cpu_ms += ms; g_prof_cpu_ms += ms;
+}
+static void prof_vider() { if (g_csv_n) { ecrire("tsc-profil.csv", g_csv, g_csv_n); g_csv_n = 0; } }
+static void prof_ajouter(Ligne &l) { if (g_csv_n + l.n > (int)sizeof g_csv) prof_vider(); memcpy(g_csv + g_csv_n, l.t, l.n); g_csv_n += l.n; }
+static void prof_emettre(ProfLigne &r) {
+	r.pleine = 0;
+	if (R.profil < 0.5f) return;
+	if (!g_csv_entete) {
+		g_csv_entete = 1;
+		Ligne e; e.s("# "); e.s(VERSION); e.s(" ; session demarree au tick "); e.i((i64)GetTickCount64()); e.s(" ms ; QPC "); e.i(g_freq); e.s(" Hz\r\n"); prof_ajouter(e);
+		Ligne c; c.s("image;t_ms;image_ms;gpu_ms;dessins;cibles;vues_gbuffer;vues_tsc;map_lect;map_ms;getdata_jeu;getdata_ms;shaders_crees;textures_creees;creation_ms;vram_mo;effet\r\n"); prof_ajouter(c);
+	}
+	Ligne l; l.i(r.img); l.s(";"); l.f(r.t_ms, 1); l.s(";"); l.f(r.image_ms, 3); l.s(";"); if (r.gpu_ms >= 0) l.f(r.gpu_ms, 3);
+	l.s(";"); l.i(r.dessins); l.s(";"); l.i(r.cibles); l.s(";"); l.i(r.vues_g); l.s(";"); l.i(r.vues_t);
+	l.s(";"); l.i(r.map_lect); l.s(";"); l.f(r.map_ms, 3); l.s(";"); l.i(r.getdata); l.s(";"); l.f(r.gd_ms, 3);
+	l.s(";"); l.i(r.ps); l.s(";"); l.i(r.tex); l.s(";"); l.f(r.cree_ms, 3); l.s(";"); if (r.vram_mo >= 0) l.i(r.vram_mo); l.s(";"); l.i(r.effet); l.s("\r\n");
+	prof_ajouter(l);
+}
+/* juste avant le Present : fin de l'image g_p_img (cote GPU et compteurs), lecture des anciennes, CSV */
+static void prof_fin_image(i64 t0, double image_ms, int vues_g, int vues_t, u64 now) {
+	i64 a; QueryPerformanceCounter(&a);
+	if (!g_p_t0) g_p_t0 = t0;
+	const i64 F = g_p_img;
+	ProfGpu &s = g_pg[F % NP];
+	if (g_ctx && g_pg_ok && s.etat == 1 && s.img == F) { g_nous++; prof_fin_q(s.b); prof_fin_q(s.dis); g_nous--; s.etat = 2; }
+	/* ligne de l'image F */
+	ProfLigne &L = g_pl[F % NR];
+	if (L.pleine) prof_emettre(L);
+	i64 ps = __atomic_exchange_n(&g_cree_ps, 0, __ATOMIC_RELAXED), tx = __atomic_exchange_n(&g_cree_tex, 0, __ATOMIC_RELAXED), ct = __atomic_exchange_n(&g_cree_t, 0, __ATOMIC_RELAXED);
+	if (image_ms > 0) {
+		L.img = F; L.t_ms = ms_de(t0 - g_p_t0); L.image_ms = image_ms; L.gpu_ms = -1;
+		L.dessins = g_pf_dessins; L.cibles = g_pf_cibles; L.vues_g = vues_g; L.vues_t = vues_t;
+		L.map_lect = g_pf_map; L.map_ms = ms_de(g_pf_map_t); L.getdata = g_pf_gd; L.gd_ms = ms_de(g_pf_gd_t);
+		L.ps = ps; L.tex = tx; L.cree_ms = ms_de(ct); L.vram_mo = g_vram_mo; L.effet = g_effet_on > 0.5f && R.actif > 0.5f; L.pleine = 1;
+		g_pw_n++; g_pw_img += image_ms; int k = (int)(image_ms / 0.2); if (k >= 0 && k < 500) g_hist[k]++;
+		if (image_ms > 16.667 - 0.3 && image_ms < 16.667 + 0.3) g_pw_16++;
+		if (image_ms > 33.333 - 0.3 && image_ms < 33.333 + 0.3) g_pw_33++;
+		g_pw_map += g_pf_map; g_pw_map_ms += L.map_ms; g_pw_gd += g_pf_gd; g_pw_gd_ms += L.gd_ms; g_pw_cree += ps + tx; g_pw_cree_ms += L.cree_ms;
+	}
+	g_pf_dessins = g_pf_cibles = g_pf_map = g_pf_map_t = g_pf_gd = g_pf_gd_t = 0;
+	/* lecture sans attente des images vieilles d'au moins 3 */
+	if (g_ctx && g_pg_ok) for (int k = 0; k < NP; k++) {
+		ProfGpu &q = g_pg[k]; if (q.etat != 2 || q.img > F - 3) continue;
+		DISJOINT dj = {0, 0}; u64 ta = 0, tb = 0;
+		HRESULT h = prof_lire(q.dis, &dj, sizeof dj); if (h == 0) h = prof_lire(q.a, &ta, 8); if (h == 0) h = prof_lire(q.b, &tb, 8);
+		if (h == 1) continue;   /* pas pret : on reessaiera, ou l'emplacement sera repris */
+		q.etat = 0;
+		double g = h == 0 && !dj.Disjoint && dj.Frequency && tb >= ta ? (double)(tb - ta) * 1000.0 / (double)dj.Frequency : -1;
+		ProfLigne &r = g_pl[q.img % NR];
+		if (g >= 0 && r.pleine && r.img == q.img) { r.gpu_ms = g; g_pw_gpu += g; g_pw_gpu_img += r.image_ms; g_pw_ngpu++; }
+	}
+	/* une ligne est definitive quand son emplacement GPU ne peut plus etre lu (NP - 1 images plus tard) */
+	for (i64 j = F - NR + 1; j <= F - (NP - 1); j++) if (j > 0) { ProfLigne &r = g_pl[j % NR]; if (r.pleine && r.img == j) prof_emettre(r); }
+	/* memoire video une fois par seconde, tampon CSV vide une fois par seconde */
+	static u64 t_vram; static int vram_err;
+	if (g_adapt3 && now - t_vram >= 1000) {
+		t_vram = now; MEMVID m; memset(&m, 0, sizeof m);
+		HRESULT h = ((HRESULT (WINAPI *)(void *, UINT, UINT, MEMVID *))VT(g_adapt3)[A3_QueryVideoMemoryInfo])(g_adapt3, 0, 0 /*LOCAL*/, &m);
+		if (h >= 0) { g_vram_mo = (int)(m.CurrentUsage >> 20); g_vram_budget_mo = (int)(m.Budget >> 20); }
+		else { g_vram_mo = g_vram_budget_mo = -1; if (!vram_err++) logline("profileur : QueryVideoMemoryInfo refuse", h & 0xffffffffLL); }
+	}
+	if (now - g_csv_t >= 1000) { g_csv_t = now; prof_vider(); }
+	g_p_img++;
+	i64 b; QueryPerformanceCounter(&b); g_prof_cpu_ms += ms_de(b - a);   /* deja compte dans le CPU TSC d'apres_image */
+}
+/* verdict sur la fenetre du rapport (2 s), ajoute a la ligne mesure :
+   - occupation GPU = temps GPU moyen / temps d'image moyen (sur les images dont le temps GPU est arrive) ;
+   - "plafond" : plus de 80 % des images a 0,3 ms pres de 16,67 ms, de 33,33 ms, ou du mode (le mode seulement si
+     l'occupation est <= 85 %, car une image limitee par le GPU mais stable se groupe aussi autour de son mode) ;
+   - sinon "GPU" si occupation > 85 % ; "CPU" si occupation < 60 % et image > 18 ms ; sinon "marge". */
+static void prof_rapport(Ligne &l, int n_img) {
+	double occ = g_pw_ngpu && g_pw_gpu_img > 0 ? g_pw_gpu / g_pw_gpu_img : -1;
+	int km = 0; for (int k = 1; k < 500; k++) if (g_hist[k] > g_hist[km]) km = k;
+	int nm = g_hist[km] + (km > 0 ? g_hist[km - 1] : 0) + (km < 499 ? g_hist[km + 1] : 0);   /* mode +/- 0,3 ms */
+	int np = g_pw_16 >= g_pw_33 ? g_pw_16 : g_pw_33; double centre = g_pw_16 >= g_pw_33 ? 16.67 : 33.33;
+	if ((occ < 0 || occ <= 0.85) && nm > np) { np = nm; centre = (km + 0.5) * 0.2; }
+	double fp = g_pw_n ? (double)np / g_pw_n : 0, moy = g_pw_n ? g_pw_img / g_pw_n : 0;
+	const char *v = fp > 0.8 ? "plafond" : occ < 0 ? "inconnu" : occ > 0.85 ? "GPU" : (occ < 0.60 && moy > 18) ? "CPU" : "marge";
+	l.s(" ; gpu image moy "); if (g_pw_ngpu) l.f(g_pw_gpu / g_pw_ngpu, 2); else l.s("-"); l.s(" ms, gpu occupe "); if (occ >= 0) l.f(occ * 100, 0); else l.s("-");
+	l.s(" % ; verdict "); l.s(v); l.s(" (groupees "); l.f(fp * 100, 0); l.s(" % autour de "); l.f(centre, 2);
+	l.s(" ms) ; map lecture "); l.i(g_pw_map); l.s(" ("); l.f(g_pw_map_ms, 2); l.s(" ms), getdata jeu "); l.i(g_pw_gd); l.s(" ("); l.f(g_pw_gd_ms, 2);
+	l.s(" ms), creations "); l.i(g_pw_cree); l.s(" ("); l.f(g_pw_cree_ms, 2); l.s(" ms) ; vram "); if (g_vram_mo >= 0) { l.i(g_vram_mo); l.s(" / budget "); l.i(g_vram_budget_mo); l.s(" Mo"); } else l.s("-");
+	l.s(" ; profileur CPU "); l.f(n_img ? g_prof_cpu_ms / n_img : 0, 3); l.s(" ms");
+	memset(g_hist, 0, sizeof g_hist); g_pw_n = g_pw_16 = g_pw_33 = g_pw_ngpu = 0; g_pw_img = g_pw_gpu = g_pw_gpu_img = g_prof_cpu_ms = 0;
+	g_pw_map = g_pw_gd = g_pw_cree = 0; g_pw_map_ms = g_pw_gd_ms = g_pw_cree_ms = 0;
 }
 
 /* ---------- par image ---------- */
@@ -468,8 +682,8 @@ static bool frappe(int vk, int &mem) { bool b = touche(0x11) && touche(0x10) && 
 static void apres_image(void *sc) {
 	i64 t0; QueryPerformanceCounter(&t0);
 	if (!g_freq) QueryPerformanceFrequency(&g_freq);
-	double dt = 0;
-	if (g_t_prec) { double ms = (double)(t0 - g_t_prec) * 1000.0 / (double)g_freq; dt = ms / 1000.0; g_somme_ms += ms; if (ms > g_pire_ms) g_pire_ms = ms; g_n_img++; }
+	double dt = 0, image_ms = 0;
+	if (g_t_prec) { double ms = (double)(t0 - g_t_prec) * 1000.0 / (double)g_freq; dt = ms / 1000.0; image_ms = ms; g_somme_ms += ms; if (ms > g_pire_ms) g_pire_ms = ms; g_n_img++; }
 	g_t_prec = t0;
 	if (g_etape == E_HDR) quitter_vue();
 	fin_mesure_gpu();
@@ -497,16 +711,19 @@ static void apres_image(void *sc) {
 	init_appareil(sc);
 	if (!g_bw) { void *bb = 0; if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) >= 0 && bb) { TEX2D_DESC d; desc_tex(bb, d); g_bw = d.Width; g_bh = d.Height; Ligne l; l.s("image presentee : "); dire_tex(l, bb); journal(l); ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); } }
 	g_vues_rapport += g_vues_traitees;
+	int vues_g = g_vues_image, vues_t = g_vues_traitees;
 	g_vues_image = 0; g_vues_traitees = 0;
 	reposer();
+	prof_fin_image(t0, image_ms, vues_g, vues_t, now);   /* en dernier : son horodatage GPU est la fin de l'image */
 
 	i64 t1; QueryPerformanceCounter(&t1); g_cpu_ms += (double)(t1 - t0) * 1000.0 / (double)g_freq;
 	if (now - g_t_rapport > 2000 && g_n_img) {
 		Ligne l; l.s("mesure : "); l.f(1000.0 * g_n_img / (g_somme_ms > 0 ? g_somme_ms : 1), 1); l.s(" img/s, image moy "); l.f(g_somme_ms / g_n_img); l.s(" ms, pire ");
-		l.f(g_pire_ms); l.s(" ms, TSC CPU "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
+		l.f(g_pire_ms); l.s(" ms, TSC CPU (profileur compris) "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
 		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
 		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(", HDR vus "); l.i(g_n_hdr);
 		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
+		prof_rapport(l, g_n_img);
 		journal(l);
 		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_omsrt = g_n_dessins = 0;
 	}
@@ -516,8 +733,15 @@ static void apres_image(void *sc) {
 	}
 }
 
-static HRESULT WINAPI h_present(void *sc, UINT sync, UINT fl) { if (!(fl & 1)) apres_image(sc); return o_present(sc, sync, fl); }
-static HRESULT WINAPI h_present1(void *sc, UINT sync, UINT fl, const void *p) { if (!(fl & 1)) apres_image(sc); return o_present1(sc, sync, fl, p); }
+/* DXGI_PRESENT_TEST (1) : rien n'est presente, ce n'est pas une image */
+static HRESULT WINAPI h_present(void *sc, UINT sync, UINT fl) {
+	if (fl & 1) return o_present(sc, sync, fl);
+	apres_image(sc); HRESULT hr = o_present(sc, sync, fl); prof_debut_image(); return hr;
+}
+static HRESULT WINAPI h_present1(void *sc, UINT sync, UINT fl, const void *p) {
+	if (fl & 1) return o_present1(sc, sync, fl, p);
+	apres_image(sc); HRESULT hr = o_present1(sc, sync, fl, p); prof_debut_image(); return hr;
+}
 static HRESULT WINAPI h_resize(void *sc, UINT n, UINT w, UINT h, UINT f, UINT fl) { g_bw = g_bh = 0; logline("changement de taille de l'image"); return o_resize(sc, n, w, h, f, fl); }
 
 /* ---------- branchement ---------- */
@@ -543,7 +767,7 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 	poser(g_vt_sc, S1_Present1, (void *)h_present1, (void **)&o_present1);
 	for (auto &c : g_cr) ok &= poser(g_vt_ctx, c.i, c.f, c.o);
 	g_hooks = 1;
-	logline(ok ? "crochets poses (Present, ResizeBuffers, cibles, effacements, viewports, dessins)" : "certains crochets n'ont pas pu etre poses");
+	logline(ok ? "crochets poses (Present, ResizeBuffers, cibles, effacements, viewports, dessins, Map, GetData)" : "certains crochets n'ont pas pu etre poses");
 	REL(ctx); REL(dev); REL(sc); DestroyWindow(fen);
 	HMODULE h; GetModuleHandleExA(5, (const char *)&scs_telemetry_init, &h);
 	return 0;
@@ -551,6 +775,9 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 extern "C" void scs_telemetry_shutdown(void) {
 	if (!g_hooks) return;
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
+	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] == c.f) retirer(g_vt_dev, c.i, *c.o);
+	for (i64 j = g_p_img - NR + 1; j <= g_p_img; j++) if (j > 0) { ProfLigne &r = g_pl[j % NR]; if (r.pleine && r.img == j) prof_emettre(r); }
+	prof_vider();
 	if (o_present1 && g_vt_sc[S1_Present1] == (void *)h_present1) retirer(g_vt_sc, S1_Present1, (void *)o_present1);
 	if (g_vt_sc[S_ResizeBuffers] == (void *)h_resize) retirer(g_vt_sc, S_ResizeBuffers, (void *)o_resize);
 	if (g_vt_sc[S_Present] == (void *)h_present) retirer(g_vt_sc, S_Present, (void *)o_present);

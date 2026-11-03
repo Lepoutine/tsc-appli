@@ -1,6 +1,6 @@
 1 VERSIONINFO
-FILEVERSION 0,3,0,0
-PRODUCTVERSION 0,3,0,0
+FILEVERSION 0,4,0,0
+PRODUCTVERSION 0,4,0,0
 FILEOS 0x40004
 FILETYPE 0x2
 BEGIN
@@ -10,12 +10,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Truck So Clean France"
       VALUE "FileDescription", "TSC Neural Graphics - rendu temps reel ETS2"
-      VALUE "FileVersion", "0.3.0"
+      VALUE "FileVersion", "0.4.0"
       VALUE "InternalName", "tsc-graphics"
       VALUE "LegalCopyright", "\251 2026 Truck So Clean France. Tous droits r\351serv\351s."
       VALUE "OriginalFilename", "tsc-graphics.dll"
       VALUE "ProductName", "TSC Neural Graphics"
-      VALUE "ProductVersion", "0.3.0"
+      VALUE "ProductVersion", "0.4.0"
     END
   END
   BLOCK "VarFileInfo"
