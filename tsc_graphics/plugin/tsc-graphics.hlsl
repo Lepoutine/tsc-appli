@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.15.3 (pied de courbe sur libre1-3) + 0.15.2 (valeurs non finies neutralisees a chaque etage, trame cabine) + 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.16 (TSC Neural : reseau appris, libre4) + 0.15.3 (pied de courbe sur libre1-3) + 0.15.2 (valeurs non finies neutralisees a chaque etage, trame cabine) + 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -557,6 +557,16 @@ float3 anticrenelage(float2 uv, float3 c0) {
 	float3 voisin = tCouleur.SampleLevel(sLin, uv + pas * 0.5, 0).rgb;
 	return lerp(c0, voisin, saturate(p20.x) * (0.35 + 0.5 * sub));
 }
+// ---------- 0.16 : TSC Neural (reseau appris sur les videos reelles de Mendy, outil tsc_graphics/neural) ----------
+// Cle libre4 = force (0 = coupe). Le bloc entre les deux marqueurs est REECRIT par neural/exporter.py (poids appris) ; ne pas l'editer a la main.
+float srgb_enc(float x) { x = saturate(x); return x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055; }
+float srgb_dec(float x) { x = saturate(x); return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4); }
+float3 srgb_enc3(float3 c) { return float3(srgb_enc(c.r), srgb_enc(c.g), srgb_enc(c.b)); }
+float3 srgb_dec3(float3 c) { return float3(srgb_dec(c.r), srgb_dec(c.g), srgb_dec(c.b)); }
+float3 nl_tap(float2 uv, float dx, float dy) { return srgb_enc3(tCouleur.SampleLevel(sPt, uv + float2(dx, dy) * p2.zw, 0).rgb); }
+// <<TSC_NEURAL>>
+float3 neural_ldr(float2 uv, float3 c) { return c; }   // pas encore de reseau appris : image inchangee
+// <</TSC_NEURAL>>
 float4 ps_ldr(VSO i) : SV_Target {
 	float4 t = tCouleur.SampleLevel(sPt, i.uv, 0);
 	if (!fini3(t.rgb)) t.rgb = 0;   // 0.15.2
@@ -616,6 +626,8 @@ float4 ps_ldr(VSO i) : SV_Target {
 		o = lerp(oneutre, o, wn);
 		c = lerp(c, saturate(o), saturate(p15.z));
 	}
+	// 0.16 : TSC Neural remplace l'etalonnage ci-dessus (il a appris tout le passage jeu -> reel) ; libre4 = force
+	if (p21.w > 0) { float3 nn = neural_ldr(i.uv, max(t.rgb, 0)); if (fini3(nn)) c = lerp(max(t.rgb, 0), nn, saturate(p21.w)); }
 	// 0.9.3 : tramage d'1/255 avant le retour en 8 bits : supprime les marches de couleur dans les degrades (plafond, ciel)
 	{
 		float n = frac(sin(dot(i.pos.xy, float2(12.9898, 78.233))) * 43758.5453) + frac(sin(dot(i.pos.xy + 17.1, float2(39.346, 11.135))) * 24634.6345) - 1;

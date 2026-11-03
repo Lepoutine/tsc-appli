@@ -1,0 +1,15 @@
+TSC Neural 0.1 - IA de rendu TSC (Truck So Clean France), entrainee sur les videos reelles de Mendy.
+
+Principe : un petit reseau par pixel (14 entrees -> 24 -> 24 -> 3), qui voit la couleur du pixel et son voisinage a 2, 6 et 16 px,
+plus sa hauteur dans l'ecran. Il retouche l'image du jeu (au plus 0,35 par canal) apres le tone mapping, dans l'etage LDR du plugin.
+Il ne peut pas inventer d'objet et ne scintille pas par lui-meme (meme entree = meme sortie).
+Entrainement : adversarial (juge PatchGAN appris sur le reel) + garde des contours du jeu + rester proche de l'image du jeu.
+
+1. Images du jeu : cle enregistre du plugin (sans effet TSC) puis outils/neural_lire.py -> fichiers *_jeu8.png.
+2. Images reelles : images extraites des videos de Mendy (jpg/png). Donnees privees, jamais publiees.
+3. venv_neural\Scripts\python entrainer.py --jeu <jeu> --reel <reel> --hlsl <plugins\tsc-graphics.hlsl actuel> --sortie <dossier>
+   (--iterations 20000 par defaut ; --depart champion.pt pour continuer l'apprentissage)
+4. A chaque nouveau champion (ecart au reel plus bas sur les images mises de cote) : champion.pt, apercu_*.png (avant/apres)
+   et tsc-graphics.hlsl avec les poids ; ce HLSL se pose a chaud dans plugins, puis libre4 = 1 dans l'ini (0 = coupe).
+5. Validation obligatoire en jeu : juge v2, garde-fou des tons, cabine, frametime median/p95, puis test a l'aveugle de Mendy.
+Cout estime : 12 lectures + ~1 000 multiplications par pixel, a mesurer (budget Mendy : 8-12 ms libres, GPU a 50 %).
