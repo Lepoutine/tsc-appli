@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.15.2 (valeurs non finies neutralisees a chaque etage, trame cabine) + 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.15.3 (pied de courbe sur libre1-3) + 0.15.2 (valeurs non finies neutralisees a chaque etage, trame cabine) + 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -578,6 +578,14 @@ float4 ps_ldr(VSO i) : SV_Target {
 	if (p13.y != 1) c = 0.18 * pow(max(c, 1e-5) / 0.18, p13.y);
 	// point noir
 	if (p14.w != 0) { float b = p14.w * 0.02; c = max(c - b, 0) / (1 - b); }
+	// 0.15.3 : pied de courbe (cles libre1 = force 0-0,95, libre2 = seuil en sRGB, 0 = 0,25, libre3 = forme, 0 = 1) :
+	// abaisse les tout derniers noirs (voile laiteux mesure : p1 0,16 contre 0,03-0,04 reel) sans ecraser les tons sombres au-dessus du seuil.
+	if (p21.x > 0) {
+		float le = pow(max(lum(c), 0), 1 / 2.2), T = p21.y > 0 ? p21.y : 0.25, g = p21.z > 0 ? p21.z : 1;
+		float sm = smoothstep(0, T, le);
+		float m = 1 - min(p21.x, 0.95) * pow(1 - sm, g);    // multiplicateur en sRGB : 1 - force au noir, 1 au seuil et au-dessus
+		c *= pow(max(m, 0.05), 2.2);
+	}
 	float l = lum(c);
 	// verts jaunes trop vifs (vegetation du jeu) : moins satures, un peu plus clairs
 	if (p15.x > 0) {
