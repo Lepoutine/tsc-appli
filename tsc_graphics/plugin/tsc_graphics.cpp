@@ -80,7 +80,7 @@ static int lire_fichier(const char *nom, char *buf, int max) {
 struct Reglages {
 	float actif = 1, humidite = -1 /* -1 = auto (pluie du jeu) */, fov_v = 43, proche = 0.2f, plage_min = 0.01f, plage_max = 0.9f;
 	float intensite = 1, rugosite = 0.12f, trainees = 1.5f, pas = 0.12f, epaisseur = 0.5f, f0 = 0.04f, assombrir = 0.35f;
-	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f;
+	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 };
 static Reglages R; static u64 g_ini_hash;
@@ -95,7 +95,7 @@ static void lire_ini(bool force) {
 		{"plage_min", &R.plage_min}, {"plage_max", &R.plage_max}, {"intensite", &R.intensite}, {"rugosite", &R.rugosite}, {"trainees", &R.trainees},
 		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
 		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues},
-		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z} };
+		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -464,7 +464,12 @@ static void apres_image(void *sc) {
 	if (frappe('D', kd)) { g_vue = (g_vue + 1) % 4; static const char *n[4] = {"vue normale", "vue de controle : profondeur", "vue de controle : normales", "vue de controle : masque mouille"}; logline(n[g_vue]); }
 	if (frappe('T', kt) && !g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee"); }
 
-	static u64 t_ini; u64 now = GetTickCount64();
+	static u64 t_ini, t_bascule; u64 now = GetTickCount64();
+	/* essai sans les mains : effet coupe / active tout seul toutes les bascule_auto secondes (0 = touche seulement) */
+	if (R.bascule_auto >= 2) {
+		if (!t_bascule) t_bascule = now;
+		if (now - t_bascule >= (u64)(R.bascule_auto * 1000)) { t_bascule = now; g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE (bascule auto)" : "effet TSC : ARRET (bascule auto)"); }
+	} else t_bascule = 0;
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) compiler(); if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	if (!g_trace_auto_fait && g_n_img > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }
 
