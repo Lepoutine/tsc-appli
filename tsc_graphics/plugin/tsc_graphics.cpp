@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.4.0"
+#define VERSION "tsc-graphics 0.4.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -87,6 +87,7 @@ struct Reglages {
 	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
+	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
 static Reglages R; static u64 g_ini_hash;
 static double nombre(const char *&p) { double s = 1, v = 0, d = 0.1; while (*p == ' ' || *p == '\t') p++; if (*p == '-') { s = -1; p++; }
@@ -101,7 +102,7 @@ static void lire_ini(bool force) {
 		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
 		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues},
 		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto},
-		{"profil", &R.profil} };
+		{"profil", &R.profil}, {"taille_min", &R.taille_min} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -193,7 +194,7 @@ static void trace_dessins() { if (g_trace && g_trace_dessins) { Ligne l; l.s("  
 enum { E_RIEN, E_GBUF, E_HDR };
 static int g_etape;                       /* ou en est la vue en cours */
 static void *g_hdr_tex, *g_vue_prof;      /* cible HDR et profondeur de la vue en cours (references gardees) */
-static int g_vues_image, g_vues_traitees; /* vues vues / traitees sur l'image en cours */
+static int g_vues_image, g_vues_traitees; static i64 g_n_petites;  /* G-buffer de petites vues ignorees (sondes) */ /* vues vues / traitees sur l'image en cours */
 static int g_dans_gouttes; static i64 g_gouttes, g_gouttes_rapport;
 static float g_mouille = 0; static int g_pluie;
 static i64 g_n_gbuf, g_n_hdr;             /* diagnostics */
@@ -441,8 +442,9 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 			if (g_hdr_tex && g_vue_prof && R.actif > 0.5f && g_effet_on > 0.5f && g_etat) passe_vue(g_hdr_tex, g_vue_prof);
 			quitter_vue();
 		}
-		if (n >= 4 && rt0 && d0.Format == 10 && pt) { quitter_vue(); g_etape = E_GBUF; g_vues_image++; g_n_gbuf++; }
-		else if (n == 1 && rt0 && d0.Format == 10 && pt && g_etape == E_GBUF) {
+		const bool grande = rt0 && d0.Width >= (UINT)R.taille_min && d0.Height >= (UINT)R.taille_min;
+		if (n >= 4 && rt0 && d0.Format == 10 && pt) { quitter_vue(); if (grande) { g_etape = E_GBUF; g_vues_image++; } else g_n_petites++; g_n_gbuf++; }
+		else if (n == 1 && grande && d0.Format == 10 && pt && g_etape == E_GBUF) {
 			TEX2D_DESC dp; desc_tex(pt, dp);
 			if (dp.Width == d0.Width && dp.Height == d0.Height) {
 				g_etape = E_HDR; g_n_hdr++;
@@ -721,11 +723,11 @@ static void apres_image(void *sc) {
 		Ligne l; l.s("mesure : "); l.f(1000.0 * g_n_img / (g_somme_ms > 0 ? g_somme_ms : 1), 1); l.s(" img/s, image moy "); l.f(g_somme_ms / g_n_img); l.s(" ms, pire ");
 		l.f(g_pire_ms); l.s(" ms, TSC CPU (profileur compris) "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
 		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
-		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(", HDR vus "); l.i(g_n_hdr);
+		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
 		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
 		prof_rapport(l, g_n_img);
 		journal(l);
-		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_omsrt = g_n_dessins = 0;
+		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_petites = 0; g_n_omsrt = g_n_dessins = 0;
 	}
 	if (g_trace) {
 		if (--g_trace == 0) { Ligne l; l.s("=== fin de la trace ==="); trace_txt(l); ecrire("tsc-graphics-trace.log", g_tbuf, g_tn); logline("trace ecrite dans tsc-graphics-trace.log"); }

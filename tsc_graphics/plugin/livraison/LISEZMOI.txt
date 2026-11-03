@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.3 « route mouillee v1 » (prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement)
+TSC Neural Graphics 0.4.1 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -19,3 +19,7 @@ En jeu :
   Ctrl+Maj+T  trace d'une image complete (passes, profondeur, viewports) -> tsc-graphics-trace.log
 Les reglages de tsc-graphics.ini et le shader tsc-graphics.hlsl sont relus chaque seconde, jeu ouvert.
 Mesures toutes les 2 s dans tsc-graphics.log : images/s, temps d'image, cout CPU et GPU de TSC, profondeur lue ou non.
+
+0.4.1 (apres le test T1 du 03/11) : l'effet ne traite plus les petites vues (sondes de reflets 256x128 / 256x256) mais les
+vues principales (taille_min = 512 dans l'ini). Pour mesurer sans plafond : garder la fenetre du jeu au premier plan
+(t_limit_fps_inactive = 30 dans config.cfg limite le jeu a 30 img/s des que la fenetre n'est plus active).
