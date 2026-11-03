@@ -54,7 +54,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.10.1"
+#define VERSION "tsc-graphics 0.10.2"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -790,6 +790,8 @@ static void WINAPI h_upd(void *c, void *r, UINT sub, const void *box, const void
    et les contextes differents du contexte immediat. Releve seulement : rien n'est remplace. */
 static volatile long g_tx_verrou; static i64 g_tx_lignes;
 static u64 empreinte(const SUBRES *sr, const TEX2D_DESC *ds, u64 &taille);
+typedef void (WINAPI *PFN_EXEC)(void *, void *, BOOL); static PFN_EXEC o_exec; static i64 g_exec_n;
+static void WINAPI h_exec(void *c, void *liste, BOOL rest) { if (!g_nous) g_exec_n++; o_exec(c, liste, rest); }
 typedef void (WINAPI *PFN_UNMAP)(void *, void *, UINT);
 typedef void (WINAPI *PFN_COPYRES)(void *, void *, void *);
 typedef void (WINAPI *PFN_COPYSUB)(void *, void *, UINT, UINT, UINT, UINT, void *, UINT, const void *);
@@ -886,7 +888,7 @@ static Crochet g_cr[] = {
 	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi},
 	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata}, {C_UpdateSubresource, (void *)h_upd, (void **)&o_upd},
 	{C_Unmap, (void *)h_unmap, (void **)&o_unmap}, {C_CopyResource, (void *)h_copyres, (void **)&o_copyres}, {C_CopySubresourceRegion, (void *)h_copysub, (void **)&o_copysub},
-	{115 /*CopySubresourceRegion1*/, (void *)h_copysub1, (void **)&o_copysub1}, {116 /*UpdateSubresource1*/, (void *)h_upd1, (void **)&o_upd1} };
+	{115 /*CopySubresourceRegion1*/, (void *)h_copysub1, (void **)&o_copysub1}, {116 /*UpdateSubresource1*/, (void *)h_upd1, (void **)&o_upd1}, {58 /*ExecuteCommandList*/, (void *)h_exec, (void **)&o_exec} };
 static void accrocher_contexte() {
 	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
 		for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
@@ -905,7 +907,7 @@ static void ajouter_creation(i64 *n, i64 t) { __atomic_fetch_add(n, 1, __ATOMIC_
    (textures de decor : pas de cible de rendu), on note une empreinte du niveau 0, la taille, le format, les niveaux.
    Sert a savoir (1) si le jeu envoie ses textures a la creation ou plus tard (UpdateSubresource, compte a part),
    (2) quelles empreintes reviennent d'une partie a l'autre (cle du cache HD). Plafond 40 000 lignes. */
-static i64 g_tx_vides, g_tx_avec;
+static i64 g_tx_vides, g_tx_avec, g_vide_usage[4], g_vide_bc, g_vide_mips, g_vide_cpu;
 static bool format_bloc(UINT f, UINT &octets) {
 	if (f >= 70 && f <= 72) { octets = 8; return true; }     /* BC1 */
 	if (f >= 73 && f <= 78) { octets = 16; return true; }    /* BC2, BC3 */
@@ -925,7 +927,9 @@ static u64 empreinte(const SUBRES *sr, const TEX2D_DESC *ds, u64 &taille) {
 }
 static void releve_texture(const TEX2D_DESC *ds, const void *init) {
 	if (!ds || (ds->BindFlags & 0x8 /*SHADER_RESOURCE*/) == 0 || (ds->BindFlags & 0xA0 /*RT|DS*/)) return;
-	if (!init) { __atomic_fetch_add(&g_tx_vides, 1, __ATOMIC_RELAXED); return; }
+	if (!init) { __atomic_fetch_add(&g_tx_vides, 1, __ATOMIC_RELAXED); __atomic_fetch_add(&g_vide_usage[ds->Usage & 3], 1, __ATOMIC_RELAXED);
+		UINT ob; if (format_bloc(ds->Format, ob)) __atomic_fetch_add(&g_vide_bc, 1, __ATOMIC_RELAXED); if (ds->MipLevels != 1) __atomic_fetch_add(&g_vide_mips, 1, __ATOMIC_RELAXED);
+		if (ds->CPUAccessFlags) __atomic_fetch_add(&g_vide_cpu, 1, __ATOMIC_RELAXED); return; }
 	__atomic_fetch_add(&g_tx_avec, 1, __ATOMIC_RELAXED);
 	if (R.sonde_textures <= 0 || ds->Width < 16 || ds->Height < 16) return;
 	const SUBRES *sr = (const SUBRES *)init; if (!sr->p || !sr->pitch) return;
@@ -942,7 +946,72 @@ static HRESULT WINAPI h_cps(void *d, const void *code, SIZE_T n, void *lien, voi
 	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_cps(d, code, n, lien, out); QueryPerformanceCounter(&b);
 	ajouter_creation(&g_cree_ps, b - a); return hr;
 }
-static Crochet g_cr_dev[] = { {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps} };
+/* 0.10.2 : la 0.10.1 n'a vu AUCUN remplissage (ni Update, ni Copy, ni Map ecriture) sur le contexte immediat pour 3 544 textures vides.
+   On regarde donc : contextes differes (fil de chargement : UpdateSubresource enregistre puis ExecuteCommandList),
+   ID3D11Device3::CreateTexture2D1 (54) et WriteToSubresource (63), et le detail des textures vides. */
+typedef HRESULT (WINAPI *PFN_CDEF)(void *, UINT, void **);
+typedef HRESULT (WINAPI *PFN_CTEX1)(void *, const void *, const void *, void **);
+typedef void (WINAPI *PFN_W2S)(void *, void *, UINT, const void *, const void *, UINT, UINT);
+static PFN_CDEF o_cdef; static PFN_CTEX1 o_ctex1; static PFN_W2S o_w2s; static i64 g_cdef_n, g_cdef_autre_table, g_ctex1_n, g_ctex1_data, g_w2s_n;
+static void **g_vt_def;   /* table d'un contexte differe, si differente de celle du contexte immediat */
+static PFN_UPD d_upd; static PFN_MAP d_map; static PFN_COPYRES d_copyres; static PFN_COPYSUB d_copysub;
+static i64 g_d_upd2, g_d_map_w, g_d_copy_decor, g_d_appels;
+static void WINAPI hd_upd(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) {
+	__atomic_fetch_add(&g_d_appels, 1, __ATOMIC_RELAXED);
+	if (!g_nous && est_tex2d(r)) {
+		__atomic_fetch_add(&g_d_upd2, 1, __ATOMIC_RELAXED);
+		TEX2D_DESC d; if (R.sonde_textures > 0 && data && rp && !box && decor(r, d)) {
+			UINT mips = d.MipLevels ? d.MipLevels : 1, niv = sub % mips;
+			if (niv == 0 && d.Width >= 16 && d.Height >= 16) { SUBRES m = {data, rp, dp}; u64 taille; u64 h = empreinte(&m, &d, taille);
+				Ligne l; l.s("differe_upd;"); l.x(h); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l); }
+		}
+	}
+	d_upd(c, r, sub, box, data, rp, dp);
+}
+static HRESULT WINAPI hd_map(void *c, void *r, UINT sub, UINT type, UINT fl, void *m) {
+	__atomic_fetch_add(&g_d_appels, 1, __ATOMIC_RELAXED);
+	if (!g_nous && (type == 2 || type == 4 || type == 5) && est_tex2d(r)) __atomic_fetch_add(&g_d_map_w, 1, __ATOMIC_RELAXED);
+	return d_map(c, r, sub, type, fl, m);
+}
+static void WINAPI hd_copyres(void *c, void *dst, void *src) {
+	__atomic_fetch_add(&g_d_appels, 1, __ATOMIC_RELAXED); TEX2D_DESC d; if (!g_nous && decor(dst, d)) __atomic_fetch_add(&g_d_copy_decor, 1, __ATOMIC_RELAXED);
+	d_copyres(c, dst, src);
+}
+static void WINAPI hd_copysub(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) {
+	__atomic_fetch_add(&g_d_appels, 1, __ATOMIC_RELAXED); TEX2D_DESC d; if (!g_nous && decor(dst, d)) __atomic_fetch_add(&g_d_copy_decor, 1, __ATOMIC_RELAXED);
+	d_copysub(c, dst, dsub, x, y, z, src, ssub, box);
+}
+static volatile long g_def_verrou;
+static void accrocher_differe(void *ctx) {
+	if (!ctx) return; void **vt = VT(ctx);
+	if (vt == g_vt_ctx) return;   /* meme table que le contexte immediat : nos crochets 0.10.1 l'auraient vu */
+	__atomic_fetch_add(&g_cdef_autre_table, 1, __ATOMIC_RELAXED);
+	while (__atomic_exchange_n(&g_def_verrou, 1, __ATOMIC_ACQUIRE)) {}
+	if (!g_vt_def) {
+		g_vt_def = vt; int ok = 1;
+		ok &= poser(vt, C_UpdateSubresource, (void *)hd_upd, (void **)&d_upd); ok &= poser(vt, C_Map, (void *)hd_map, (void **)&d_map);
+		ok &= poser(vt, C_CopyResource, (void *)hd_copyres, (void **)&d_copyres); ok &= poser(vt, C_CopySubresourceRegion, (void *)hd_copysub, (void **)&d_copysub);
+		Ligne l; l.s("TSC Textures : contexte differe avec sa propre table, crochets "); l.s(ok ? "ok" : "partiel"); l.s(" ; module "); module_de(l, (void *)d_upd); journal(l);
+	}
+	__atomic_store_n(&g_def_verrou, 0, __ATOMIC_RELEASE);
+}
+static HRESULT WINAPI h_cdef(void *d, UINT fl, void **out) {
+	HRESULT hr = o_cdef(d, fl, out); if (!g_nous) { __atomic_fetch_add(&g_cdef_n, 1, __ATOMIC_RELAXED); if (hr >= 0 && out) accrocher_differe(*out); } return hr;
+}
+static HRESULT WINAPI h_ctex1(void *d, const void *ds, const void *init, void **out) {
+	if (!g_nous) { __atomic_fetch_add(&g_ctex1_n, 1, __ATOMIC_RELAXED); if (init) __atomic_fetch_add(&g_ctex1_data, 1, __ATOMIC_RELAXED); }
+	return o_ctex1(d, ds, init, out);
+}
+static void WINAPI h_w2s(void *d, void *r, UINT sub, const void *box, const void *src, UINT rp, UINT dp) { if (!g_nous) __atomic_fetch_add(&g_w2s_n, 1, __ATOMIC_RELAXED); o_w2s(d, r, sub, box, src, rp, dp); }
+typedef HRESULT (WINAPI *PFN_QI)(void *, const GUIDx *, void **);
+static const GUIDx IID_Dev3 = {0xa05c8c37, 0xd2c6, 0x4732, {0xb3, 0xa0, 0x9c, 0xe0, 0xb0, 0xdc, 0x9a, 0xe6}};
+static void accrocher_dev3() {
+	void *d3 = 0; if (((PFN_QI)VT(g_dev)[0])(g_dev, &IID_Dev3, &d3) < 0 || !d3) { logline("TSC Textures : ID3D11Device3 absent"); return; }
+	void **vt = VT(d3); int ok = (int)poser(vt, 54, (void *)h_ctex1, (void **)&o_ctex1); ok &= (int)poser(vt, 63, (void *)h_w2s, (void **)&o_w2s);
+	Ligne l; l.s("TSC Textures : ID3D11Device3 CreateTexture2D1/WriteToSubresource accroches "); l.s(ok ? "ok" : "non"); l.s(vt == g_vt_dev ? " (meme table)" : " (autre table)"); journal(l);
+	REL(d3);
+}
+static Crochet g_cr_dev[] = { {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps}, {27 /*CreateDeferredContext*/, (void *)h_cdef, (void **)&o_cdef} };
 static void reposer() {
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) g_reposes++; }
 	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] != c.f) { if (poser(g_vt_dev, c.i, c.f, c.o)) g_reposes++; }
@@ -959,7 +1028,6 @@ static const GUIDx IID_DxgiDev = {0x54ec77fa, 0x1377, 0x44e6, {0x8c, 0x32, 0x88,
 static const GUIDx IID_Adapt3 = {0x645967a4, 0x1392, 0x4310, {0xa7, 0x98, 0x80, 0x53, 0xce, 0x3e, 0x93, 0xfd}};
 enum { G_GetAdapter = 7, A3_QueryVideoMemoryInfo = 14 };
 struct MEMVID { u64 Budget, CurrentUsage, AvailableForReservation, CurrentReservation; };
-typedef HRESULT (WINAPI *PFN_QI)(void *, const GUIDx *, void **);
 
 static void prof_init() {
 	static int fait; if (fait || !g_dev || !g_ctx) return; fait = 1;
@@ -988,6 +1056,7 @@ static void prof_init() {
 	/* creations de shaders et de textures : table du vrai appareil */
 	g_vt_dev = VT(g_dev);
 	int okd = 1; for (auto &c : g_cr_dev) okd &= poser(g_vt_dev, c.i, c.f, c.o);
+	accrocher_dev3();
 	Ligne l; l.s("profileur TSC v1 : requetes GPU "); l.s(g_pg_ok ? "ok" : "non"); l.s(", memoire video "); l.s(g_adapt3 ? "ok" : "non");
 	l.s(", crochets de creation "); l.s(okd ? "ok" : "partiel"); l.s(" ; module de l'appareil "); module_de(l, (void *)o_ctex); journal(l);
 }
@@ -1125,7 +1194,11 @@ static void apres_image(void *sc) {
 		Ligne m; m.s("TSC Textures (chemins) : Map tex2D READ "); m.i(g_mx[1]); m.s(" WRITE "); m.i(g_mx[2]); m.s(" READ_WRITE "); m.i(g_mx[3]); m.s(" WRITE_DISCARD "); m.i(g_mx[4]);
 		m.s(" NO_OVERWRITE "); m.i(g_mx[5]); m.s(" ; usage default/immutable/dynamic/staging "); m.i(g_mx_usage[0]); m.s("/"); m.i(g_mx_usage[1]); m.s("/"); m.i(g_mx_usage[2]); m.s("/"); m.i(g_mx_usage[3]);
 		m.s(" ; CopyResource "); m.i(g_cp_res); m.s(" CopySubresourceRegion "); m.i(g_cp_sub); m.s(" CSR1 "); m.i(g_cp_sub1); m.s(" dont vers texture de decor "); m.i(g_cp_vers_decor);
-		m.s(" ; UpdateSubresource1 2D "); m.i(g_upd1_2d); m.s(" ; Map hors contexte immediat "); m.i(g_mx_autre_ctx); m.s(" ; autres contextes vus "); m.i(g_ctx_n); journal(m); } }
+		m.s(" ; UpdateSubresource1 2D "); m.i(g_upd1_2d); m.s(" ; Map hors contexte immediat "); m.i(g_mx_autre_ctx); m.s(" ; autres contextes vus "); m.i(g_ctx_n); journal(m);
+		Ligne v; v.s("TSC Textures (vides) : usage default/immutable/dynamic/staging "); v.i(g_vide_usage[0]); v.s("/"); v.i(g_vide_usage[1]); v.s("/"); v.i(g_vide_usage[2]); v.s("/"); v.i(g_vide_usage[3]);
+		v.s(" ; compressees BC "); v.i(g_vide_bc); v.s(" ; avec niveaux "); v.i(g_vide_mips); v.s(" ; acces CPU "); v.i(g_vide_cpu);
+		v.s(" ; contextes differes crees "); v.i(g_cdef_n); v.s(" (autre table "); v.i(g_cdef_autre_table); v.s(") appels "); v.i(g_d_appels); v.s(" Update2D "); v.i(g_d_upd2); v.s(" MapW "); v.i(g_d_map_w); v.s(" Copy decor "); v.i(g_d_copy_decor);
+		v.s(" ; ExecuteCommandList "); v.i(g_exec_n); v.s(" ; CreateTexture2D1 "); v.i(g_ctex1_n); v.s(" (avec donnees "); v.i(g_ctex1_data); v.s(") ; WriteToSubresource "); v.i(g_w2s_n); journal(v); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
