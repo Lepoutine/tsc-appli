@@ -220,14 +220,14 @@
 
   /* ---------- simulateur ---------- */
   let anim = 0, clapetOuvert = false, clapetK = 0, clapetAnim = 0;
-  const TOUCHE_CLAPET = 'v'; // touche validee par Mendy le 03/11/2026
+  const TOUCHE_CLAPET = 'v'; // Maj+V, choisi par Mendy le 03/11/2026 (libre dans tous ses profils)
   function clapet() {
     if (!P.couches.some(c => c.role === 'clapet')) { toast('Ajoute des couches « Clapet ouvert » pour essayer le clapet.'); return; }
     clapetOuvert = !clapetOuvert;
     const one = P.couches.find(c => c.role === (clapetOuvert ? 'clapet_on' : 'clapet_off') && bufs[c.id]);
     if (one && moteur.marche) SF.joueEffet(one, bufs[one.id]);
     $('bClapet').classList.toggle('gold', clapetOuvert);
-    $('bClapet').textContent = clapetOuvert ? 'Fermer le clapet (V)' : 'Ouvrir le clapet (V)';
+    $('bClapet').textContent = clapetOuvert ? 'Fermer le clapet (Maj+V)' : 'Ouvrir le clapet (Maj+V)';
     cancelAnimationFrame(clapetAnim);
     const de = clapetK, vers = clapetOuvert ? 1 : 0, t0 = performance.now(), D = clapetOuvert ? 180 : 350; // ouverture franche, fermeture plus douce
     (function pas(t) { const u = Math.min(1, (t - t0) / D); clapetK = de + (vers - de) * u; if (!anim) simMaj(); if (u < 1) clapetAnim = requestAnimationFrame(pas); })(t0);
@@ -415,7 +415,7 @@
     $('eRole').addEventListener('change', () => { const c = couche(); if (!c) return; c.role = $('eRole').value; c.boucle = SF.ROLES[c.role].boucle; if (SF.ROLES[c.role].rpm && (c.role === 'ralenti')) c.rpm = 600; if (moteur.marche) moteur.demarre(P.couches, bufs); sauve(); rendTout(); });
     $('rpm').addEventListener('input', () => { arreteAccel(); simMaj(); }); $('load').addEventListener('input', () => { arreteAccel(); simMaj(); });
     $('bMoteur').onclick = moteurOnOff; $('bAccel').onclick = accel; $('bClapet').onclick = clapet;
-    document.addEventListener('keydown', e => { if (e.key.toLowerCase() === TOUCHE_CLAPET && !(e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && /^(text|search|number)$/.test(e.target.type))) && !e.repeat) { e.preventDefault(); clapet(); } });
+    document.addEventListener('keydown', e => { if (e.key.toLowerCase() === TOUCHE_CLAPET && e.shiftKey && !e.ctrlKey && !e.altKey && !(e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && /^(text|search|number)$/.test(e.target.type))) && !e.repeat) { e.preventDefault(); clapet(); } });
     $('bDemarre').onclick = () => { const c = P.couches.find(x => x.role === 'demarrage' && bufs[x.id]); if (!c) { toast('Aucun son de démarrage dans le projet.'); return; } SF.joue(c, bufs[c.id], {}); };
     $('bExportWav').onclick = exporteWav; $('bExportJson').onclick = exporteProjet;
     $('ficProjet').addEventListener('change', e => { if (e.target.files[0]) ouvreProjet(e.target.files[0]); e.target.value = ''; });
