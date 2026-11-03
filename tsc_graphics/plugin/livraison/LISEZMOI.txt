@@ -112,6 +112,11 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
 
+0.14.3 (03/11/2026) - correction de plantage (seule la DLL change ; HLSL 0.14.2 inchange)
+- Plantage 0xc0000005 a RVA 0x19A29 (calcul d'empreinte des textures) a l'entree dans le camion : la lecture allait jusqu'a pas x lignes,
+  alors que la derniere ligne du tampon du jeu ne fait que la largeur utile. Lecture bornee + verification du tampon avant lecture.
+- Contient 0.14.1 (cache HD) et 0.14.2 (optique).
+
 0.14.2 (03/11/2026) - optique (DLL + HLSL, jeu ferme ; contient la correction 0.14.1)
 - Juge v2 (photorealisme) : ce qui fait « jeu » = micro-contraste de synthese (+7 a +12 sigma contre le reel ; SnowyMoon + DLSS 5 +3 a +5).
 - Nouvelle cle optique (a chaud, 0 par defaut) : retire une part du detail fin (1 px) et moyen (~3 px), plus au loin, comme un objectif + l'air.

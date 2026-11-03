@@ -22,3 +22,4 @@ FindFirstFileA
 FindNextFileA
 FindClose
 MoveFileExA
+IsBadReadPtr

@@ -40,6 +40,7 @@ __declspec(dllimport) BOOL WINAPI CloseHandle(HANDLE);
 __declspec(dllimport) BOOL WINAPI CreateDirectoryA(const char *, void *);
 __declspec(dllimport) void *WINAPI VirtualAlloc(void *, SIZE_T, DWORD, DWORD);
 __declspec(dllimport) BOOL WINAPI VirtualFree(void *, SIZE_T, DWORD);
+__declspec(dllimport) BOOL WINAPI IsBadReadPtr(const void *, u64);
 __declspec(dllimport) BOOL WINAPI FlushInstructionCache(HANDLE, const void *, SIZE_T);
 __declspec(dllimport) HANDLE WINAPI GetCurrentProcess(void);
 __declspec(dllimport) HANDLE WINAPI FindFirstFileA(const char *, void *);
@@ -62,7 +63,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.14.2"
+#define VERSION "tsc-graphics 0.14.3"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -1267,12 +1268,19 @@ static bool format_bloc(UINT f, UINT &octets) {
 	return false;
 }
 static u64 empreinte(const SUBRES *sr, const TEX2D_DESC *ds, u64 &taille) {
-	UINT ob; UINT lignes = format_bloc(ds->Format, ob) ? (ds->Height + 3) / 4 : ds->Height;
+	UINT ob; bool bloc = format_bloc(ds->Format, ob); UINT lignes = bloc ? (ds->Height + 3) / 4 : ds->Height;
 	taille = (u64)sr->pitch * lignes; const unsigned char *p = (const unsigned char *)sr->p;
 	u64 h = 1469598103934665603ULL ^ taille;
+	/* 0.14.3 : la derniere ligne ne fait que la largeur utile, pas le pas : en 0.14.2 la lecture debordait du tampon du jeu quand
+	   le pas etait aligne plus large (plantage 0xc0000005 a RVA 0x19A29, 03/11 22:48 et 22:51). Meme empreinte qu'avant si pas == largeur. */
+	UINT bp = bloc ? 0 : octets_pixel(ds->Format);
+	u64 utile = bloc ? (u64)((ds->Width + 3) / 4) * ob : (bp ? (u64)ds->Width * bp : 0);
+	if (!utile || utile > sr->pitch) utile = sr->pitch < 16 ? sr->pitch : 16;   /* format inconnu : on ne suppose rien de la derniere ligne */
+	u64 reel = lignes ? (u64)sr->pitch * (lignes - 1) + utile : 0;
 	/* au plus 4096 blocs de 16 octets repartis sur tout le niveau 0 : rapide et assez sur pour reconnaitre une texture */
 	u64 pas = taille / 4096; if (pas < 16) pas = 16;
-	for (u64 o = 0; o + 16 <= taille; o += pas) { const u64 *q = (const u64 *)(p + o); h = (h ^ q[0]) * 1099511628211ULL; h = (h ^ q[1]) * 1099511628211ULL; h ^= h >> 29; }
+	if (!p || reel < 16 || IsBadReadPtr(p, 16) || IsBadReadPtr(p + reel - 16, 16)) return h;   /* tampon du jeu plus court qu'annonce : pas de lecture */
+	for (u64 o = 0; o + 16 <= reel; o += pas) { const u64 *q = (const u64 *)(p + o); h = (h ^ q[0]) * 1099511628211ULL; h = (h ^ q[1]) * 1099511628211ULL; h ^= h >> 29; }
 	return h;
 }
 static void releve_texture(const TEX2D_DESC *ds, const void *init) {
