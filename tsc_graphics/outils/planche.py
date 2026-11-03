@@ -1,6 +1,6 @@
 import sys, numpy as np
 sys.path.insert(0,'/home/claude/tsc-appli/tsc_graphics/outils')
-import etalon
+import etalon, profondeur
 from PIL import Image, ImageDraw
 R='/mnt/project-files/tsc_graphics/references_videos/'; G='/mnt/project-files/tsc_graphics/captures_jeu_classees/'
 choix={'jour':('videoplayback__2_/videoplayback__2__00995s.jpg','jour/ets2_20261016_210531_00.png'),
@@ -28,7 +28,7 @@ for a in amb:
         cw=int(g.height*16/9); x0=(g.width-cw)//2; g=g.crop((x0,0,x0+cw,g.height))
     H=540; gw=int(g.width*H/g.height)
     src=np.asarray(g.resize((gw,H)),dtype=np.float32)/255
-    after=Image.fromarray((etalon.rendu_photo(src,etalon.LOOKS[a])*255).astype(np.uint8))
+    after=Image.fromarray((etalon.rendu_photo(src,etalon.LOOKS[a],profondeur.disparite(src))*255).astype(np.uint8))
     rw=int(im.width*H/im.height)
     canvas=Image.new('RGB',(rw+2*gw+16,H+8),(20,20,20))
     canvas.paste(im.resize((rw,H)),(0,0)); canvas.paste(g.resize((gw,H)),(rw+8,0)); canvas.paste(after,(rw+gw+16,0))

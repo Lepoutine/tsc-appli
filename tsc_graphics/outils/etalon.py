@@ -299,7 +299,7 @@ def flou_lin(a, rayon):
     return srgb_vers_lin(flou(lin_vers_srgb(a / m), rayon)) * m
 
 
-def effets_scene(out, lin, nb, ext, p):
+def effets_scene(out, lin, nb, ext, p, disp=None):
     """Ce que le jeu ne rend pas : ombres de contact, route mouillee qui reflete le ciel et les lumieres
     (plus fort en angle rasant, Fresnel), flou de pluie (pare-brise, lointain, vitres laterales).
     Dans le plugin, horizon et masques viendront de la camera et de la profondeur du jeu."""
@@ -307,7 +307,13 @@ def effets_scene(out, lin, nb, ext, p):
     rows = np.arange(h)[:, None]
     yh = int(h * p.get('horizon', 0.4))
     # ombres de contact (approche sans profondeur : creux plus sombres que leur voisinage)
-    if p.get('ombres', 0) > 0:
+    if p.get('ombres', 0) > 0 and disp is not None:
+        # occlusion ambiante d'ecran : un point plus loin que son voisinage est dans un creux -> ombre
+        occl = 0
+        for R in (max(3, int(min(h, w) / 80)), max(6, int(min(h, w) / 30)), max(10, int(min(h, w) / 12))):
+            occl = occl + np.clip(boite(disp, R) - disp - 0.01, 0, 0.1) * 4
+        out = out * (2.0 ** (-occl * p['ombres']))[..., None]
+    elif p.get('ombres', 0) > 0:
         R = max(4, int(min(h, w) / 25))
         occl = np.clip(boite(nb, R) - nb - 0.15, 0, 2.0)
         out = out * (2.0 ** (-occl * p['ombres']))[..., None]
@@ -322,16 +328,21 @@ def effets_scene(out, lin, nb, ext, p):
         refl = flou_vertical(flou_lin(refl, 2), h / 40)
         lum_r = np.clip(refl - 0.45, 0, None) * 3
         trainee = flou_vertical(flou_horizontal(lum_r, 1), h / 8)
-        dist = np.clip((rows - yh) / max(1, h - yh), 0, 1)
-        fres = (p.get('f0', 0.08) + (1 - p.get('f0', 0.08)) * (1 - dist) ** 4) * sous
-        m = (route * fres[:, 0][:, None] if fres.ndim == 2 else route * fres)[..., None]
+        if disp is not None:
+            # angle rasant = loin : plus de reflet (Fresnel), d'apres la profondeur
+            dr = np.clip(disp / 0.6, 0, 1)
+            fres = (p.get('f0', 0.08) + (1 - p.get('f0', 0.08)) * (1 - dr) ** 3) * sous
+        else:
+            dist = np.clip((rows - yh) / max(1, h - yh), 0, 1)
+            fres = (p.get('f0', 0.08) + (1 - p.get('f0', 0.08)) * (1 - dist) ** 4) * sous
+        m = (route * fres)[..., None]
         k = p['mouille']
         out = out * (1 - 0.3 * route[..., None] * k)
         out = out * (1 - m * k) + (refl + trainee * p.get('trainees', 1.0)) * m * k
     # flou de pluie
     if p.get('pluie_flou', 0) > 0:
         a = p['pluie_flou']
-        bande = np.exp(-((rows - yh) / (0.18 * h)) ** 2)[..., None]
+        bande = (np.exp(-((rows - yh) / (0.18 * h)) ** 2) if disp is None else np.clip(1 - disp / 0.6, 0, 1) ** 2)[..., None]
         fl = flou_lin(out, min(h, w) / 160)
         fl2 = flou_lin(out, min(h, w) / 70)
         out = out * (1 - ext * a) + fl * ext * a
@@ -339,10 +350,18 @@ def effets_scene(out, lin, nb, ext, p):
         xx = np.abs(np.arange(w)[None, :] - w / 2) / (w / 2)
         cote = smooth(xx, 0.55, 0.85)[..., None] * ext
         out = out * (1 - cote * a) + flou_horizontal(out, w / 60) * cote * a
+    # brouillard / brume selon la distance reelle
+    if p.get('brouillard', 0) > 0 and disp is not None:
+        # disparite MiDaS : ~0 ciel, ~0.3 route lointaine, ~0.55 route proche ; la cabine n'est pas fiable -> masque ext
+        d = np.clip(1 - disp / 0.6, 0, 1)
+        b = (np.clip(p['brouillard'] * d ** 2, 0, 0.85) * ext[..., 0])[..., None]
+        yo = out @ LUMA
+        niv = np.percentile(yo[ext[..., 0] > 0.5], 90) if (ext[..., 0] > 0.5).any() else 0.6
+        out = out * (1 - b) + np.asarray(p.get('ext_teinte', [0.9, 0.92, 0.95])) * niv * b
     return out
 
 
-def rendu_photo(img_srgb, p):
+def rendu_photo(img_srgb, p, disp=None):
     """Passes du shader TSC Graphics, dans le meme ordre :
     1. luminance log, decomposee en grandes zones (filtre guide) et detail fin ;
     2. grandes zones : ecart dehors / dedans agrandi (macro), exposition visee ;
@@ -362,6 +381,13 @@ def rendu_photo(img_srgb, p):
     detail = ly - base
     moy = np.percentile(base, 60)
     nb = moy + (base - moy) * p['macro'] + p['expo']
+    interieur = None
+    if disp is not None:
+        # cabine = tout ce qui est proche : la camera l'expose sous le dehors
+        c0 = p.get('cab_seuil', 0.6)
+        interieur = smooth(disp, c0 - 0.08, c0 + 0.08)
+        if p.get('cab_expo', 0.0):
+            nb = nb - interieur * p['cab_expo']
     # les grandes zones tres claires (ciel, vitres) sont compressees en log : pas de ciel blanc brule
     hi = p.get('haut', 0.0)
     nb = np.where(nb > hi, hi + (nb - hi) * p.get('haut_pente', 0.35), nb)
@@ -391,9 +417,8 @@ def rendu_photo(img_srgb, p):
         dif = srgb_vers_lin(flou(lin_vers_srgb(clair), max(h, w) / 60))
         out = out + dif * p['diffusion']
     ext = smooth(nb, p.get('ext_seuil', -1.6), p.get('ext_seuil', -1.6) + 1.2)[..., None]
-    out = effets_scene(out, lin, nb, ext, p)
-    # dehors : perspective aerienne (lointain plus clair et moins sature), la ou les grandes zones sont claires
-    ext = smooth(nb, p.get('ext_seuil', -1.6), p.get('ext_seuil', -1.6) + 1.2)[..., None]
+    out = effets_scene(out, lin, nb, ext, p, disp)
+    # dehors : perspective aerienne (lointain plus clair et moins sature)
     if p.get('ext_desat', 0) > 0:
         yo = out @ LUMA
         out = out + (yo[..., None] - out) * ext * p['ext_desat']
@@ -427,22 +452,22 @@ LOOKS = {
     # jour : dehors lumineux et laiteux comme une camera, cabine dans l'ombre mais lisible
     'jour': dict(_OPT, macro=1.6, expo=1.4, haut=-0.3, haut_pente=0.25, micro=0.65, epaule=1.0, blanc=2.2,
                  balance=[1.0, 1.0, 1.0], sat=[1.0, 0.97, 0.9], diffusion=0.7, ext_desat=0.25, ext_voile=0.25,
-                 vignette=0.35, aberration=1.5, grain=0.012, douceur=0.35, ombres=0.5, horizon=0.45),
+                 vignette=0.35, aberration=1.5, grain=0.012, douceur=0.35, ombres=0.5, horizon=0.45, brouillard=0.15),
     # gris : ciel couvert blanc, lointain delave, couleurs eteintes, leger bleu
     'gris': dict(_OPT, macro=1.5, expo=1.6, haut=-0.4, haut_pente=0.25, micro=0.55, epaule=1.0, blanc=2.0, voile=0.05,
                  balance=[0.97, 1.0, 1.03], sat=[0.85, 0.80, 0.6], veg_force=0.4, diffusion=0.6, ext_desat=0.55,
                  ext_voile=0.45, ext_teinte=[0.92, 0.94, 0.97], vignette=0.3, aberration=1.2, grain=0.014, douceur=0.4,
-                 ombres=0.5, horizon=0.45),
+                 ombres=0.5, horizon=0.45, brouillard=0.35),
     # pluie : brume forte, detail noye par l'eau sur le pare-brise, gris vert
     'pluie': dict(_OPT, macro=1.4, expo=0.5, haut=-0.9, haut_pente=0.25, micro=0.45, epaule=1.0, blanc=2.0, voile=0.07,
                   balance=[0.96, 1.0, 1.04], sat=[0.8, 0.8, 0.65], veg_force=0.4, diffusion=0.7, ext_desat=0.5,
                   ext_voile=0.3, ext_teinte=[0.85, 0.9, 0.92], vignette=0.35, aberration=1.2, grain=0.016, douceur=0.6,
-                  horizon=0.40, mouille=1.0, trainees=2.5, f0=0.25, ombres=0.8, pluie_flou=0.8),
+                  horizon=0.40, mouille=1.0, trainees=2.5, f0=0.25, ombres=0.8, pluie_flou=0.8, brouillard=0.6),
     # crepuscule : chaud, contre-jour, gros halo, grain de basse lumiere
     'crepuscule': dict(_OPT, macro=1.7, expo=0.6, haut=0.0, haut_pente=0.3, micro=0.6, epaule=1.0, blanc=2.0, voile=0.03,
                        balance=[1.08, 1.0, 0.88], sat=[0.95, 1.0, 1.05], veg_force=0.3, diffusion=0.9, ext_desat=0.1,
                        ext_voile=0.2, ext_teinte=[1.0, 0.85, 0.7], vignette=0.45, aberration=1.5, grain=0.02, douceur=0.4,
-                       ombres=0.6, horizon=0.45),
+                       ombres=0.6, horizon=0.45, brouillard=0.2),
     # nuit : noirs profonds, lumieres franches qui bavent, grain de capteur
     'nuit': dict(_OPT, macro=1.8, expo=-0.3, haut=0.8, haut_pente=0.5, micro=0.7, epaule=1.0, blanc=1.6, voile=0.0,
                  balance=[1.0, 0.98, 1.0], sat=[0.9, 1.0, 1.05], vegetation=None, veg_force=0.0, diffusion=1.0,
