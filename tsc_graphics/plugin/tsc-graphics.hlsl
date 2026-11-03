@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.15.2 (valeurs non finies neutralisees a chaque etage, trame cabine) + 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -177,7 +177,11 @@ float lm_propre() {
 	[unroll] for (int y = 0; y < 4; y++) [unroll] for (int x = 0; x < 4; x++) s += lum(tCouleur.SampleLevel(sLin, float2(0.125 + x * 0.25, 0.125 + y * 0.25), max(p5.w - 1, 0)).rgb);
 	return max(s / 16, 1e-4);
 }
-float lm_vue() { return p15.y > 0.5 ? max(tLm.Load(int3(0, 0, 0)), 1e-4) : lm_propre(); }
+// 0.15.2 : reference de lumiere toujours finie (une valeur infinie ou NaN dans la vue du jeu passe par les mips et contaminait la brume au sol)
+// test sur les bits (exposant plein = infini ou NaN) : le compilateur optimise ne peut pas le supprimer, contrairement a isnan
+bool fini3(float3 c) { return all((asuint(c) & 0x7f800000u) != 0x7f800000u); }
+bool fini1(float x) { return (asuint(x) & 0x7f800000u) != 0x7f800000u; }
+float lm_vue() { float l = p15.y > 0.5 ? tLm.Load(int3(0, 0, 0)) : lm_propre(); return fini1(l) ? clamp(l, 1e-4, 1e4) : 1.0; }
 float4 ps_lm(VSO i) : SV_Target { return lm_propre(); }
 // ---------- 0.15 : occlusion par horizons (facon HBAO/GTAO, ecrite pour TSC) ----------
 // Pour 3 directions tournees par pixel, on cherche de chaque cote le point le plus « haut » au-dessus du plan de la surface
@@ -457,7 +461,7 @@ float3 meteo(float2 uv, float3 c, float lm, float nuit) {
 		float3 coul = lm * float3(0.93, 0.97, 1.02) * lerp(1.25, 0.6, nuit);
 		float3 diff = tCouleur.SampleLevel(sLin, uv, min(5, p5.w)).rgb;        // la nuit, la brume prend la lumiere des phares et lampadaires
 		coul += max(diff - lm, 0) * 0.5 * nuit;
-		c = lerp(c, coul, f);
+		if (f > 0 && fini3(coul)) c = lerp(c, coul, f);   // 0.15.2 : jamais 0 x infini (trame noir/blanc vue sur la cabine)
 	}
 	// 3) rideau de pluie : 3 couches (4, 11, 30 m), visibles seulement devant le decor plus lointain, eclairees par la lumiere locale
 	if (p17.x > 0 && pa > 0.05) {
@@ -509,15 +513,19 @@ float4 ps_principal(VSO i) : SV_Target {
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
 	float lm = lm_vue();
 	float nt = nuit_de(lm);
-	float3 v = monde_photo(i.uv, r.rgb, lm, nt);
-	v = meteo(i.uv, v, lm, nt);
-	v = vitre(i.uv, v);
-	v = camera(i.uv, v);
+	// 0.15.2 : chaque etage est verifie ; une valeur non finie reprend l'etage precedent (avant : f = v meme si v etait deja faux,
+	// d'ou des blocs noirs (NaN -> 0) et clairs (infini -> 65504) que l'histoire du jeu (bloom, exposition) gardait figes)
+	float3 src = fini3(r.rgb) ? max(r.rgb, 0) : 0;
+	float3 v = monde_photo(i.uv, src, lm, nt); if (!fini3(v)) v = src;
+	float3 w = meteo(i.uv, v, lm, nt); if (fini3(w)) v = w;
+	w = vitre(i.uv, v); if (fini3(w)) v = w;
+	w = camera(i.uv, v); if (fini3(w)) v = w;
 	float3 f = finition(i.uv, v, lm, nt);
-	f = lerp(v, f, saturate(p6.x));
-	f = optique(i.uv, f);
-	if (any(isnan(f)) || any(isinf(f))) f = v;
-	return float4(min(max(f, 0), 65504), r.a);
+	f = lerp(v, f, saturate(p6.x)); if (!fini3(f)) f = v;
+	w = optique(i.uv, f); if (fini3(w)) f = w;
+	// garde-fou : notre passe ne fait jamais apparaitre une lumiere enorme la ou le jeu n'en a pas (boucle avec l'exposition du jeu)
+	f = min(max(f, 0), max(src * 8, lm * 64));
+	return float4(min(f, 65504), r.a);
 }
 
 // ---------- 0.9 : etage APRES l'auto-exposition et le tone mapping du jeu ----------
@@ -551,7 +559,8 @@ float3 anticrenelage(float2 uv, float3 c0) {
 }
 float4 ps_ldr(VSO i) : SV_Target {
 	float4 t = tCouleur.SampleLevel(sPt, i.uv, 0);
-	if (p20.x > 0) t.rgb = anticrenelage(i.uv, t.rgb);
+	if (!fini3(t.rgb)) t.rgb = 0;   // 0.15.2
+	if (p20.x > 0) { float3 a = anticrenelage(i.uv, t.rgb); if (fini3(a)) t.rgb = a; }
 	float3 c = max(t.rgb, 0);
 	// balance : temperature (+ chaud / - froid) et teinte (+ vert / - magenta)
 	c *= float3(1 + 0.08 * p14.y, 1 + 0.06 * p14.z, 1 - 0.08 * p14.y);
