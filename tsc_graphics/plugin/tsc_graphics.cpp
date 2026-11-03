@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.4.3"
+#define VERSION "tsc-graphics 0.5.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -87,6 +87,7 @@ struct Reglages {
 	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
+	float camera = 1, brouillard = 0.25f, diffusion = 0.6f, grain = 0.012f, sat_hautes = 0.3f, ext_desat = 0.25f, ombres = 0.5f;   /* camera v1 (0.5) */
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -103,7 +104,9 @@ static void lire_ini(bool force) {
 		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
 		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues},
 		{"flou", &R.flou}, {"etirement", &R.etirement}, {"peinture", &R.peinture}, {"decalage_z", &R.decalage_z}, {"bascule_auto", &R.bascule_auto},
-		{"profil", &R.profil}, {"taille_min", &R.taille_min}, {"trace", &R.trace} };
+		{"profil", &R.profil}, {"taille_min", &R.taille_min}, {"trace", &R.trace},
+		{"camera", &R.camera}, {"brouillard", &R.brouillard}, {"diffusion", &R.diffusion}, {"grain", &R.grain}, {"sat_hautes", &R.sat_hautes},
+		{"ext_desat", &R.ext_desat}, {"ombres", &R.ombres} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -434,7 +437,9 @@ static void passe_vue(void *hdr, void *prof) {
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
 		R.intensite, R.rugosite, R.flou, R.trainees,
 		R.etirement, R.pas, R.epaisseur, R.f0,
-		(float)g_vues_traitees, R.assombrir, R.peinture, (float)(g_coul_mips - 1) };
+		(float)g_vues_traitees, R.assombrir, R.peinture, (float)(g_coul_mips - 1),
+		R.camera, R.brouillard, R.diffusion, R.grain,
+		R.sat_hautes, R.ext_desat, R.ombres, (float)((GetTickCount64() / 16) % 997) };
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);

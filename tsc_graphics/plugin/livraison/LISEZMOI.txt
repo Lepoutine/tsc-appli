@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.4.3 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.5 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -28,3 +28,7 @@ depuis l'ini (cle trace : changer le nombre), passe TSC notee dans la trace (pou
 0.4.3 (apres T1c) : la passe TSC ne bascule plus tout l'etat du contexte (SwapDeviceContextState) : elle sauve et remet
 a l'identique chaque reglage qu'elle touche. T1c montrait qu'apres la passe le jeu perdait la suite de l'image
 (vues 2 et 3 et passe des gouttes) -> 1 vue sur 3 et taches sur la vitre.
+0.5 : couche « camera v1 » calee sur les videos (en HDR, avant le tone mapping du jeu, jamais sur l'interface) :
+perspective aerienne et lointain delave, halo des lumieres fortes, hautes lumieres saturees, ombres de contact depuis
+la profondeur reelle, grain de capteur anime. Cles camera, brouillard, diffusion, grain, sat_hautes, ext_desat, ombres.
+Comprend le correctif 0.4.3 (3 vues, etat du jeu remis a l'identique).

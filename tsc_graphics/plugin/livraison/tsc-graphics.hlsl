@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.4.3 « route mouillee v1 » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.5 « route mouillee v1 + camera v1 » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -13,6 +13,8 @@ cbuffer P : register(b0) {
 	float4 p3; // intensite, rugosite, flou (largeur du lobe brillant), trainees (bruit d'axe)
 	float4 p4; // etirement vertical des reflets, pas de marche (m), epaisseur (m), f0
 	float4 p5; // index de la vue, assombrissement de l'asphalte mouille, attenuation sur la peinture, dernier niveau de mip
+	float4 p6; // camera v1 : intensite globale, brouillard (densite), diffusion (halo des lumieres), grain
+	float4 p7; // saturation des hautes lumieres, desaturation du lointain, ombres de contact, numero d'image (grain anime)
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -48,7 +50,7 @@ float3 normale(float2 uv, float3 c) {
 // bruit stable a l'ecran (pas de scintillement d'une image a l'autre) ; motif entrelace pour casser les bandes
 float bruit(float2 p) { return frac(52.9829189 * frac(dot(p, float2(0.06711056, 0.00583715)))); }
 
-float4 ps_principal(VSO i) : SV_Target {
+float4 route(VSO i) {
 	float4 src = tCouleur.SampleLevel(sPt, i.uv, 0);
 	float3 col = src.rgb;
 	int vue = (int)p0.x;
@@ -142,4 +144,59 @@ float4 ps_principal(VSO i) : SV_Target {
 	if (any(isnan(res)) || any(isinf(res))) return src;
 	res = min(max(res, 0), 65504);   // en D3D11 min/max renvoient l'operande valide : un NaN restant devient 0
 	return float4(res, src.a);
+}
+
+// ---------- camera v1 (0.5) : ce que montrent les videos reelles et que le jeu ne rend pas ----------
+// Mesures du 03/11 (mesures_reel.json / mesures_jeu.json) : le reel a des hautes lumieres saturees (0,33-0,41 contre
+// 0,07 en jeu), un lointain voile et delave (perspective aerienne), des lumieres qui bavent (diffusion de l'optique),
+// des ombres dans les creux et un grain de capteur. Tout est fait ici en HDR, avant l'exposition et le tone mapping du jeu.
+float lum(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
+float3 camera(float2 uv, float3 col) {
+	float k = p6.x; if (k <= 0) return col;
+	float d = tProf.SampleLevel(sPt, uv, 0);
+	bool monde = !(ciel(d) || cabine(d));
+	float3 moy = tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb;   // moyenne de la vue (dernier mip)
+	float lm = max(lum(moy), 1e-4);
+	float3 c = col;
+	if (monde) {
+		float3 P = posVue(uv); float z = P.z;
+		// ombres de contact : creux et pieds d'objets, depuis la profondeur reelle (8 directions, ~0,5 m)
+		if (p7.z > 0) {
+			float pxm = p2.y / (2 * p0.z * max(z, p1.x)); float r = clamp(0.5 * pxm, 2, 40);
+			float occ = 0;
+			[unroll] for (int a = 0; a < 8; a++) {
+				float ang = a * 0.785398 + bruit(uv * p2.xy) * 0.785398;
+				float2 u2 = uv + float2(cos(ang), sin(ang)) * r * p2.zw;
+				float ds = tProf.SampleLevel(sPt, u2, 0);
+				if (ciel(ds) || cabine(ds)) continue;
+				float dz = z - lineaire(ds);
+				occ += saturate(dz / (0.5 + 0.02 * z)) * saturate(1 - dz / (3 + 0.1 * z));
+			}
+			c *= 1 - p7.z * 0.45 * saturate(occ / 8 * 1.6);
+		}
+		// perspective aerienne : le lointain se voile vers la couleur moyenne du ciel et se delave
+		float b = 1 - exp(-max(z - 20, 0) * p6.y * 0.002);
+		float3 voile = moy * float3(0.95, 0.98, 1.05) * 1.3;
+		float l = lum(c);
+		c = lerp(c, lerp(c, float3(l, l, l), p7.y), saturate(b * 2));
+		c = lerp(c, voile, saturate(b * 0.85));
+	}
+	// diffusion de l'optique : les lumieres fortes bavent (mips de la copie HDR, au-dessus de 3x la moyenne)
+	if (p6.z > 0) {
+		float3 h = 0;
+		[unroll] for (int m = 2; m <= 5; m++) { float3 s = tCouleur.SampleLevel(sLin, uv, min((float)m, p5.w)).rgb; h += max(s - lm * 3, 0) * (0.5 / (m - 1)); }
+		c += h * p6.z * 0.35;
+	}
+	// hautes lumieres plus saturees (comme la camera), sans toucher aux tons moyens
+	if (p7.x > 0) { float l = lum(c); float w = saturate((l / lm - 1.5) / 3); c = max(0, l + (c - l) * (1 + p7.x * w)); }
+	// grain de capteur, plus visible dans les ombres, anime d'une image a l'autre
+	if (p6.w > 0) { float g = bruit(uv * p2.xy + p7.w * float2(17.3, 9.1)) - 0.5; float l = lum(c); c *= 1 + g * p6.w * 2 * (0.4 + 0.6 * saturate(1 - l / (lm * 2))); }
+	c = lerp(col, c, saturate(k));
+	if (any(isnan(c)) || any(isinf(c))) return col;
+	return min(max(c, 0), 65504);
+}
+float4 ps_principal(VSO i) : SV_Target {
+	float4 r = route(i);
+	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
+	return float4(camera(i.uv, r.rgb), r.a);
 }
