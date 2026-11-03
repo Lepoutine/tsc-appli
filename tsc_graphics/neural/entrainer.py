@@ -31,14 +31,27 @@ def charger(p, hauteur):
 
 
 class Banque:
-    """Images gardees en memoire (RAM), tirage de morceaux aleatoires a echelle variable."""
-    def __init__(self, chemins, hauteur, t):
+    """Images gardees en memoire (RAM), tirage de morceaux aleatoires a echelle variable.
+    groupes > 0 : les images sont rangees en groupes de scenes (couleur moyenne + luminosite, k-moyennes) et chaque groupe
+    est tire aussi souvent que les autres (v0.2 : 1er essai teinte vert-jaune car les videos sont surtout de la foret)."""
+    def __init__(self, chemins, hauteur, t, groupes=0):
         self.im = [charger(p, hauteur) for p in chemins]; self.t = t
+        self.grp = [list(range(len(self.im)))]
+        if groupes > 1 and len(self.im) >= groupes * 3:
+            f = torch.stack([torch.cat([x.mean((1, 2)), x.std((1, 2))]) for x in self.im])
+            c = f[torch.randperm(len(f), generator=torch.Generator().manual_seed(0))[:groupes]].clone()
+            for _ in range(30):
+                a = torch.cdist(f, c).argmin(1)
+                c = torch.stack([f[a == k].mean(0) if (a == k).any() else c[k] for k in range(groupes)])
+            self.grp = [torch.nonzero(a == k).flatten().tolist() for k in range(groupes)]
+            self.grp = [g for g in self.grp if g]
+            print("groupes de scenes reelles :", [len(g) for g in self.grp])
 
     def lot(self, n, gen):
         out = []
         for _ in range(n):
-            x = self.im[gen.randrange(len(self.im))]
+            g = self.grp[gen.randrange(len(self.grp))]
+            x = self.im[g[gen.randrange(len(g))]]
             k = gen.uniform(0.8, 1.25); t = min(int(self.t * k), x.shape[1], x.shape[2])
             i = gen.randrange(x.shape[1] - t + 1); j = gen.randrange(x.shape[2] - t + 1)
             m = x[:, i:i + t, j:j + t]
@@ -67,8 +80,8 @@ def stats(x):
     mx = x.max(1, keepdim=True)[0]; mn = x.min(1, keepdim=True)[0]
     sat = ((mx - mn) / mx.clamp_min(1e-3)).mean()
     d1 = (l - flou(l, 1)).abs().mean(); d3 = (flou(l, 1) - flou(l, 4)).abs().mean(); d8 = (flou(l, 4) - flou(l, 12)).abs().mean()
-    c = x.mean((0, 2, 3))
-    return torch.cat([q, torch.stack([sat, d1 * 10, d3 * 10, d8 * 10]), c - c.mean()]).cpu()
+    # v0.2 : plus de couleur moyenne dans la signature (elle recompensait le vert des videos de foret)
+    return torch.cat([q, torch.stack([sat, d1 * 10, d3 * 10, d8 * 10])]).cpu()
 
 
 @torch.no_grad()
@@ -90,6 +103,10 @@ def main():
     a.add_argument("--lot", type=int, default=12); a.add_argument("--hauteur", type=int, default=1080)
     a.add_argument("--structure", type=float, default=4.0, help="poids qui garde les contours du jeu (anti-invention)")
     a.add_argument("--identite", type=float, default=0.5, help="poids qui garde le reseau proche de l'image du jeu")
+    a.add_argument("--chroma", type=float, default=3.0, help="poids qui garde la teinte du jeu (le reseau change surtout lumiere et contraste)")
+    a.add_argument("--neutres", type=float, default=8.0, help="poids qui garde gris les gris du jeu (route, beton, ciel couvert)")
+    a.add_argument("--groupes", type=int, default=6, help="groupes de scenes reelles tires a egalite")
+    a.add_argument("--dominante_max", type=float, default=0.015, help="derive de teinte maxi des gris (sinon pas champion)")
     a.add_argument("--depart", default="", help="modele.pt a reprendre (apprentissage continu)")
     a.add_argument("--graine", type=int, default=1)
     o = a.parse_args()
@@ -106,7 +123,7 @@ def main():
     test_j, train_j, test_r, train_r = pj[:nj], pj[nj:], pr[:nr], pr[nr:]
     json.dump({"test_jeu": test_j, "test_reel": test_r}, open(os.path.join(o.sortie, "jeu_de_test.json"), "w"), indent=1)
     print(f"images jeu {len(train_j)} (+{nj} test), reel {len(train_r)} (+{nr} test)")
-    BJ, BR = Banque(train_j, 0, o.taille), Banque(train_r, o.hauteur, o.taille)
+    BJ, BR = Banque(train_j, 0, o.taille), Banque(train_r, o.hauteur, o.taille, groupes=o.groupes)
     tj = [charger(p, 0) for p in test_j]
     tr = [charger(p, o.hauteur) for p in test_r]
     ref = torch.stack([stats(x[None].to(appareil)) for x in tr]).mean(0)
@@ -137,19 +154,26 @@ def main():
         la = ((D(y) - 1) ** 2).mean()
         ly, lx = lum(y), lum(x)
         ls = F.l1_loss(ly - flou(ly, 2), lx - flou(lx, 2) * 1.0) * 0.5 + F.l1_loss(flou(ly, 2) - flou(ly, 8), flou(lx, 2) - flou(lx, 8))
-        li = F.l1_loss(flou(y, 8), flou(x, 8))
-        lG = la + o.structure * ls + o.identite * li
+        li = F.l1_loss(flou(lum(y), 8), flou(lum(x), 8))
+        cy, cx = flou(y - ly, 4), flou(x - lx, 4)                       # teinte (couleur moins luminance), adoucie
+        lc = F.l1_loss(cy, cx)
+        mx = x.max(1, keepdim=True)[0]; mn = x.min(1, keepdim=True)[0]
+        neutre = (1 - ((mx - mn) / mx.clamp_min(0.05)).clamp(0, 1) * 4).clamp(0, 1)   # 1 sur les gris du jeu
+        ln = (neutre * (y - ly - (x - lx)).abs()).sum() / neutre.sum().clamp_min(1) / 3
+        lG = la + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln
         oG.zero_grad(set_to_none=True); lG.backward(); oG.step()
         if it % 200 == 0:
-            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} {time.time() - t0:.0f} s"
+            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} {time.time() - t0:.0f} s"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
         if it % 2000 == 0 or it == o.iterations:
-            G.eval(); e = ecart(G, tj, ref, appareil); G.train()
+            G.eval(); e = ecart(G, tj, ref, appareil); dom = dominante(G, tj, appareil); G.train()
             nom = os.path.join(o.sortie, f"modele_{it:06d}.pt")
             torch.save({"modele": G.state_dict(), "ecart": e, "iteration": it}, nom)
-            ligne = f"== {it} : ecart au reel {e:.4f} = {pct(e):.0f} % restant (objectif <= 10 %) ; jeu brut {base:.4f}, meilleur {meilleur:.4f}"
+            ligne = f"== {it} : ecart au reel {e:.4f} = {pct(e):.0f} % restant (objectif <= 10 %) ; derive des gris {dom:.4f} (max {o.dominante_max}) ; jeu brut {base:.4f}, meilleur {meilleur:.4f}"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
-            if e < meilleur:
+            if dom > o.dominante_max:
+                print("   -> refuse : dominante de couleur sur les gris du jeu")
+            elif e < meilleur:
                 meilleur = e
                 torch.save({"modele": G.state_dict(), "ecart": e, "iteration": it}, os.path.join(o.sortie, "champion.pt"))
                 exporter.ecrire(G, o.hlsl, os.path.join(o.sortie, "tsc-graphics.hlsl"), note=f"iteration {it}, ecart {e:.4f}")
@@ -157,6 +181,19 @@ def main():
                 apercu(G, tj[:3], appareil, os.path.join(o.sortie, f"apercu_{it:06d}.png"))
                 print("   -> nouveau champion, HLSL ecrit dans", o.sortie)
     print("fini. meilleur ecart", meilleur, "(jeu brut", base, ")")
+
+
+@torch.no_grad()
+def dominante(G, jeu, appareil):
+    """Derive moyenne de teinte (r-l, g-l, b-l) sur les pixels gris du jeu : 0 = pas de dominante ajoutee."""
+    s = torch.zeros(3); n = 0
+    for x in jeu:
+        x = x[None].to(appareil); y = G(x)
+        mx = x.max(1, keepdim=True)[0]; mn = x.min(1, keepdim=True)[0]
+        m = (((mx - mn) / mx.clamp_min(0.05)) < 0.08).float()
+        d = (y - lum(y)) - (x - lum(x))
+        s += ((d * m).sum((0, 2, 3)) / m.sum().clamp_min(1)).cpu(); n += 1
+    return float((s / max(n, 1)).abs().max())
 
 
 @torch.no_grad()
