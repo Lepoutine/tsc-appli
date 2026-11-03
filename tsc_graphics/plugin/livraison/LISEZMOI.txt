@@ -54,3 +54,6 @@ sortie en sRGB) appliquee en dernier dans l'etage apres tone mapping ; relue a c
 0.9.3 : TSC Neural, donnees d'entrainement : cle enregistre (changer le nombre N = N images sans effet, une toutes les 2 s) ;
 fichiers plugins\tsc_neural\iNNNNNN_vV_{hdr,prof,albedo,jeu8}.raw (en-tete 32 octets : TSCN, largeur, hauteur, format DXGI, pas).
 Lecteur : tsc_graphics/outils/neural_lire.py.
+0.9.3 (shader) : apres le reglage 0.9.2 (ecart au reel -42 %) : marbrure jaune sur l'asphalte corrigee (surfaces neutres : table de
+couleurs en lumiere seulement ; verts cibles seulement s'ils sont satures), marches de couleur au plafond corrigees (tramage 1/255),
+epaule sur la luminance (les hautes lumieres gardent leur couleur).

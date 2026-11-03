@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -375,7 +375,14 @@ float4 ps_ldr(VSO i) : SV_Target {
 	c *= float3(1 + 0.08 * p14.y, 1 + 0.06 * p14.z, 1 - 0.08 * p14.y);
 	// exposition puis epaule douce : on eclaircit sans bruler les blancs
 	c *= max(p13.x, 0.1);
-	c = float3(epaule(c.r, p13.z), epaule(c.g, p13.z), epaule(c.b, p13.z));
+	// 0.9.3 : epaule surtout sur la luminance (garde la teinte) : en 0.9.2 l'epaule par canal delavait les hautes lumieres (sat 0,07 contre 0,19 reel)
+	{
+		float l0 = lum(c);
+		float3 cl = c * (epaule(l0, p13.z) / max(l0, 1e-5));
+		float3 cc = float3(epaule(c.r, p13.z), epaule(c.g, p13.z), epaule(c.b, p13.z));
+		c = lerp(cc, cl, 0.75);
+		float m = max(c.r, max(c.g, c.b)); if (m > 1) c = lerp(c / m, float3(1, 1, 1), saturate((m - 1) * 0.5));
+	}
 	// contraste autour du gris moyen (0,18 lineaire)
 	if (p13.y != 1) c = 0.18 * pow(max(c, 1e-5) / 0.18, p13.y);
 	// point noir
@@ -384,7 +391,8 @@ float4 ps_ldr(VSO i) : SV_Target {
 	// verts jaunes trop vifs (vegetation du jeu) : moins satures, un peu plus clairs
 	if (p15.x > 0) {
 		float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
-		float vert = saturate((c.g - max(c.r, c.b)) / max(mx, 1e-4) * 4) * saturate((c.g - c.b) / max(mx, 1e-4) * 2);
+		float satv = (mx - mn) / max(mx, 1e-4);
+		float vert = saturate((c.g - max(c.r, c.b)) / max(mx, 1e-4) * 4) * saturate((c.g - c.b) / max(mx, 1e-4) * 2) * smoothstep(0.15, 0.35, satv);   // 0.9.3 : pas sur l'asphalte
 		float k = saturate(p15.x) * vert;
 		c = lerp(c, l + (c - l) * 0.6, k);
 		c *= 1 + 0.15 * k;
@@ -400,7 +408,17 @@ float4 ps_ldr(VSO i) : SV_Target {
 		float3 e = pow(c, 1 / 2.2);
 		float3 uvw = (e * (p15.w - 1) + 0.5) / p15.w;
 		float3 o = pow(saturate(tLut.SampleLevel(sLin, uvw, 0).rgb), 2.2);
-		c = lerp(c, o, saturate(p15.z));
+		// 0.9.3 : les surfaces neutres (route, beton, plafond) ne prennent que le changement de lumiere, pas de teinte (marbrure jaune vue au reglage)
+		float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+		float wn = smoothstep(0.06, 0.2, (mx - mn) / max(mx, 1e-4));
+		float3 oneutre = c * (lum(o) / max(lum(c), 1e-4));
+		o = lerp(oneutre, o, wn);
+		c = lerp(c, saturate(o), saturate(p15.z));
+	}
+	// 0.9.3 : tramage d'1/255 avant le retour en 8 bits : supprime les marches de couleur dans les degrades (plafond, ciel)
+	{
+		float n = frac(sin(dot(i.pos.xy, float2(12.9898, 78.233))) * 43758.5453) + frac(sin(dot(i.pos.xy + 17.1, float2(39.346, 11.135))) * 24634.6345) - 1;
+		c = pow(saturate(pow(c, 1 / 2.2) + n / 255), 2.2);
 	}
 	if (any(isnan(c))) c = t.rgb;
 	return float4(c, t.a);
