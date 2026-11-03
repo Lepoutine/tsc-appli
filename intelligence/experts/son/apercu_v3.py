@@ -211,3 +211,60 @@ def main_lent(sons, sortie, regimes=(300, 200), duree=8.0):
         ecrire(nom, normaliser(x, -1))
         noms.append(nom)
     return noms
+
+
+# ---------------------------------------------------------------------------------------------
+# v4 calee sur la reference envoyee par Mendy (video Shelby GT500 1967, V8 a gros arbre a cames),
+# mesuree le 03/11 : 75-92 % de l'energie entre 80 et 250 Hz, presque rien au-dessus de 1 kHz,
+# coups d'allumage rapides modules par un « galop » lent et irregulier (~2 par seconde).
+
+def timbre_reference(x, sr=SR):
+    """Filtre doux en frequence : garde 80-250 Hz, -4 dB sous 80 Hz, -8 dB sous 60 Hz (la reference a 25 % sous 80 Hz), pente de -10 dB vers 1 kHz et au-dela."""
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1.0 / sr)
+    g_db = np.zeros_like(f)
+    g_db[f < 80] = -4.0
+    g_db[f < 60] = -8.0
+    haut = f > 300
+    g_db[haut] = -10.0 * np.clip(np.log2(f[haut] / 300) / np.log2(1000 / 300), 0, 1.6)
+    return np.fft.irfft(X * 10 ** (g_db / 20), len(x))
+
+
+def ralenti_galop(grains_moteur, grains_echap, rpm, duree, rng, cylindres=8):
+    """Comme ralenti_lent, plus un galop d'arbre a cames : tous les 2 a 3 tours, un tour plus fort et un peu retarde."""
+    n = int(duree * SR)
+    out = np.zeros(n + SR)
+    pas = 120.0 / (rpm * cylindres)
+    motif = [1.0, 0.45, 0.7, 0.4]
+    t, k, tour, prochain_galop = 0.0, 0, 0, 2
+    accent = 1.0
+    while t < duree:
+        if k % 4 == 0:
+            tour += 1
+            if tour >= prochain_galop:
+                accent, prochain_galop = rng.uniform(1.35, 1.6), tour + rng.integers(2, 4)
+                t += pas * rng.uniform(0.15, 0.35)  # petit retard : le « galop »
+            else:
+                accent = rng.uniform(0.75, 0.95)
+        g = grains_moteur[rng.integers(len(grains_moteur))]
+        h = grains_echap[rng.integers(len(grains_echap))]
+        amp = motif[k % 4] * accent * rng.uniform(0.9, 1.1)
+        i = int(t * SR)
+        out[i:i + len(g)] += amp * g
+        out[i:i + len(h)] += amp * 1.1 * h
+        t += pas * rng.uniform(0.94, 1.06)
+        k += 1
+    return out[:n]
+
+
+def main_v4(sons, sortie, regimes=(300, 200), duree=8.0):
+    rng = np.random.default_rng(23)
+    gm = grains_allumage(charger(sons, "500_op_idle"), SR)
+    ge = grains_allumage(charger(sons, "exhaust_op"), SR)
+    noms = []
+    for rpm in regimes:
+        x = timbre_reference(ralenti_galop(gm, ge, rpm, duree, rng))
+        nom = os.path.join(sortie, "v4_ralenti_galop_%d.wav" % rpm)
+        ecrire(nom, normaliser(x, -1))
+        noms.append(nom)
+    return noms
