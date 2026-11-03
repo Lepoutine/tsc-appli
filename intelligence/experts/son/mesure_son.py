@@ -104,6 +104,19 @@ def allumage(x, sr, cylindres):
     return float(f), float(tr_min)
 
 
+def craquements(x, sr, k=4.0):
+    if len(x) < sr // 10:
+        return 0.0
+    e = np.diff(x, prepend=x[:1]) ** 2
+    w = max(int(0.005 * sr), 1)
+    st = np.convolve(e, np.ones(w) / w, "same")[::w]
+    L = 40
+    pad = np.pad(st, (L // 2, L // 2), mode="edge")
+    med = np.median(np.lib.stride_tricks.sliding_window_view(pad, L + 1), axis=1)[: len(st)]
+    haut = st > k * med + 1e-12
+    return float(np.count_nonzero(haut[1:] & ~haut[:-1])) / (len(x) / sr)
+
+
 def mesurer(x, sr, cylindres=8):
     r = {"duree_s": round(len(x) / sr, 2), "frequence_echantillonnage": sr}
     rms = float(np.sqrt(np.mean(x ** 2))) if len(x) else 0.0
@@ -135,14 +148,10 @@ def mesurer(x, sr, cylindres=8):
             pics = np.array(pics)
             r["irregularite_pct"] = round(100.0 * float(pics.std() / max(pics.mean(), 1e-12)), 1)
 
-    # craquements : pics de l'aigu (> 2 kHz par difference) bien au-dessus de la mediane
-    hp = np.diff(x, prepend=x[:1]) if len(x) else x
-    ea = enveloppe(hp, sr, 500.0)
-    if len(ea):
-        seuil = 6.0 * float(np.median(ea) + 1e-9)
-        haut = ea > seuil
-        fronts = int(np.count_nonzero(haut[1:] & ~haut[:-1]))
-        r["craquements_par_s"] = round(fronts / max(len(x) / sr, 1e-9), 2)
+    # craquements : trames de 5 ms dont l'energie aigue (derivee) depasse 4 x la mediane locale (200 ms).
+    # Relatif au voisinage : un moteur aigu en continu ne compte pas, une petarade si (verifie le 03/11 :
+    # claquant_1-3 = 16-18/s, boucles de ralenti = 0-0,3/s).
+    r["craquements_par_s"] = round(craquements(x, sr), 2)
 
     # jonction de boucle : saut d'echantillon et ecart de niveau entre la fin et le debut
     n50 = int(0.05 * sr)
