@@ -32,6 +32,7 @@ cbuffer P : register(b0) {
 	float4 p18; // 0.14 : nuages de pluie (force), ambiance pluie lissee 0-1, delavage, froid
 	float4 p19; // 0.14 : contraste sous la pluie, force de la table de pluie, taille de la table de pluie (0 = absente) ; 0.14.2 : w = optique
 	float4 p20; // 0.15 : anticrenelage (apres tone mapping), air (perspective aerienne physique), visibilite (m), occlusion par horizons (force, 0 = ancienne)
+	float4 p21, p22, p23; // 0.15.1 : cles libre1..libre12 de l'ini, pour les prochains effets (seul le HLSL change, recharge a chaud)
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {

@@ -112,6 +112,10 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
 
+0.15.1 (03/11/2026) - moins de relances (DLL + HLSL, jeu ferme, a poser a la place de la 0.15)
+- 12 reglages libres (libre1..libre12 -> p21-p23) : les prochains effets ne changeront que le HLSL, recharge a chaud, sans relancer le jeu.
+- textures_relister : relit tsc_textures_hd a chaud (nouveaux lots HD sans relance).
+
 0.15 (03/11/2026) - TSC Neural Engine, 3 ameliorations choisies par le juge v2 (DLL + HLSL, jeu ferme ; contient 0.14.3)
 - anticrenelage (LDR) : bord detecte par la luminance (contraste local + sens du bord), melange avec le cote oppose. Cible : pique de synthese.
 - air + visibilite (HDR) : loi de Koschmieder T = exp(-3,912 z / V), lumiere du ciel lue a l'horizon dans l'image. Cible : perspective aerienne -1,1 sigma.
