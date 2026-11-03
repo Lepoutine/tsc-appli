@@ -17,6 +17,7 @@ C'est la référence que Claude consulte avant chaque création, dans Sound Forg
 - `fmod/02_sons_camion_scs.md` : événements, paramètres et bus des sons de camion dans ETS2/ATS.
 - `fmod/03_procedure_mod_son_scs.md` : procédure officielle d'un mod de son, modèles et exemples à télécharger.
 - `fmod/04_recette_moteur_sound_forge.md` : notre recette pour créer l'événement moteur par script (phase 3).
+- `fmod/05_exemple_officiel_peterbilt_579.md` : l'exemple moteur officiel SCS décrit en chiffres (couches, plages, courbes de charge et de frein).
 - `fmod/reference/fmod_studio_2.03_api.json` : toutes les fonctions de l'API de script (MIT).
 - `blender/01_scs_blender_tools.md` : SCS Blender Tools (versions, plan de la doc, matières, looks).
 - `blender/02_conversion_et_skins.md` : Conversion Tools, `accessory_paint_job_data`, fichiers d'une peinture.
@@ -26,6 +27,6 @@ C'est la référence que Claude consulte avant chaque création, dans Sound Forg
 ## À compléter
 
 - Pages SCS : TruckTransmission, TruckChassis, TruckCabin, Tires, SoundWorld, Variant/Part/Locators, Export, Supported_shaders.
-- Options exactes de `fmodstudiocl` 2.03 (relevées sur le PC).
-- Structure des événements de l'exemple officiel Peterbilt 579 (1.42).
 - API Python de Blender 3.6 pour piloter Blender en arrière-plan (`blender -b -P script.py`).
+
+Une copie de travail existe aussi sur le PC de Mendy, dans `Outils admin\soundforge\base_savoir\`, avec `donnees\fmod_ets2_1.61.json` (GUID des bus master, paramètres globaux, événements de 12 banques du jeu). Ce dépôt reste la version de référence.

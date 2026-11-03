@@ -73,7 +73,9 @@
     const groupe = role => couches.filter(c => c.role === role || c.role === 'ralenti').sort((a, b) => a.rpm - b.rpm);
     const gc = groupe('charge'), gs = groupe('sans');
     const aCharge = couches.some(c => c.role === 'charge'), aSans = couches.some(c => c.role === 'sans');
-    let pc = L, ps = 1 - L;
+    // courbe de l'exemple officiel SCS (Peterbilt 579) : sans charge sous 0,2, fondu de 0,2 a 0,35, charge au-dessus
+    const tc = Math.max(0, Math.min(1, (L - 0.2) / 0.15));
+    let pc = Math.sin(tc * Math.PI / 2), ps = Math.cos(tc * Math.PI / 2);
     if (!aCharge && !aSans) { pc = 1; ps = 0; }
     else if (!aCharge) { pc = 0; ps = 1; }
     else if (!aSans) { pc = 1; ps = 0; }

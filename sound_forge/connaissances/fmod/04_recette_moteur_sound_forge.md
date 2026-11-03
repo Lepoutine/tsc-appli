@@ -1,6 +1,6 @@
 # Recette Sound Forge : créer l'événement moteur par script
 
-Statut : [à vérifier] C'est le plan de la phase 3, construit à partir des fiches 01 à 03. Chaque point sera coché après le test sur le PC de Mendy, puis en jeu.
+Statut : [à vérifier] C'est le plan de la phase 3, construit à partir des fiches 01 à 03 et de l'exemple officiel Peterbilt (fiche 05, à suivre en priorité pour les plages et les courbes). Chaque point sera coché après le test sur le PC de Mendy, puis en jeu.
 
 ## Entrée
 
@@ -25,7 +25,8 @@ Le projet `.tscforge.json` de l'atelier, et les couches exportées en WAV 48 kHz
    - Sur chaque piste, poser un SingleSound par régime sur le paramètre `rpm`, de la moitié de l'écart avec le voisin du bas à la moitié de l'écart avec le voisin du haut.
    - Ajouter des fondus enchaînés (`setFadeInCurve` / `setFadeOutCurve`) qui se chevauchent.
    - Automatiser la hauteur (pitch) de chaque instrument selon `rpm` (rapport rpm / régime de la couche, comme dans le simulateur de l'atelier).
-   - Automatiser le volume des deux pistes selon `load` : la piste charge monte avec load, la piste sans charge baisse. En dessous de 0,05, c'est le ralenti.
+   - Automatiser le volume des deux pistes selon `load`, comme dans l'exemple SCS : uniquement « sans charge » en dessous de 0,2, fondu entre 0,2 et 0,35, uniquement « charge » au-dessus. Une piste « nofuel » joue si load < 0,05.
+   - Ajouter une piste de frein moteur (brake 0 = -80 dB, 0,21 = -1 dB, 1 = +3 dB, coupée sous ~860 tr/min), et intégrer le démarrage et l'arrêt pilotés par play.
 6. **Échappement** : même structure avec les couches marquées « échappement », ou une copie filtrée des couches moteur s'il n'y en a pas [à décider avec Mendy].
 7. **Turbo** : une boucle, avec volume et hauteur automatisés par `engine/turbo`.
 8. **start_bad** : un MultiSound avec les sons de démarrage, en lecture aléatoire.

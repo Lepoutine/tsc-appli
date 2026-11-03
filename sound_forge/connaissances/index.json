@@ -100,6 +100,28 @@
    "statut": "a_verifier"
   },
   {
+   "id": "exemple_peterbilt",
+   "titre": "Exemple officiel SCS Peterbilt 579 en chiffres",
+   "domaine": "fmod",
+   "fichier": "fmod/05_exemple_officiel_peterbilt_579.md",
+   "mots_cles": [
+    "peterbilt",
+    "exemple",
+    "loaded",
+    "unloaded",
+    "nofuel",
+    "frein moteur",
+    "play",
+    "exhaust",
+    "turbo",
+    "remote"
+   ],
+   "sources": [
+    "https://download.eurotrucksimulator2.com/sound/example_sound_engine_peterbilt_579_142_01.zip"
+   ],
+   "statut": "verifie"
+  },
+  {
    "id": "structure_jeu_161",
    "titre": "Structure son relevée dans ETS2 1.61",
    "domaine": "fmod",

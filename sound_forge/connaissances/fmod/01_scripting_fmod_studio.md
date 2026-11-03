@@ -11,9 +11,15 @@ Sources : https://www.fmod.com/docs/2.03/studio/scripting-api-reference-project.
    - Le serveur n'écoute que si un projet est ouvert.
    - On envoie du JavaScript en texte UTF-8. FMOD l'évalue et renvoie le résultat sous forme de texte. Du texte de console peut précéder le résultat.
    - Bonne pratique : envelopper chaque commande dans `(function(){ try { ... return JSON.stringify({success:true,result:r}); } catch(e) { return JSON.stringify({success:false,error:String(e)}); } })()`, puis lire le dernier objet JSON de la réponse.
-2. **Ligne de commande `fmodstudiocl.exe`** (sans fenêtre), pour compiler et lancer un script.
-   - Les options exactes de la 2.03 sont [à vérifier] avec `fmodstudiocl -help` sur le PC.
-   - Les options connues des versions précédentes : `-build`, `-script <fichier.js>`, `-banks`, `-platforms`.
+2. **Ligne de commande `fmodstudiocl.exe`** (sans fenêtre). [vérifié avec `-help` en 2.03.15, sur le PC de Mendy, le 2026-11-03]
+   - Usage : `fmodstudiocl [-build] [-shared-audio-source-dir <dossier>] [-banks <b1,b2>] [-platforms <p1,p2>] [-export-guids] [-script <fichier.js>] [-diagnostic] [-ignore-warnings] [-log-dir <dossier>] [-log-max-file-size <octets>] [-working-dir <dossier>] [-unpack <dossier>] [-version] <projet.fspro>`
+   - Exemple pour Sound Forge : `fmodstudiocl -build -banks "tsc_mon_v8,tsc_mon_v8_rm" -export-guids projet.fspro`. Ce n'est pas encore testé.
+   - Pour lancer un script sur le projet : `fmodstudiocl -script creer_moteur.js projet.fspro`.
+   - `-diagnostic` vérifie que le projet n'est pas corrompu.
+   - Installation : `C:\Program Files\FMOD SoundSystem\FMOD Studio 2.03.15\`.
+     - Le manuel hors ligne (60 pages HTML) est dans `documentation\FMOD Studio User Manual\`.
+     - Les scripts d'exemple sont dans `scripts\` : AddAhdsrToSelectedEvents, AddGroupTrack, BatchRename, EngineDesigner, exportGUIDsHeader, RandomizeColors, SVN.
+     - Un paquet d'exemples se trouve dans `examples\Examples.fspackage`.
 
 Sound Forge utilisera la voie 2 pour le build, et la voie 1 (ou un script lancé par fmodstudiocl) pour créer les événements.
 
