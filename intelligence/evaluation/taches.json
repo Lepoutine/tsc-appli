@@ -68,6 +68,14 @@
    "statut": "en_cours"
   },
   {
+   "id": "son_02",
+   "agent": "son",
+   "tache": "Isoler les vraies sources des 8 Shorts de reference de Mendy : echappement, purge d'air, decompression, passages de rapport, sans parasites",
+   "donnees": "captures faites par Mendy (WAV) des 8 Shorts du 03/11",
+   "attendu": "un WAV par evenement + attributs mesures ; parasite residuel mesure < -30 dB sous la source ; ecoute OK de Mendy",
+   "statut": "a_faire"
+  },
+  {
    "id": "conduite_01",
    "agent": "conduite",
    "tache": "Rejouer les scenarios de traces.json sur la version courante du Pilote de tete",

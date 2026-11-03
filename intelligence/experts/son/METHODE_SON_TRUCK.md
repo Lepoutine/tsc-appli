@@ -28,3 +28,14 @@ La v2 a corrigé ce qui s'entendait comme un défaut : plus de coupure, plus de 
 
 - `mesure_son.py`, testé (numpy seulement, comme sur le Shadow) : il mesure et compare deux sons, puis donne le diagnostic en clair.
 - Après le passage de l'expert : `Mesurer_Mes_sons.bat`, qui relève tous les sons de `Mes_sons` d'un coup, en lecture seule.
+
+## Étape 0 : références de Mendy, capture et isolation (demande du 03/11 19:33)
+
+Mendy a envoyé 8 Shorts YouTube de vrais camions. La liste est dans `agents/agents.json` → `son.references_mendy`.
+
+- **Capture** : c'est Mendy qui la fait sur son PC, en enregistrant ce que joue sa carte son pendant la lecture. Par exemple avec Audacity, entrée « WASAPI loopback », en WAV 48 kHz. Claude ne télécharge rien depuis YouTube, à cause des conditions d'utilisation, et le filtre du PC bloque de toute façon ce type de code. Les captures servent de **références à mesurer** et ne sont jamais publiées.
+- **Isolation, en numpy, faisable tout de suite** :
+  - estimer le bruit de fond sur les passages sans moteur, puis le retirer par soustraction spectrale ;
+  - repérer les événements par leur signature : les harmoniques d'allumage pour le moteur et l'échappement, un souffle large bande et aigu de 0,2 à 1 s pour la purge d'air, des impulsions rapides et régulières pour la décompression, une chute de régime suivie d'une reprise pour les passages de rapport ;
+  - découper un WAV par événement, avec ses attributs mesurés (`mesure_son.py`).
+- **Séparation par réseau de neurones** (Demucs, licence MIT) : plus propre sur les voix et la musique, mais il faut torch, qui n'est pas installé sur le Shadow (8,2 Go libres). On ne l'installe qu'avec l'accord de Mendy, par un .bat qu'il lance lui-même.

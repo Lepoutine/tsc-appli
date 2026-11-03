@@ -302,12 +302,30 @@
    ],
    "manque": [
     "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
+    "module d'isolation : soustraction spectrale du bruit + detection et classement des evenements (numpy) ; separation par reseau (Demucs, MIT) seulement si torch est installe sur le Shadow, accord de Mendy",
     "detection automatique des points de boucle",
     "test d'ecoute en jeu d'un son TSC"
    ],
    "demande_avant": "mesurer le son (spectre, niveaux, regimes) avant de proposer un reglage",
    "fil": "Créer TSC Sound Forge pour ETS2",
-   "priorite": "1re tache : son truck ultime V8 Scania R/S 2016 (demande de Mendy 03/11 19:13)"
+   "priorite": "1re tache : son truck ultime V8 Scania R/S 2016 (demande de Mendy 03/11 19:13)",
+   "capacites_demandees": [
+    "capturer l'audio d'une video de reference (capture lancee par Mendy sur son PC, jamais de telechargement YouTube par Claude)",
+    "isoler les vraies sources et retirer les parasites (vent, voix, musique, autres vehicules)",
+    "reconnaitre et decouper par evenement : echappement/moteur, purge de bouteille d'air, frein moteur/decompression, passages de rapport, clapet",
+    "garder pour chaque extrait ses attributs mesures (regime, charge supposee, niveau, duree, points de boucle)"
+   ],
+   "references_mendy": [
+    "https://www.youtube.com/watch?v=QunyWALxgps",
+    "https://www.youtube.com/shorts/6xRFmNbw41I",
+    "https://www.youtube.com/shorts/fp4gjHvMHAQ",
+    "https://www.youtube.com/shorts/5Q38tZjko3w",
+    "https://www.youtube.com/shorts/Pa0LP_l2OjA",
+    "https://www.youtube.com/shorts/TuGp0_gxJZM",
+    "https://www.youtube.com/shorts/Y3HHvN-h8nc",
+    "https://www.youtube.com/shorts/tLxCs8VVJKM",
+    "https://www.youtube.com/shorts/lk9rRn_1YUM"
+   ]
   },
   {
    "id": "forge",
