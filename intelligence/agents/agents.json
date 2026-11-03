@@ -11,7 +11,7 @@
  "agents": [
   {
    "id": "graphics",
-   "nom": "TSC Neural Graphics Expert",
+   "nom": "IA Pro Photoréalisme",
    "specialite": "rendu DX11 d'ETS2, shaders HLSL, reflets, ombres, eclairage, photorealisme temps reel",
    "niveau": 3,
    "preuve_niveau": "plugin tsc-graphics 0.1 a 0.14 construit et pose dans TSCF_Lab, audit du pipeline prouve (G-buffer, Z inverse, cout SSR 1,1-2,0 ms) ; rendu final pas encore valide en jeu par Mendy ; sources : branche claude/project-thread-a76ees, plugin 0.14 commit 414d468 (meteo 0.14 pas encore posee)",

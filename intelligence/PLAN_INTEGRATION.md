@@ -47,7 +47,7 @@ Il n'y a aujourd'hui **aucune IA qui tourne seule chez le joueur**, sauf le Pilo
 
 | # | Expert | Niveau | Ce qui manque surtout |
 |---|---|---|---|
-| 1 | Neural Graphics | 3 | jeu de captures fixe pour comparer chaque version |
+| 1 | IA Pro Photoréalisme (Graphics) | 3 | jeu de captures fixe pour comparer chaque version |
 | 2 | Textures | 3 | jeu de test fixe, contrôle UV automatique |
 | 3 | Performance | 4 | mesure de frametime fiable derrière ReShade |
 | 4 | Mod Engineering | 4 | analyseur automatique du game.log, contrôle .scs avant livraison |
@@ -97,7 +97,7 @@ Au démarrage, chaque expert lance `tsc_ia.py demarrer <expert>` : il relit ses 
 
 `tsc_ia.py transfert` écrit une fiche de passage (`transferts/`) : de qui, vers qui, objet, fichiers avec taille et date, hypothèses, preuve, statut. L'intelligence centrale (le coordinateur du projet) enchaîne les passages et fait vérifier par Qualité avant de présenter **un seul livrable** à Mendy.
 
-Exemple : Textures (matériau route) → Neural Graphics (rendu) → Performance (coût en ms) → Mod Engineering (intégration .scs) → Qualité (contrôle) → Mendy.
+Exemple : Textures (matériau route) → IA Pro Photoréalisme (rendu) → Performance (coût en ms) → Mod Engineering (intégration .scs) → Qualité (contrôle) → Mendy.
 
 ## 9. Apprentissage et mise à jour, trois mécanismes séparés
 
