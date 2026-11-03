@@ -112,6 +112,12 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
 
+0.14.1 (03/11/2026) - correction textures HD (seule la DLL change, jeu ferme)
+- Mesure en jeu (TSCF_Lab) : 3221 textures HD posees pour 1110 fichiers, budget 6000 Mo plein en 45 min, puis refus : chaque re-creation
+  d'une texture par le jeu (streaming) refaisait une texture HD sans rendre l'ancienne.
+- 0.14.1 : une seule texture HD par empreinte, gardee en cache et partagee ; une empreinte refusee n'est plus relue sur le disque.
+  Memoire HD bornee par le nombre de fichiers (lot 1 + lot 2 ~2,8 Go). Journal : posees (uniques), reutilisees.
+
 0.14 (03/11/2026) - TSC Meteo (DLL + HLSL a copier, jeu ferme ; l'ini peut rester, les nouvelles cles ont leurs valeurs par defaut)
 - Ambiance pluie lissee d'apres la pluie du jeu (monte en ~15 s, retombe en ~90 s) ; humidite = 1 la force pour essayer.
 - Ciel de pluie : gris, soleil etale, nuages sombres qui defilent (plafond nuageux projete). Monde sous la pluie : delave, plus froid, plus doux.

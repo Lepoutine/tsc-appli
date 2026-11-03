@@ -62,7 +62,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.14"
+#define VERSION "tsc-graphics 0.14.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -979,7 +979,24 @@ static void vider_dds(u64 h, const TEX2D_DESC &d, const void *data, UINT rp) {
    3) quand le jeu attache ses textures au pixel shader (PSSetShaderResources), on remplace la vue du jeu par la vue HD.
    Le jeu garde ses objets : couper (textures_hd = 0) rend instantanement les textures d'origine. Format HD accepte : le meme que
    le jeu, ou son equivalent non compresse (BC1/2/3 -> RGBA8, BC4 -> R8, BC5 -> R8G8, meme espace sRGB). */
-static u64 g_hd_liste[16384]; static int g_hd_n; static i64 g_hd_crees, g_hd_refus, g_hd_octets, g_hd_budget_refus;
+static u64 g_hd_liste[16384]; static int g_hd_n; static i64 g_hd_crees, g_hd_refus, g_hd_octets, g_hd_budget_refus, g_hd_reutil;
+/* 0.14.1 : cache par empreinte. En 0.14 chaque re-creation d'une texture par le jeu (streaming) relisait le .dds et creait une
+   nouvelle texture HD, jamais rendue : 3221 poses pour 1110 fichiers et budget de 6 Go plein en 45 min (mesure 03/11 sur TSCF_Lab).
+   Maintenant une seule texture HD par empreinte, gardee par le cache et partagee par toutes les textures du jeu identiques ;
+   une empreinte refusee (format, budget, fichier) n'est plus relue. Memoire HD bornee par le nombre de fichiers. */
+enum { NHC = 16384 };
+struct HdCache { u64 h; void *v; UINT jf, jw, jh; int etat; };   /* etat 1 = vue HD, 2 = refusee */
+static HdCache g_hc[NHC]; static volatile long g_hc_verrou;
+static void hc_lock() { while (__atomic_exchange_n(&g_hc_verrou, 1, __ATOMIC_ACQUIRE)) {} }
+static void hc_unlock() { __atomic_store_n(&g_hc_verrou, 0, __ATOMIC_RELEASE); }
+static HdCache *hc_trouver(u64 h, bool creer) {
+	unsigned i = (unsigned)(h ^ (h >> 29)) & (NHC - 1);
+	for (int n = 0; n < 256; n++, i = (i + 1) & (NHC - 1)) { if (g_hc[i].h == h) return &g_hc[i]; if (!g_hc[i].h) { if (!creer) return 0; g_hc[i].h = h; g_hc[i].v = 0; g_hc[i].etat = 0; return &g_hc[i]; } }
+	return 0;
+}
+static void hc_noter(u64 h, void *v, const TEX2D_DESC &dj, int etat) {
+	hc_lock(); HdCache *c = hc_trouver(h, true); if (c) { c->v = v; c->jf = dj.Format; c->jw = dj.Width; c->jh = dj.Height; c->etat = etat; } hc_unlock();
+}
 static bool hd_existe(u64 h) { for (int i = 0; i < g_hd_n; i++) if (g_hd_liste[i] == h) return true; return false; }
 static u64 hex16(const char *n) { u64 v = 0; for (int k = 0; k < 16; k++) { char c = n[k]; int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; if (d < 0) return 0; v = v << 4 | (u64)d; } return v; }
 static void hd_lister() {
@@ -1006,14 +1023,14 @@ static bool hd_format_ok(UINT jeu, UINT hd) {
 static void hd_charger(void *tex_jeu, const TEX2D_DESC &dj, u64 h) {
 	char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_textures_hd\\"); char nom[24]; static const char hx[] = "0123456789abcdef";
 	for (int k = 0; k < 16; k++) nom[k] = hx[(h >> (60 - 4 * k)) & 15]; nom[16] = 0; cat(p, nom); cat(p, ".dds");
-	HANDLE f = CreateFileA(p, 0x80000000, 1, 0, 3, 0x80, 0); if (f == INVALID) { g_hd_refus++; return; }
-	DWORD hi = 0, taille = GetFileSize(f, &hi); if (hi || taille < 148 || taille > 512u * 1048576u) { CloseHandle(f); g_hd_refus++; return; }
-	unsigned char *b = (unsigned char *)VirtualAlloc(0, taille, 0x3000, 0x04); if (!b) { CloseHandle(f); g_hd_refus++; return; }
+	HANDLE f = CreateFileA(p, 0x80000000, 1, 0, 3, 0x80, 0); if (f == INVALID) { g_hd_refus++; hc_noter(h, 0, dj, 2); return; }
+	DWORD hi = 0, taille = GetFileSize(f, &hi); if (hi || taille < 148 || taille > 512u * 1048576u) { CloseHandle(f); g_hd_refus++; hc_noter(h, 0, dj, 2); return; }
+	unsigned char *b = (unsigned char *)VirtualAlloc(0, taille, 0x3000, 0x04); if (!b) { CloseHandle(f); g_hd_refus++; hc_noter(h, 0, dj, 2); return; }
 	DWORD lu = 0; ReadFile(f, b, taille, &lu, 0); CloseHandle(f);
 	const UINT *e = (const UINT *)b; Ligne l; l.s("TSC Textures HD "); l.s(nom); l.s(" : ");
-	if (lu != taille || e[0] != 0x20534444 || e[21] != 0x30315844) { l.s("dds invalide (en-tete DX10 attendu)"); journal(l); g_hd_refus++; VirtualFree(b, 0, 0x8000); return; }
+	if (lu != taille || e[0] != 0x20534444 || e[21] != 0x30315844) { l.s("dds invalide (en-tete DX10 attendu)"); journal(l); g_hd_refus++; hc_noter(h, 0, dj, 2); VirtualFree(b, 0, 0x8000); return; }
 	UINT H = e[3], W = e[4], mips = e[7] ? e[7] : 1, fmt = e[32];
-	if (!hd_format_ok(dj.Format, fmt) || W < dj.Width || (u64)W * dj.Height != (u64)H * dj.Width) { l.s("refusee (format "); l.i(fmt); l.s(" "); l.i(W); l.s("x"); l.i(H); l.s(" contre jeu "); l.i(dj.Format); l.s(" "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l); g_hd_refus++; VirtualFree(b, 0, 0x8000); return; }
+	if (!hd_format_ok(dj.Format, fmt) || W < dj.Width || (u64)W * dj.Height != (u64)H * dj.Width) { l.s("refusee (format "); l.i(fmt); l.s(" "); l.i(W); l.s("x"); l.i(H); l.s(" contre jeu "); l.i(dj.Format); l.s(" "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l); g_hd_refus++; hc_noter(h, 0, dj, 2); VirtualFree(b, 0, 0x8000); return; }
 	SUBRES sr[16]; u64 o = 148; UINT ob; bool bloc = format_bloc(fmt, ob); UINT bp = bloc ? 0 : octets_pixel(fmt); if (mips > 16) mips = 16;
 	for (UINT m = 0; m < mips; m++) {
 		UINT w = W >> m ? W >> m : 1, hh = H >> m ? H >> m : 1;
@@ -1021,15 +1038,16 @@ static void hd_charger(void *tex_jeu, const TEX2D_DESC &dj, u64 h) {
 		if (!pitch || o + (u64)pitch * lignes > taille) { mips = m; break; }
 		sr[m].p = b + o; sr[m].pitch = pitch; sr[m].slice = pitch * lignes; o += (u64)pitch * lignes;
 	}
-	if (!mips) { l.s("aucun niveau lisible"); journal(l); g_hd_refus++; VirtualFree(b, 0, 0x8000); return; }
-	if (g_hd_octets + (i64)o > (i64)R.hd_budget_mo * 1048576) { VirtualFree(b, 0, 0x8000); if (g_hd_budget_refus++ < 5) { l.s("budget memoire atteint ("); l.i(g_hd_octets >> 20); l.s(" Mo), texture du jeu gardee"); journal(l); } return; }
+	if (!mips) { l.s("aucun niveau lisible"); journal(l); g_hd_refus++; hc_noter(h, 0, dj, 2); VirtualFree(b, 0, 0x8000); return; }
+	if (g_hd_octets + (i64)o > (i64)R.hd_budget_mo * 1048576) { VirtualFree(b, 0, 0x8000); hc_noter(h, 0, dj, 2); if (g_hd_budget_refus++ < 5) { l.s("budget memoire atteint ("); l.i(g_hd_octets >> 20); l.s(" Mo), texture du jeu gardee"); journal(l); } return; }
 	TEX2D_DESC d; memset(&d, 0, sizeof d); d.Width = W; d.Height = H; d.MipLevels = mips; d.ArraySize = 1; d.Format = fmt; d.SampleCount = 1; d.Usage = 1 /*IMMUTABLE*/; d.BindFlags = 0x8;
 	void *t = 0, *v = 0;
 	g_nous++; HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, &d, sr, &t);
 	if (hr >= 0 && t) ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, t, 0, &v);
 	g_nous--; VirtualFree(b, 0, 0x8000);   /* la carte graphique a sa copie : on rend la memoire du fichier */
-	if (!v) { REL(t); l.s("creation refusee "); l.x((u64)(hr & 0xffffffff)); journal(l); g_hd_refus++; return; }
-	REL(t);   /* la vue garde la texture */
+	if (!v) { REL(t); l.s("creation refusee "); l.x((u64)(hr & 0xffffffff)); journal(l); g_hd_refus++; hc_noter(h, 0, dj, 2); return; }
+	REL(t);   /* la vue garde la texture ; le cache garde la vue (jamais rendue avant la fermeture du jeu) */
+	hc_noter(h, v, dj, 1);
 	tab_lock(); tab_mettre(g_t_cle, g_t_val, tex_jeu, v); tab_unlock();
 	__atomic_store_n(&g_hd_actif, 1, __ATOMIC_RELEASE); g_hd_crees++; __atomic_fetch_add(&g_hd_octets, (i64)(o - 148), __ATOMIC_RELAXED);
 	l.s("posee "); l.i(W); l.s("x"); l.i(H); l.s(" "); l.i(mips); l.s(" niveaux, format "); l.i(fmt); l.s(" (jeu "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l);
@@ -1051,7 +1069,14 @@ static void releve_upd(void *r, UINT sub, const void *box, const void *data, UIN
 	if (d.Width < 16 || d.Height < 16) return;
 	SUBRES m = {data, rp, dp}; u64 taille; u64 hh = empreinte(&m, &d, taille);
 	vider_dds(hh, d, data, rp);
-	if (g_hd_n && g_dev && hd_existe(hh)) { tab_lock(); void *deja = tab_lire(g_t_cle, g_t_val, r); tab_unlock(); if (!deja) hd_charger(r, d, hh); }
+	if (g_hd_n && g_dev && hd_existe(hh)) {
+		tab_lock(); void *deja = tab_lire(g_t_cle, g_t_val, r); tab_unlock();
+		if (!deja) {
+			hc_lock(); HdCache *c = hc_trouver(hh, false); HdCache cc; bool vu = c && c->etat; if (vu) cc = *c; hc_unlock();
+			if (!vu) hd_charger(r, d, hh);
+			else if (cc.etat == 1 && cc.v && cc.jf == d.Format && cc.jw == d.Width && cc.jh == d.Height) { tab_lock(); tab_mettre(g_t_cle, g_t_val, r, cc.v); tab_unlock(); __atomic_fetch_add(&g_hd_reutil, 1, __ATOMIC_RELAXED); }
+		}
+	}
 	Ligne l; l.s(chemin); l.s(";"); l.x(hh); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
 static void WINAPI h_copyres(void *c, void *dst, void *src) {
@@ -1543,7 +1568,7 @@ static void apres_image(void *sc) {
 		{ Ligne z; z.s("etage apres tone mapping : images avec les 3 ecrans "); z.i(g_ldr_img3); z.s(", images incompletes "); z.i(g_ldr_imgpas3); z.s(", autres cibles 8 bits ignorees "); z.i(g_ldr_saut); journal(z); }
 		Ligne u; u.s("TSC Textures (tri) : updates vers decor "); u.i(g_upd_decor); u.s(", dont boite partielle "); u.i(g_upd_boite_part); u.s(", niveaux >0 "); u.i(g_upd_niv);
 		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); u.s(" ; extraites "); u.i(g_vide_n); u.s(" ("); u.i(g_vide_octets >> 20); u.s(" Mo, formats refuses "); u.i(g_vide_refus); u.s(")"); journal(u);
-		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees "); x.i(g_hd_crees); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(", memoire HD "); x.i(g_hd_octets >> 20); x.s(" Mo / budget "); x.i((i64)R.hd_budget_mo); x.s(", hors budget "); x.i(g_hd_budget_refus); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
+		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees (uniques) "); x.i(g_hd_crees); x.s(", reutilisees "); x.i(g_hd_reutil); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(", memoire HD "); x.i(g_hd_octets >> 20); x.s(" Mo / budget "); x.i((i64)R.hd_budget_mo); x.s(", hors budget "); x.i(g_hd_budget_refus); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
