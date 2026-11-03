@@ -6,7 +6,7 @@ Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets m
   - asphalte mouille plus sombre et un peu plus sature, marquages au sol mats ;
   - fondu au-dela de 150 m, rayon sorti de l'ecran -> dernier point visible (rien d'invente) ;
   - distance relue avec le decalage mesure sur un vidage reel du jeu (decalage_z = -0,000194).
-Shader compile sans erreur ni avertissement avec d3dcompiler_47 du Shadow (ps_5_0, ~443 instructions).
+Version precedente du shader compilee sans erreur sur le Shadow (ps_5_0, ~443 instructions) ; cette version finale est a recompiler.
 
 Pose (jeu ferme) : copier tsc-graphics.dll, tsc-graphics.hlsl et tsc-graphics.ini dans
   <ETS2>\bin\win_x64\plugins
