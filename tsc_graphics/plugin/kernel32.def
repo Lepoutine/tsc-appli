@@ -1,0 +1,15 @@
+LIBRARY kernel32.dll
+EXPORTS
+LoadLibraryA
+GetProcAddress
+VirtualProtect
+CreateFileA
+ReadFile
+WriteFile
+GetFileSize
+CloseHandle
+GetModuleFileNameA
+GetTickCount64
+QueryPerformanceCounter
+QueryPerformanceFrequency
+GetModuleHandleExA
