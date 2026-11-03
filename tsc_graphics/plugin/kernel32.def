@@ -21,3 +21,4 @@ GetCurrentProcess
 FindFirstFileA
 FindNextFileA
 FindClose
+MoveFileExA

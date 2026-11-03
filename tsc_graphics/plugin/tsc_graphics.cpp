@@ -35,6 +35,7 @@ __declspec(dllimport) HANDLE WINAPI CreateFileA(const char *, DWORD, DWORD, void
 __declspec(dllimport) BOOL WINAPI ReadFile(HANDLE, void *, DWORD, DWORD *, void *);
 __declspec(dllimport) BOOL WINAPI WriteFile(HANDLE, const void *, DWORD, DWORD *, void *);
 __declspec(dllimport) DWORD WINAPI GetFileSize(HANDLE, DWORD *);
+__declspec(dllimport) BOOL WINAPI MoveFileExA(const char *, const char *, DWORD);
 __declspec(dllimport) BOOL WINAPI CloseHandle(HANDLE);
 __declspec(dllimport) BOOL WINAPI CreateDirectoryA(const char *, void *);
 __declspec(dllimport) void *WINAPI VirtualAlloc(void *, SIZE_T, DWORD, DWORD);
@@ -77,6 +78,15 @@ static void ecrire(const char *fichier, const char *txt, int n) {
 	char p[340] = {0}; cat(p, g_dir); cat(p, fichier);
 	HANDLE f = CreateFileA(p, 4 /*FILE_APPEND_DATA*/, 1, 0, 4 /*OPEN_ALWAYS*/, 0x80, 0);
 	if (f == INVALID) return; DWORD w; WriteFile(f, txt, (DWORD)n, &w, 0); CloseHandle(f);
+}
+/* 0.14 : rotation au debut d'une session : un fichier de plus de max_mo Mo devient <nom>.ancien (l'ancien .ancien est remplace) */
+static void tourner(const char *fichier, DWORD max_mo) {
+	char p[340] = {0}; cat(p, g_dir); cat(p, fichier);
+	HANDLE f = CreateFileA(p, 0x80000000, 7, 0, 3, 0x80, 0); if (f == INVALID) return;
+	DWORD hi = 0, lo = GetFileSize(f, &hi); CloseHandle(f);
+	if (!hi && lo < max_mo * 1048576u) return;
+	char q[360] = {0}; cat(q, p); cat(q, ".ancien");
+	MoveFileExA(p, q, 1 /*MOVEFILE_REPLACE_EXISTING*/);
 }
 static void journal(Ligne &l) { l.s("\r\n"); ecrire("tsc-graphics.log", l.t, l.n); }
 static void logline(const char *a, i64 v = -1) { Ligne l; l.s(a); if (v >= 0) { l.s(" "); l.i(v); } journal(l); }
@@ -898,7 +908,7 @@ static Ecrit *ec_trouver(void *r, UINT sub, bool creer) {
 }
 static void tx_ligne(Ligne &l) {
 	while (__atomic_exchange_n(&g_tx_verrou, 1, __ATOMIC_ACQUIRE)) {}
-	if (g_tx_lignes == 0) { const char *t = "# " VERSION " : chemin;empreinte;largeur;hauteur;niveaux;tableau;format;usage;bind;niveau;octets;tick_ms\r\n"; ecrire("tsc-textures.csv", t, lng(t)); }
+	if (g_tx_lignes == 0) { tourner("tsc-textures.csv", 64); const char *t = "# " VERSION " : chemin;empreinte;largeur;hauteur;niveaux;tableau;format;usage;bind;niveau;octets;tick_ms\r\n"; ecrire("tsc-textures.csv", t, lng(t)); }
 	if (g_tx_lignes < 40000) { g_tx_lignes++; ecrire("tsc-textures.csv", l.t, l.n); }
 	__atomic_store_n(&g_tx_verrou, 0, __ATOMIC_RELEASE);
 }
@@ -1404,6 +1414,7 @@ static void prof_emettre(ProfLigne &r) {
 	if (R.profil < 0.5f) return;
 	if (!g_csv_entete) {
 		g_csv_entete = 1;
+		tourner("tsc-profil.csv", 32);   /* 40 Mo vus le 03/11 : le Perf Lab ne lit que la fin, mais le fichier ne doit pas grossir sans fin */
 		Ligne e; e.s("# "); e.s(VERSION); e.s(" ; session demarree au tick "); e.i((i64)GetTickCount64()); e.s(" ms ; QPC "); e.i(g_freq); e.s(" Hz\r\n"); prof_ajouter(e);
 		Ligne c; c.s("image;t_ms;image_ms;gpu_ms;dessins;cibles;vues_gbuffer;vues_tsc;map_lect;map_ms;getdata_jeu;getdata_ms;shaders_crees;textures_creees;creation_ms;vram_mo;effet\r\n"); prof_ajouter(c);
 	}
