@@ -1,0 +1,22 @@
+LIBRARY kernel32.dll
+EXPORTS
+CreateThread
+WaitForSingleObject
+CloseHandle
+Sleep
+LoadLibraryW
+FreeLibrary
+GetProcAddress
+GetProcessHeap
+HeapAlloc
+HeapFree
+GetEnvironmentVariableW
+CreateFileW
+ReadFile
+WriteFile
+GetFileSize
+FindFirstFileW
+FindNextFileW
+FindClose
+GetCurrentProcessId
+GetTickCount

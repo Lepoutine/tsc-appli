@@ -29,3 +29,21 @@ La banque est en Vorbis (code FSB5 15) : elle se décode avec vgmstream, sur une
 
 ## Niveaux mesurés (03/11/2026)
 Les couches `rv8op <rpm>ex` d'origine ont des niveaux très inégaux : environ −34 dB RMS à 550 tr/min et −12 dB à 2000, soit un écart de 12 fois. Dans l'aperçu, elles sont égalisées sur une cible qui monte de −17 dB à 600 tr/min jusqu'à −13 dB à 2000. Les couches clapet fermé (`rv8 exl`) sont égalisées 3 dB plus bas. Les sons d'ouverture et de fermeture ont leur crête ramenée à −3 dB.
+
+## Plugin tsc-clapet.dll 0.1 (étape B, 03/11/2026)
+- Source : `sound_forge/plugin_clapet/`. C++ sans CRT ni SDK Windows, construit avec `construire.sh` (clang + lld-link). Test sous Linux : `test/lancer.sh` (faux jeu, faux Windows, faux XAudio2, ASan), 25 vérifications.
+- Plugin de télémétrie : il lit `truck.engine.rpm`, `truck.effective.throttle` et `truck.engine.enabled`, plus les événements pause et reprise. Les callbacks du jeu ne font que recopier ces valeurs.
+- Tout le reste se passe dans un fil à lui :
+  - la touche V seule, lue quand la fenêtre du jeu est devant et pas en pause ;
+  - le son, avec XAudio2 de Windows (xaudio2_9.dll, aucune licence tierce) ;
+  - la lecture des fichiers.
+- Les sons sont dans `%LOCALAPPDATA%\TruckSoCleanFrance\TSC\clapet\` :
+  - `c_<régime>.wav` en PCM 16 bits, 24 couches au plus ;
+  - `ouverture.wav` et `fermeture.wav` ;
+  - `reglages.ini` (`volume=80`).
+  Le plugin écrit `journal.txt` dans ce même dossier.
+- La recette est la même que dans Sound Forge, à une différence près : le plugin ne peut pas baisser l'échappement du jeu, donc le clapet s'ajoute par-dessus.
+- Limites :
+  - pas encore de multijoueur (étape C) ;
+  - V tapé dans le chat ouvre aussi le clapet ;
+  - les sons du R770 sont réservés à un usage personnel tant que l'auteur n'a pas donné son accord.
