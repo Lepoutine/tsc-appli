@@ -14,7 +14,7 @@
    "nom": "TSC Neural Graphics Expert",
    "specialite": "rendu DX11 d'ETS2, shaders HLSL, reflets, ombres, eclairage, photorealisme temps reel",
    "niveau": 3,
-   "preuve_niveau": "plugin tsc-graphics 0.1 a 0.14 construit et pose dans TSCF_Lab, audit du pipeline prouve (G-buffer, Z inverse, cout SSR 1,1-2,0 ms) ; rendu final pas encore valide en jeu par Mendy",
+   "preuve_niveau": "plugin tsc-graphics 0.1 a 0.14 construit et pose dans TSCF_Lab, audit du pipeline prouve (G-buffer, Z inverse, cout SSR 1,1-2,0 ms) ; rendu final pas encore valide en jeu par Mendy ; sources : branche claude/project-thread-a76ees, plugin 0.14 commit 414d468 (meteo 0.14 pas encore posee)",
    "outils": [
     {
      "nom": "plugin tsc-graphics (dll + hlsl + ini)",
@@ -73,7 +73,7 @@
    "nom": "TSC Textures Expert",
    "specialite": "textures, materiaux, UV, normal maps, DDS/BC, skins de remorques et tracteurs",
    "niveau": 3,
-   "preuve_niveau": "lot IA textures HD (Real-ESRGAN + grain + detecteur d'hallucination + encodeur BC maison PSNR 36,4 dB) en cours ; skins Spartan construits par scripts ; pas encore de validation en jeu du lot",
+   "preuve_niveau": "lot IA textures HD (Real-ESRGAN + grain + detecteur d'hallucination + encodeur BC maison PSNR 36,4 dB) en cours ; skins Spartan construits par scripts ; pas encore de validation en jeu du lot ; textures HD en memoire 0.13.1 ; TSC Textures IA GPU commit 31e7a60 (testee a blanc seulement) ; TSC-IA numpy v1 entrainee sur le Shadow",
    "outils": [
     {
      "nom": "TSC Textures IA (entrainement, application, boucle)",
