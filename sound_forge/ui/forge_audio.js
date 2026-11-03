@@ -10,6 +10,9 @@
     charge:     { nom: 'Accélération (charge)', court: 'Charge', boucle: true,  rpm: 1200, sim: true },
     sans:       { nom: 'Lever de pied', court: 'Pied levé',         boucle: true,  rpm: 1200, sim: true },
     turbo:      { nom: 'Turbo', court: 'Turbo',                 boucle: true,  rpm: 0,    sim: true },
+    clapet:     { nom: 'Clapet ouvert (par régime)', court: 'Clapet', boucle: true, rpm: 1200, sim: true },
+    clapet_on:  { nom: 'Ouverture du clapet', court: 'Clapet +',  boucle: false, rpm: 0,    sim: false },
+    clapet_off: { nom: 'Fermeture du clapet', court: 'Clapet −',  boucle: false, rpm: 0,    sim: false },
     demarrage:  { nom: 'Démarrage', court: 'Démarrage',             boucle: false, rpm: 0,    sim: false },
     arret:      { nom: 'Arrêt', court: 'Arrêt',                 boucle: false, rpm: 0,    sim: false },
     autre:      { nom: 'Autre (non utilisé)', court: 'Autre',   boucle: false, rpm: 0,    sim: false }
@@ -66,7 +69,11 @@
 
   /* Poids de chaque couche pour un régime et une charge donnés.
      Fondu à puissance constante entre les deux couches de régime voisines, mélange charge / lever de pied selon la charge. */
-  SF.poids = function (couches, rpm, charge) {
+  /* clapet : 0 = fermé, 1 = ouvert (TSC Clapet). Ouvert, les couches « clapet » prennent le dessus
+     et l'échappement normal baisse de CLAPET_BAISSE. */
+  SF.CLAPET_BAISSE = 0.6;
+  SF.poids = function (couches, rpm, charge, clapet) {
+    const K = Math.max(0, Math.min(1, clapet || 0));
     const res = {};
     couches.forEach(c => { res[c.id] = { g: 0, vitesse: 1 }; });
     const L = Math.max(0, Math.min(1, charge));
@@ -89,8 +96,13 @@
       res[b.id].g += poidsGroupe * Math.sin(t * Math.PI / 2);
     }
     fondu(gc, pc); fondu(gs, ps);
+    const gk = couches.filter(c => c.role === 'clapet').sort((a, b) => a.rpm - b.rpm);
+    if (gk.length) {
+      couches.forEach(c => { if (c.role === 'ralenti' || c.role === 'charge' || c.role === 'sans') res[c.id].g *= 1 - SF.CLAPET_BAISSE * K; });
+      fondu(gk, K * (0.55 + 0.45 * L)); // plus fort en charge, présent aussi au lever de pied
+    }
     couches.forEach(c => {
-      if (c.role === 'ralenti' || c.role === 'charge' || c.role === 'sans') {
+      if (c.role === 'ralenti' || c.role === 'charge' || c.role === 'sans' || c.role === 'clapet') {
         res[c.id].vitesse = Math.max(0.5, Math.min(2, rpm / Math.max(100, c.rpm)));
       } else if (c.role === 'turbo') {
         const k = Math.max(0, Math.min(1, (rpm - 1000) / 1000));
@@ -131,6 +143,13 @@
     const x = SF.ctx(), len = solo.f - solo.d, t = x.currentTime - solo.t0;
     return solo.d + (solo.boucle ? t % len : Math.min(t, len));
   };
+  /* effet ponctuel (ouverture / fermeture du clapet) joué par-dessus le moteur, sans couper le reste */
+  SF.joueEffet = function (c, buf) {
+    const x = SF.ctx(), s = x.createBufferSource(); s.buffer = buf;
+    const m = x.createGain(); m.gain.value = 0.9; m.connect(x.destination);
+    const ch = chaine(c, buf, m); s.connect(ch.entree);
+    s.start(0, c.debut, Math.max(0.01, c.fin - c.debut)); s.onended = () => m.disconnect();
+  };
   SF.stopSolo = function () { if (solo) { try { solo.s.stop(); } catch (e) {} solo.m.disconnect(); solo = null; } };
 
   /* simulateur : toutes les couches de moteur jouent en boucle, leur volume et leur vitesse suivent régime et charge */
@@ -152,8 +171,8 @@
       });
       this.marche = true;
     };
-    this.regle = function (couches, bufs, rpm, charge) {
-      const p = SF.poids(couches.filter(c => voix[c.id]), rpm, charge), t = x.currentTime;
+    this.regle = function (couches, bufs, rpm, charge, clapet) {
+      const p = SF.poids(couches.filter(c => voix[c.id]), rpm, charge, clapet), t = x.currentTime;
       Object.keys(voix).forEach(id => {
         const v = voix[id], q = p[id] || { g: 0, vitesse: 1 };
         v.mix.gain.setTargetAtTime(q.g, t, 0.04);
