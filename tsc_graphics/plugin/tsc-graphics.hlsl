@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -6,6 +6,7 @@ Texture2D tCouleur : register(t0);
 Texture2D<float> tProf : register(t1);
 Texture2D<float> tLm : register(t3);   // 0.9.1 : luminance moyenne de l'image, mesuree une fois (vue 1) et partagee par les 3 vues
 Texture2D tGb2 : register(t2);
+Texture3D tLutP : register(t5);   // 0.14 : table de couleurs de pluie (meme format), melangee selon l'ambiance pluie
 Texture3D tLut : register(t4);   // 0.9.2 : table de couleurs 32x32x32 (entree/sortie en sRGB), apprise jeu -> videos reelles   // 0.7 : cible 2 du G-buffer (albedo RGB, alpha = masque du feuillage) ; absente = vegetation coupee
 SamplerState sLin : register(s0);
 SamplerState sPt : register(s1);
@@ -26,6 +27,10 @@ cbuffer P : register(b0) {
 	float4 p13; // 0.9 apres tone mapping : exposition, contraste, epaule (debut de la compression des blancs), saturation
 	float4 p14; // 0.9 : saturation des hautes lumieres (negatif = moins), temperature, teinte (vert/magenta), point noir
 	float4 p15; // 0.9 : verts ; 0.9.1 : y = reference partagee presente ; 0.9.2 : z = force de la table de couleurs, w = taille (0 = absente)
+	float4 p16; // 0.14 meteo : marche, brume au sol (force), hauteur de la brume (m), hauteur de l'oeil (m)
+	float4 p17; // 0.14 : rideau de pluie (force), vitesse de chute, inclinaison, temps (s, continu)
+	float4 p18; // 0.14 : nuages de pluie (force), ambiance pluie lissee 0-1, delavage, froid
+	float4 p19; // 0.14 : contraste sous la pluie, force de la table de pluie, taille de la table de pluie (0 = absente), libre
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -353,12 +358,89 @@ float3 finition(float2 uv, float3 c, float lm, float nuit) {
 float nuit_de(float lm) {
 	return p8.y > 0.5 ? saturate((log2(max(p8.w, 1e-5)) - log2(lm)) / max(log2(max(p8.w, 1e-5)) - log2(max(p8.z, 1e-6)), 0.1)) : 0;
 }
+// ---------- 0.14 : TSC Meteo, dans le HDR, avant la vitre (la pluie et la brume sont DEHORS) ----------
+// Ambiance pluie p18.y : lissee par le plugin (monte en ~15 s quand le jeu fait pleuvoir, retombe en ~90 s).
+float vn(float2 p) { float2 i = floor(p), f = frac(p); f = f * f * (3 - 2 * f);
+	return lerp(lerp(h21(i), h21(i + float2(1, 0)), f.x), lerp(h21(i + float2(0, 1)), h21(i + 1), f.x), f.y); }
+float fbm(float2 p) { float s = 0, a = 0.5; [unroll] for (int k = 0; k < 4; k++) { s += a * vn(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+float3 meteo(float2 uv, float3 c, float lm, float nuit) {
+	float on = p16.x; if (on <= 0) return c;
+	float d = tProf.SampleLevel(sPt, uv, 0);
+	if (cabine(d)) return c;                       // l'interieur de la cabine n'est pas sous la pluie
+	bool sky = ciel(d);
+	float pa = saturate(p18.y) * saturate(on);
+	float2 ndc = uv * float2(2, -2) + float2(-1, 1);
+	float3 dir = normalize(float3(ndc.x * p0.z * p0.w, ndc.y * p0.z, 1));   // repere de la vue, y vers le haut
+	float z = sky ? 3000 : lineaire(d);
+	float t = p17.w;
+	// 1) ciel couvert et nuages de pluie / monde sous la pluie (lumiere diffuse, couleurs lavees, plus froid, moins de contraste)
+	if (pa > 0.001) {
+		if (sky) {
+			float l = lum(c);
+			float3 s = lerp(c, l * float3(0.97, 1.0, 1.04), 0.65 * pa);
+			float3 m5 = tCouleur.SampleLevel(sLin, uv, min(5, p5.w)).rgb;          // le soleil et les trouees s'etalent sous la couche
+			s = lerp(s, lum(m5) * float3(0.97, 1.0, 1.04), 0.35 * pa);
+			if (p18.x > 0) {
+				float2 q = dir.xz / max(dir.y + 0.08, 0.04) * 0.6;                  // projection sur un plafond de nuages
+				float n = fbm(q + float2(t * 0.010, t * 0.004));
+				float masse = smoothstep(0.35, 0.75, n);
+				float horizon = saturate(1 - dir.y * 2.5);
+				s *= 1 - saturate(p18.x) * pa * (0.15 + 0.35 * masse) * lerp(0.6, 1.0, horizon);
+			}
+			c = s;
+		} else {
+			float l = lum(c);
+			c = lerp(c, float3(l, l, l), saturate(p18.z) * pa);
+			c *= lerp(float3(1, 1, 1), float3(0.96, 1.0, 1.06), saturate(p18.w) * pa);
+			float kc = lerp(1, clamp(p19.x, 0.5, 1.5), pa);
+			c *= clamp(pow(max(l / lm, 1e-3), kc - 1), 0.5, 2.0);
+		}
+	}
+	// 2) brume au sol : densite qui decroit avec la hauteur (exponentielle), integree le long du rayon depuis l'oeil
+	if (p16.y > 0) {
+		float H = max(p16.z, 0.5), h0 = max(p16.w, 0.3);
+		float dens = p16.y * (0.1 + 0.9 * pa + 0.5 * nuit) * 0.004;
+		float L = z / max(dir.z, 0.2);
+		float b = clamp(dir.y * L / H, -20, 50);
+		float integ = L * exp(-h0 / H) * (abs(b) > 1e-3 ? (1 - exp(-b)) / b : 1);
+		float f = min(1 - exp(-dens * integ), 0.85) * saturate((z - 3) / 20);
+		float3 coul = lm * float3(0.93, 0.97, 1.02) * lerp(1.25, 0.6, nuit);
+		float3 diff = tCouleur.SampleLevel(sLin, uv, min(5, p5.w)).rgb;        // la nuit, la brume prend la lumiere des phares et lampadaires
+		coul += max(diff - lm, 0) * 0.5 * nuit;
+		c = lerp(c, coul, f);
+	}
+	// 3) rideau de pluie : 3 couches (4, 11, 30 m), visibles seulement devant le decor plus lointain, eclairees par la lumiere locale
+	if (p17.x > 0 && pa > 0.05) {
+		float3 loc = tCouleur.SampleLevel(sLin, uv, min(4, p5.w)).rgb;
+		float eclair = lm * 0.3 + lum(max(loc - lm * 1.5, 0)) * 0.6;
+		float acc = 0;
+		[unroll] for (int k = 0; k < 3; k++) {
+			float D = k == 0 ? 4.0 : (k == 1 ? 11.0 : 30.0);
+			if (!sky && z < D) continue;
+			float cols = k == 0 ? 60.0 : (k == 1 ? 120.0 : 220.0);
+			float wid = k == 0 ? 0.07 : (k == 1 ? 0.10 : 0.15);
+			float sp = max(p17.y, 0.1) * 11.4 / D;                             // ~9 m/s, en hauteurs d'ecran par seconde
+			float2 q = float2(uv.x * p0.w, uv.y); q.x += q.y * p17.z;
+			float2 cel = float2(cols, cols / 8);
+			float2 r = q * cel - float2(0, t * sp * cel.y);
+			float2 id = floor(r), f = frac(r);
+			float rx = h21(id + k * 7.1), ry = h21(id + 3.7 + k), pr = step(0.55, h21(id + 11.3 + k));
+			float dx = abs(f.x - (0.2 + 0.6 * rx));
+			float len = 0.35 + 0.3 * ry, fy = frac(f.y + ry);
+			float tr = saturate(1 - dx / wid) * smoothstep(0, 0.1, fy) * smoothstep(len, len - 0.25, fy);
+			acc += tr * pr * (k == 0 ? 1.0 : (k == 1 ? 0.7 : 0.45));
+		}
+		c += eclair * acc * saturate(p17.x) * pa * float3(0.9, 0.95, 1.0) * 0.6;
+	}
+	return c;
+}
 float4 ps_principal(VSO i) : SV_Target {
 	float4 r = route(i);
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
 	float lm = lm_vue();
 	float nt = nuit_de(lm);
 	float3 v = monde_photo(i.uv, r.rgb, lm, nt);
+	v = meteo(i.uv, v, lm, nt);
 	v = vitre(i.uv, v);
 	v = camera(i.uv, v);
 	float3 f = finition(i.uv, v, lm, nt);
@@ -411,6 +493,8 @@ float4 ps_ldr(VSO i) : SV_Target {
 		float3 e = pow(c, 1 / 2.2);
 		float3 uvw = (e * (p15.w - 1) + 0.5) / p15.w;
 		float3 o = pow(saturate(tLut.SampleLevel(sLin, uvw, 0).rgb), 2.2);
+		// 0.14 : sous la pluie, table apprise sur les videos de pluie (si presente)
+		if (p19.z > 1 && p19.y > 0 && p16.x > 0) o = lerp(o, pow(saturate(tLutP.SampleLevel(sLin, uvw, 0).rgb), 2.2), saturate(p18.y * p19.y * p16.x));
 		// 0.9.3 : les surfaces neutres (route, beton, plafond) ne prennent que le changement de lumiere, pas de teinte (marbrure jaune vue au reglage)
 		float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
 		float wn = smoothstep(0.02, 0.35, (mx - mn) / max(mx, 1e-4)); // 0.9.4 : transition elargie (joint montant droit : pare-brise sature / cabine neutre traites trop differemment)

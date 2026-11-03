@@ -61,7 +61,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.13.1"
+#define VERSION "tsc-graphics 0.14"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -113,6 +113,11 @@ struct Reglages {
 	/* 0.9.3 : TSC Neural, donnees d'entrainement : changer ce nombre (N) = N images enregistrees, une toutes les 2 s, image du jeu
 	   SANS effet TSC (HDR, profondeur, albedo+feuillage, vue 8 bits du jeu) dans plugins\\tsc_neural */
 	float enregistre = 0;
+	/* 0.14 : TSC Meteo. Ambiance pluie lissee (d'apres la passe des gouttes du jeu, ou l'humidite forcee) : ciel couvert et nuages de pluie,
+	   monde delave et plus froid, brume au sol (par la hauteur), rideau de pluie en 3 couches derriere lesquelles on voit le decor,
+	   table de couleurs de pluie (tsc-graphics-lut-pluie.bin) melangee a celle du jour. Tout a chaud ; meteo = 0 coupe tout. */
+	float meteo = 1, brume_sol = 0.5f, brume_hauteur = 6, oeil = 2.6f, rideau = 0.6f, pluie_vitesse = 1, pluie_incl = 0.15f, nuages = 0.5f;
+	float pluie_delave = 0.25f, pluie_froid = 0.3f, pluie_contraste = 0.9f, ldr_lut_pluie = 1, pluie_montee_s = 15, pluie_fin_s = 90;
 	float hd_budget_mo = 6000;   /* 0.13.1 : memoire video maximale des textures HD (Mo) ; au-dela, les suivantes restent celles du jeu */
 	float textures_hd = 1;   /* 0.13 : remplacement a la volee par plugins\\tsc_textures_hd\\<empreinte>.dds (1 = marche, 0 = textures du jeu) */
 	float vider_textures = 0;   /* 0.12 : TSC Textures, extraction du niveau 0 des textures de decor en .dds (Mo maximum ; 0 = coupe) -> plugins\\tsc_textures_brut */
@@ -126,7 +131,7 @@ static double nombre(const char *&p) { double s = 1, v = 0, d = 0.1; while (*p =
 	while (*p >= '0' && *p <= '9') v = v * 10 + (*p++ - '0'); if (*p == '.' || *p == ',') { p++; while (*p >= '0' && *p <= '9') { v += (*p++ - '0') * d; d *= 0.1; } } return v * s; }
 static bool cle(const char *l, const char *k) { int i = 0; while (k[i] && l[i] == k[i]) i++; if (k[i]) return false; while (l[i] == ' ') i++; return l[i] == '='; }
 static void lire_ini(bool force) {
-	static char b[8192]; int n = lire_fichier("tsc-graphics.ini", b, sizeof b); if (n < 0) return;
+	static char b[16384]; int n = lire_fichier("tsc-graphics.ini", b, sizeof b); if (n < 0) return;
 	u64 h = 1469598103934665603ULL; for (int i = 0; i < n; i++) h = (h ^ (unsigned char)b[i]) * 1099511628211ULL;
 	if (!force && h == g_ini_hash) return; g_ini_hash = h;
 	struct { const char *k; float *v; } t[] = { {"actif", &R.actif}, {"humidite", &R.humidite}, {"fov_v", &R.fov_v}, {"proche", &R.proche},
@@ -143,7 +148,10 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"hd_budget_mo", &R.hd_budget_mo} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"hd_budget_mo", &R.hd_budget_mo},
+		{"meteo", &R.meteo}, {"brume_sol", &R.brume_sol}, {"brume_hauteur", &R.brume_hauteur}, {"oeil", &R.oeil}, {"rideau", &R.rideau}, {"pluie_vitesse", &R.pluie_vitesse},
+		{"pluie_incl", &R.pluie_incl}, {"nuages", &R.nuages}, {"pluie_delave", &R.pluie_delave}, {"pluie_froid", &R.pluie_froid}, {"pluie_contraste", &R.pluie_contraste},
+		{"ldr_lut_pluie", &R.ldr_lut_pluie}, {"pluie_montee_s", &R.pluie_montee_s}, {"pluie_fin_s", &R.pluie_fin_s} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -243,14 +251,14 @@ static int g_etape;                       /* ou en est la vue en cours */
 static void *g_hdr_tex, *g_vue_prof;      /* cible HDR et profondeur de la vue en cours (references gardees) */
 static int g_vues_image, g_vues_traitees; static i64 g_n_petites;  /* G-buffer de petites vues ignorees (sondes) */ /* vues vues / traitees sur l'image en cours */
 static int g_dans_gouttes; static i64 g_gouttes, g_gouttes_rapport;
-static float g_mouille = 0; static int g_pluie;
+static float g_mouille = 0, g_amb_pluie = 0; static int g_pluie;
 static i64 g_n_gbuf, g_n_hdr;             /* diagnostics */
 static float g_val_effacement = -1;
 
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
 static void *g_ps_lm, *g_lm, *g_lm_srv, *g_lm_rtv;
-static void *g_lut, *g_lut_srv; static u64 g_lut_hash;
+static void *g_lut, *g_lut_srv; static u64 g_lut_hash; static void *g_lutp, *g_lutp_srv; static u64 g_lutp_hash;   /* 0.14 : table de pluie */
 static int g_enr_image, g_enr_reste, g_enr_num; static u64 g_enr_t;   /* 0.9.3 : enregistrement TSC Neural */   /* 0.9.2 : table de couleurs 3D */   /* 0.9.1 : reference de lumiere partagee par les 3 vues */
 static void *g_ps_ldr, *g_ldr, *g_ldr_srv, *g_ldr_tex; static UINT g_ldr_w, g_ldr_h, g_ldr_fmt; static int g_ldr_n; static i64 g_n_ldr;   /* 0.9 */
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
@@ -305,21 +313,33 @@ static HRESULT dev_tex(const TEX2D_DESC *d, void **out) {   /* g_nous : nos crea
 /* 0.9.2 : table de couleurs 3D relue a chaud (comme l'ini) ; absente = etage sans table */
 struct TEX3D_DESC { UINT Width, Height, Depth, MipLevels, Format, Usage, BindFlags, CPUAccessFlags, MiscFlags; };
 struct SUBRES { const void *p; UINT pitch, slice; };
-static void charger_lut() {
+static void charger_une_lut(const char *nom, void *&tex, void *&srv, u64 &hash) {
 	enum { N = 32, TAILLE = N * N * N * 8 };
-	static char b[TAILLE + 16]; int n = lire_fichier("tsc-graphics-lut.bin", b, sizeof b);
-	if (n != TAILLE) { if (g_lut && n < 0) { REL(g_lut_srv); REL(g_lut); g_lut_hash = 0; logline("table de couleurs retiree"); } return; }
+	static char b[TAILLE + 16]; int n = lire_fichier(nom, b, sizeof b);
+	if (n != TAILLE) { if (tex && n < 0) { REL(srv); REL(tex); hash = 0; Ligne l; l.s("table de couleurs retiree : "); l.s(nom); journal(l); } return; }
 	u64 h = 1469598103934665603ULL; for (int i = 0; i < n; i++) h = (h ^ (unsigned char)b[i]) * 1099511628211ULL;
-	if (h == g_lut_hash) return; g_lut_hash = h;
-	REL(g_lut_srv); REL(g_lut);
+	if (h == hash) return; hash = h;
+	REL(srv); REL(tex);
 	TEX3D_DESC d = {N, N, N, 1, 11 /*R16G16B16A16_UNORM*/, 0, 8, 0, 0};
 	SUBRES sr = {b, N * 8, N * N * 8};
 	g_nous++;
-	HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX3D_DESC *, const SUBRES *, void **))VT(g_dev)[6 /*CreateTexture3D*/])(g_dev, &d, &sr, &g_lut);
-	if (hr >= 0 && g_lut) ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_lut, 0, &g_lut_srv);
+	HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX3D_DESC *, const SUBRES *, void **))VT(g_dev)[6 /*CreateTexture3D*/])(g_dev, &d, &sr, &tex);
+	if (hr >= 0 && tex) ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, tex, 0, &srv);
 	g_nous--;
-	if (hr < 0 || !g_lut_srv) { REL(g_lut); logline("table de couleurs refusee", hr); return; }
-	logline("table de couleurs chargee (tsc-graphics-lut.bin, 32x32x32)");
+	Ligne l; if (hr < 0 || !srv) { REL(tex); l.s("table de couleurs refusee : "); l.s(nom); journal(l); return; }
+	l.s("table de couleurs chargee ("); l.s(nom); l.s(", 32x32x32)"); journal(l);
+}
+static void charger_lut() {
+	charger_une_lut("tsc-graphics-lut.bin", g_lut, g_lut_srv, g_lut_hash);
+	charger_une_lut("tsc-graphics-lut-pluie.bin", g_lutp, g_lutp_srv, g_lutp_hash);
+}
+/* 0.14 : constantes meteo (p16-p19), communes a la passe HDR et a l'etage apres tone mapping */
+static void meteo_cb(float *c) {
+	float on = R.meteo > 0 ? R.meteo : 0, pa = g_amb_pluie;
+	c[64] = on; c[65] = R.brume_sol; c[66] = R.brume_hauteur > 0.5f ? R.brume_hauteur : 0.5f; c[67] = R.oeil;
+	c[68] = R.rideau; c[69] = R.pluie_vitesse; c[70] = R.pluie_incl; c[71] = (float)(GetTickCount64() % 1000000) / 1000.0f;
+	c[72] = R.nuages; c[73] = pa; c[74] = R.pluie_delave; c[75] = R.pluie_froid;
+	c[76] = R.pluie_contraste; c[77] = R.ldr_lut_pluie; c[78] = g_lutp_srv ? 32.0f : 0.0f; c[79] = 0;
 }
 /* 0.9.3 : copie GPU -> disque d'une texture (niveau 0), en-tete 32 octets : "TSCN", largeur, hauteur, format DXGI, pas de ligne */
 static void vider_tex(void *src, const char *quoi, int vue) {
@@ -405,7 +425,7 @@ static bool init_appareil(void *sc) {
 	int fl = ((int (WINAPI *)(void *))VT(g_dev)[D_GetFeatureLevel])(g_dev), choisi = 0;
 	HRESULT hr = ((HRESULT (WINAPI *)(void *, UINT, const int *, UINT, UINT, const GUIDx *, int *, void **))VT(g_dev1)[D1_CreateDeviceContextState])(g_dev1, 0, &fl, 1, 7, &IID_Dev, &choisi, &g_etat);
 	if (hr < 0 || !g_etat) { logline("CreateDeviceContextState refuse", hr & 0xffffffffLL); g_etat = 0; return false; }
-	BUF_DESC bd = {256, 2, 4, 0x10000, 0, 0};
+	BUF_DESC bd = {320, 2, 4, 0x10000, 0, 0};   /* 0.14 : 20 float4 */
 	((HRESULT (WINAPI *)(void *, const BUF_DESC *, const void *, void **))VT(g_dev)[D_CreateBuffer])(g_dev, &bd, 0, &g_cb);
 	SAMP_DESC s = {0x15, 3, 3, 3, 0, 1, 1, {0, 0, 0, 0}, 0, 3.4e38f};
 	((HRESULT (WINAPI *)(void *, const SAMP_DESC *, void **))VT(g_dev)[D_CreateSampler])(g_dev, &s, &g_samp_lin);
@@ -565,7 +585,7 @@ static void passe_vue(void *hdr, void *prof) {
 	if ((int)R.mode == 1) { m_omb = 0; m_dif *= 0.5f; m_gr = 0; m_vit = 0; q = q < 0.5f ? q : 0.5f; }
 	float m_veg = R.vegetation; if ((int)R.mode == 1) m_veg *= 0.5f;
 	const bool gb2_ok = g_gb2_valide;
-	float cbv[64] = {
+	float cbv[80] = {
 		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
 		R.proche, R.plage_min, R.plage_max, R.decalage_z,
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
@@ -609,6 +629,7 @@ static void passe_vue(void *hdr, void *prof) {
 	}
 	const bool lm_ok = g_ps_lm && g_lm_srv && g_lm_rtv;
 	cbv[61] = lm_ok ? 1.0f : 0.0f;
+	meteo_cb(cbv);
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
 	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
 	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
@@ -657,11 +678,12 @@ static void passe_ldr(void *tex) {
 	}
 	if (!g_ldr_srv) return;
 	void *rtv = rtv_de(tex); if (!rtv) return;
-	float cbv[64]; memset(cbv, 0, sizeof cbv);
+	float cbv[80]; memset(cbv, 0, sizeof cbv);
 	cbv[8] = (float)d.Width; cbv[9] = (float)d.Height; cbv[10] = 1.0f / d.Width; cbv[11] = 1.0f / d.Height;
 	cbv[52] = R.ldr_expo; cbv[53] = R.ldr_contraste; cbv[54] = R.ldr_epaule; cbv[55] = R.ldr_sat;
 	cbv[56] = R.ldr_sat_hautes; cbv[57] = R.ldr_temperature; cbv[58] = R.ldr_teinte; cbv[59] = R.ldr_noirs; cbv[60] = R.ldr_verts;
 	cbv[62] = R.ldr_lut; cbv[63] = g_lut_srv ? 32.0f : 0.0f;
+	meteo_cb(cbv);
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);
@@ -682,12 +704,12 @@ static void passe_ldr(void *tex) {
 	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps_ldr, 0, 0);
-	void *srv[5] = {g_ldr_srv, 0, 0, 0, g_lut_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 5, srv);
+	void *srv[6] = {g_ldr_srv, 0, 0, 0, g_lut_srv, g_lutp_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 6, srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
 	if (!g_enr_image) ((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
-	void *nul[5] = {0, 0, 0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 5, nul);
+	void *nul[6] = {0, 0, 0, 0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 6, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	remettre(sv);
 	g_nous--;
@@ -1477,6 +1499,11 @@ static void apres_image(void *sc) {
 	g_pluie = g_gouttes > (i64)R.seuil_gouttes; g_gouttes_rapport = g_gouttes > g_gouttes_rapport ? g_gouttes : g_gouttes_rapport; g_gouttes = 0;
 	if (dt > 0 && dt < 1) { if (g_pluie) g_mouille += (float)(dt / (R.mouille_s > 1 ? R.mouille_s : 1)); else g_mouille -= (float)(dt / (R.seche_s > 1 ? R.seche_s : 1)); }
 	if (g_mouille < 0) g_mouille = 0; if (g_mouille > 1) g_mouille = 1;
+	/* 0.14 : ambiance pluie lissee : monte en ~15 s quand il pleut, retombe en ~90 s (ciel qui se degage) ; humidite forcee = ambiance forcee */
+	{ float cible = R.humidite >= 0 ? (R.humidite > 1 ? 1 : R.humidite) : (g_pluie ? 1.0f : 0.0f);
+	  if (dt > 0 && dt < 1) { float tc = cible > g_amb_pluie ? (R.pluie_montee_s > 1 ? R.pluie_montee_s : 1) : (R.pluie_fin_s > 1 ? R.pluie_fin_s : 1);
+	    float k = (float)dt * 3 / tc; g_amb_pluie += (cible - g_amb_pluie) * (k > 1 ? 1 : k); }
+	  if (g_amb_pluie < 0) g_amb_pluie = 0; if (g_amb_pluie > 1) g_amb_pluie = 1; }
 
 	static int kg, kd, kt;
 	if (frappe('G', kg)) { g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE" : "effet TSC : ARRET"); }
@@ -1528,7 +1555,7 @@ static void apres_image(void *sc) {
 		Ligne l; l.s("mesure : "); l.f(1000.0 * g_n_img / (g_somme_ms > 0 ? g_somme_ms : 1), 1); l.s(" img/s, image moy "); l.f(g_somme_ms / g_n_img); l.s(" ms, pire ");
 		l.f(g_pire_ms); l.s(" ms, TSC CPU (profileur compris) "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
 		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
-		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
+		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; ambiance pluie "); l.f(g_amb_pluie); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
 		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
 		prof_rapport(l, g_n_img);
 		journal(l);

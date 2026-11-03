@@ -112,6 +112,13 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
 
+0.14 (03/11/2026) - TSC Meteo (DLL + HLSL a copier, jeu ferme ; l'ini peut rester, les nouvelles cles ont leurs valeurs par defaut)
+- Ambiance pluie lissee d'apres la pluie du jeu (monte en ~15 s, retombe en ~90 s) ; humidite = 1 la force pour essayer.
+- Ciel de pluie : gris, soleil etale, nuages sombres qui defilent (plafond nuageux projete). Monde sous la pluie : delave, plus froid, plus doux.
+- Brume au sol : densite qui baisse avec la hauteur, integree le long du regard ; la nuit elle prend la lumiere des phares et lampadaires.
+- Rideau de pluie : 3 couches (4, 11, 30 m) visibles seulement devant le decor plus lointain, eclairees par la lumiere locale.
+- Table de couleurs de pluie (tsc-graphics-lut-pluie.bin, facultative) melangee a celle du jour sous la pluie.
+- Pas encore : gerbes d'eau des autres vehicules (le jeu ne donne pas leur position : detection a l'image a construire).
 0.13.1 : textures HD comprimees acceptees (BC1/BC3/BC7 sRGB, BC4, BC5, avec niveaux), budget memoire video (cle hd_budget_mo, 6000 Mo),
          memoire des fichiers rendue apres chargement. Necessaire pour le lot complet de textures HD.
 0.13 (03/11/2026) - TSC Textures HD : remplacement a la volee
