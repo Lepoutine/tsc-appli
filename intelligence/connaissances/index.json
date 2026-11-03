@@ -1,0 +1,112 @@
+{
+  "nom": "Base de connaissances commune TSC Intelligence",
+  "maj": "2026-11-03",
+  "regle": "Chaque fiche a une source, une version, une date de verification, un domaine et un statut. Rien d'invente : sans source, pas de fiche.",
+  "statuts": {
+    "verifie": "lu dans une documentation officielle, ou constate dans les fichiers du jeu, sur le PC ou en jeu",
+    "verifie_partiel": "une partie verifiee, le reste a confirmer",
+    "a_verifier": "deduit ou source non officielle : ne pas l'appliquer chez un joueur avant un test",
+    "concu": "methode TSC ecrite, pas encore testee"
+  },
+  "bases_jointes": [
+    {"chemin": "sound_forge/connaissances/index.json", "version": "FMOD Studio 2.03, ETS2 1.61, SCS Blender Tools 2.4.1", "date_verif": "2026-11-03", "domaines": ["son", "textures"]}
+  ],
+  "fiches": [
+    {
+      "id": "audit_pipeline_161",
+      "titre": "Pipeline de rendu ETS2 1.61.1.9 : G-buffer, profondeur Z inverse, cout du SSR",
+      "domaine": "graphics",
+      "lieu": "projet",
+      "fichier": "tsc_graphics/audit_pipeline/SYNTHESE_AUDIT.md",
+      "sources": ["RenderDoc 30/10/2026 sur TSCF_Lab", "rapports socle tscf_probe v0.1-v0.9h"],
+      "version": "ETS2 1.61.1.9 DX11",
+      "date_verif": "2026-11-03",
+      "statut": "verifie_partiel",
+      "mots_cles": ["gbuffer", "profondeur", "z inverse", "ssr", "reflets", "dx11", "rt0", "stencil", "pbr"]
+    },
+    {
+      "id": "perf_shadow_constats",
+      "titre": "Performances sur le Shadow : PrismCacheFix, PresentMon derriere ReShade, flux 60 fps",
+      "domaine": "performance",
+      "lieu": "memoire",
+      "fichier": "tsc-performance-lab-suivi",
+      "sources": ["essais sur le Shadow du 24/10/2026 et du 03/11/2026"],
+      "version": "ETS2 1.61, client Shadow Beta 9.9.10488",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": ["prismcachefix", "presentmon", "reshade", "fps", "shadow", "flux", "resolution"]
+    },
+    {
+      "id": "piege_zip_scs",
+      "titre": "Piege .scs : attribut de fichier zip obligatoire (sinon 'incompatible zip entry')",
+      "domaine": "mods",
+      "lieu": "memoire",
+      "fichier": "tsc-build-cloud",
+      "sources": ["game.log ETS2 du 24/10/2026 : <ERROR> [zipfs] Failed to process incompatible zip entry"],
+      "version": "ETS2 1.61",
+      "date_verif": "2026-10-24",
+      "statut": "verifie",
+      "mots_cles": ["zip", "scs", "external_attr", "zipfs", "incompatible", "writestr"]
+    },
+    {
+      "id": "regle_noms_sii_11",
+      "titre": "Noms d'unites SII : segments de 11 caracteres maximum (exception .addon_hookup)",
+      "domaine": "mods",
+      "lieu": "memoire",
+      "fichier": "MEMORY.md",
+      "sources": ["constat de Mendy en jeu le 03/11/2026 01:24"],
+      "version": "ETS2 1.61",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": ["sii", "unite", "nom", "token", "12", "11", "addon_hookup"]
+    },
+    {
+      "id": "regles_mods_mendy",
+      "titre": "Regles TSC pour les mods : pas de version UK, compatibles MDT, un pack par categorie, installables depuis la tablette",
+      "domaine": "mods",
+      "lieu": "memoire",
+      "fichier": "MEMORY.md",
+      "sources": ["decisions de Mendy 23-24/10/2026"],
+      "version": "-",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": ["uk", "mdt", "pack", "catalogue", "tablette", "copyright", "tscf"]
+    },
+    {
+      "id": "sdk_telemetrie_scs",
+      "titre": "SDK telemetrie SCS : en-tetes officiels (ETS2 telemetrie 1.18, patch 1.45+)",
+      "domaine": "conduite",
+      "lieu": "code",
+      "fichier": "plugin_src/sdk/include/scssdk_telemetry.h",
+      "sources": ["SCS Software Telemetry SDK (en-tetes inclus, licence plugin/LICENSE_SCS_SDK.txt)"],
+      "version": "SCS_TELEMETRY_EUT2_GAME_VERSION_1_18",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": ["telemetrie", "sdk", "canal", "evenement", "gameplay", "truck", "trailer", "job"]
+    },
+    {
+      "id": "build_cloud",
+      "titre": "Construire l'appli TSC depuis le cloud (build.sh, Go, bundles, limites d'envoi au PC)",
+      "domaine": "logiciel",
+      "lieu": "memoire",
+      "fichier": "tsc-build-cloud",
+      "sources": ["builds 2.14.27 a 2.14.54"],
+      "version": "appli 2.14.54",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": ["build", "go", "lanceur", "bundle", "publication", "taille", "25 mo"]
+    },
+    {
+      "id": "echelle_maturite",
+      "titre": "Echelle de maturite TSC (0 a 6) et regle de preuve",
+      "domaine": "qualite",
+      "lieu": "depot",
+      "fichier": "registre/REGISTRE_MAITRE.md",
+      "sources": ["cahier des charges TSCF par.5.2, registre maitre v1.0 du 24/10/2026"],
+      "version": "1.0",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": ["maturite", "niveau", "preuve", "validation", "livrable"]
+    }
+  ]
+}
