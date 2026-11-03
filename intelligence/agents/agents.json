@@ -217,6 +217,21 @@
      "nom": "registre des creations (licences)",
      "lieu": "depot",
      "chemin": "registre/registre_creations.json"
+    },
+    {
+     "nom": "verificateur de mods TSC (PC)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\outils_tsc\\Verifier_Mods_TSC.ps1"
+    },
+    {
+     "nom": "lecteur SCS C# (PC)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\outils_tsc\\Scs.cs"
+    },
+    {
+     "nom": "extractor.exe SCS officiel + extractions base_vehicle (19 Go)",
+     "lieu": "pc",
+     "chemin": "Documents\\TSC Driver\\base_vehicle_extrait"
     }
    ],
    "connaissances": [
@@ -226,7 +241,7 @@
    "manque": [
     "analyseur automatique de game.log (erreurs -> mod -> fichier)",
     "fiches SII/SUI/.mat/.tobj officielles sourcees",
-    "controle automatique avant livraison d'un .scs"
+    "etendre Verifier_Mods_TSC.ps1 (PC) au controle complet avant livraison, sans creer un 2e verificateur"
    ],
    "demande_avant": "lire game.log et ouvrir les archives soi-meme avant de demander ou est un fichier",
    "fil": "Reprise App, Site HUB et MOD"
@@ -472,6 +487,16 @@
      "nom": "feuille de route",
      "lieu": "memoire",
      "chemin": "tsc-feuille-route"
+    },
+    {
+     "nom": "regles permanentes de reprise (CLAUDE.md, REGLES_DEVELOPPEMENT, directives)",
+     "lieu": "pc",
+     "chemin": "Documents\\TSC Driver\\Reprise_Code\\CLAUDE.md"
+    },
+    {
+     "nom": "inventaire de l'ecosysteme du 03/11",
+     "lieu": "pc",
+     "chemin": "Outils admin\\inventaire_ecosysteme_2026-11-03.md"
     }
    ],
    "connaissances": [

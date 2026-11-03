@@ -35,6 +35,8 @@ Les points 2 à 6 sont la technologie propre à TSC. On n'entraîne un modèle �
 | Registre maître + registre des créations (vérificateur) | `registre` | tenu |
 | Mémoire du projet (fichiers de mémoire des sessions Claude) | mémoire du projet | tenue à chaque session |
 
+Inventaire complémentaire fait sur le Shadow le 03/11 (lecture seule) : `Outils admin\inventaire_ecosysteme_2026-11-03.md` (5 355 DDS, 67 .scs publiés, 1 146 .wav, extractions SCS 19 Go, CLAUDE.md et directives ; 8,2 Go libres sur C:, Python sans scipy ni torch ; ~3 Go de doublons à ne nettoyer qu'avec l'accord de Mendy).
+
 Détail par expert, avec chaque chemin : `agents/agents.json` (vérifié par `outils/tsc_ia.py verifier`, 0 chemin manquant dans le code et le dossier projet).
 
 ## 2. Les IA déjà présentes
@@ -110,7 +112,7 @@ Exemple : Textures (matériau route) → Neural Graphics (rendu) → Performance
 ## Ordre de développement (dépendances)
 
 1. **Fait** : socle commun (registre des experts, mémoire, base jointe, vérificateur, banc, tests).
-2. **Mod Engineering** : analyseur automatique du game.log (erreur → mod → fichier) et contrôle des .scs avant livraison (attributs zip, noms SII, chemins). Faisable dans le cloud, sans risque, testable sur les mods déjà validés.
+2. **Mod Engineering** : analyseur automatique du game.log (erreur → mod → fichier) et contrôle des .scs avant livraison (attributs zip, noms SII, chemins), en **étendant `Verifier_Mods_TSC.ps1` + `Scs.cs` qui existent déjà sur le PC** (inventaire du 03/11), pas en créant un second vérificateur. Testable sur les 67 .scs publiés.
 3. **Analyse ETS2 commune** : sortir la partie générique d'`Analyser_ETS2.ps1` en module partagé (à lancer sur le PC, lecture seule).
 4. **Forge** : compiler l'exemple Peterbilt 579 par fmodstudiocl, GUID réels, mod .scs contrôlé par l'étape 2 (sur le PC).
 5. **Atelier** : piloter Blender 3.6 en arrière-plan sur une copie, contrôles UV/échelle/origine, export par l'étape 2.
