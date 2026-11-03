@@ -1,0 +1,231 @@
+{
+ "nom": "Base de connaissances TSC FMOD + Blender",
+ "maj": "2026-11-03",
+ "fiches": [
+  {
+   "id": "fmod_scripting",
+   "titre": "Piloter FMOD Studio par script",
+   "domaine": "fmod",
+   "fichier": "fmod/01_scripting_fmod_studio.md",
+   "mots_cles": [
+    "script",
+    "3663",
+    "fmodstudiocl",
+    "build",
+    "exportGUIDs",
+    "automation",
+    "addSound",
+    "api"
+   ],
+   "sources": [
+    "https://www.fmod.com/docs/2.03/studio/scripting-api-reference-project.html",
+    "https://github.com/EYamanS/fmod-studio-mcp",
+    "https://github.com/xDarkzx/Dans_Fmod_Studio_MCP"
+   ],
+   "statut": "verifie_partiel"
+  },
+  {
+   "id": "fmod_api_liste",
+   "titre": "Liste complète de l'API de script FMOD 2.03",
+   "domaine": "fmod",
+   "fichier": "fmod/reference/fmod_studio_2.03_api.json",
+   "mots_cles": [
+    "api",
+    "signature",
+    "fonction"
+   ],
+   "sources": [
+    "https://github.com/EYamanS/fmod-studio-mcp"
+   ],
+   "statut": "verifie"
+  },
+  {
+   "id": "scs_sons_camion",
+   "titre": "Sons d'un camion ETS2/ATS : événements, paramètres, bus",
+   "domaine": "fmod",
+   "fichier": "fmod/02_sons_camion_scs.md",
+   "mots_cles": [
+    "engine",
+    "exhaust",
+    "turbo",
+    "start_bad",
+    "remote",
+    "rpm",
+    "load",
+    "bus",
+    "soundref",
+    "sui",
+    "cabin_out"
+   ],
+   "sources": [
+    "https://modding.scssoft.com/wiki/Documentation/Engine/Sound/TruckEngine",
+    "https://modding.scssoft.com/wiki/Documentation/Engine/Sound/Mixer"
+   ],
+   "statut": "verifie"
+  },
+  {
+   "id": "scs_mod_son",
+   "titre": "Procédure officielle d'un mod de son",
+   "domaine": "fmod",
+   "fichier": "fmod/03_procedure_mod_son_scs.md",
+   "mots_cles": [
+    "modele",
+    "template",
+    "banque",
+    "guids",
+    "build",
+    "peterbilt",
+    "telechargement"
+   ],
+   "sources": [
+    "https://modding.scssoft.com/wiki/Documentation/Engine/Sound/Modding",
+    "https://modding.scssoft.com/wiki/Documentation/Engine/Sound/Downloads"
+   ],
+   "statut": "verifie"
+  },
+  {
+   "id": "recette_moteur",
+   "titre": "Recette Sound Forge : événement moteur par script",
+   "domaine": "fmod",
+   "fichier": "fmod/04_recette_moteur_sound_forge.md",
+   "mots_cles": [
+    "recette",
+    "moteur",
+    "fondu",
+    "rpm",
+    "load",
+    "phase 3"
+   ],
+   "sources": [],
+   "statut": "a_verifier"
+  },
+  {
+   "id": "exemple_peterbilt",
+   "titre": "Exemple officiel SCS Peterbilt 579 en chiffres",
+   "domaine": "fmod",
+   "fichier": "fmod/05_exemple_officiel_peterbilt_579.md",
+   "mots_cles": [
+    "peterbilt",
+    "exemple",
+    "loaded",
+    "unloaded",
+    "nofuel",
+    "frein moteur",
+    "play",
+    "exhaust",
+    "turbo",
+    "remote"
+   ],
+   "sources": [
+    "https://download.eurotrucksimulator2.com/sound/example_sound_engine_peterbilt_579_142_01.zip"
+   ],
+   "statut": "verifie"
+  },
+  {
+   "id": "structure_jeu_161",
+   "titre": "Structure son relevée dans ETS2 1.61",
+   "domaine": "fmod",
+   "fichier": "../docs/structure_son_ets2_1.61.md",
+   "mots_cles": [
+    "1.61",
+    "scania",
+    "volvo",
+    "guids",
+    "fev"
+   ],
+   "sources": [],
+   "statut": "verifie"
+  },
+  {
+   "id": "guide_metier",
+   "titre": "Guide de métier Sound Forge",
+   "domaine": "fmod",
+   "fichier": "../docs/techniques_sound_forge.md",
+   "mots_cles": [
+    "methode",
+    "pieges",
+    "diffusion",
+    "licences"
+   ],
+   "sources": [],
+   "statut": "verifie_partiel"
+  },
+  {
+   "id": "scs_blender_tools",
+   "titre": "SCS Blender Tools : versions, matières, looks",
+   "domaine": "blender",
+   "fichier": "blender/01_scs_blender_tools.md",
+   "mots_cles": [
+    "blender",
+    "scs root",
+    "look",
+    "material",
+    "tobj",
+    "shader",
+    "3.6"
+   ],
+   "sources": [
+    "https://modding.scssoft.com/wiki/Documentation/Tools/SCS_Blender_Tools"
+   ],
+   "statut": "verifie"
+  },
+  {
+   "id": "conversion_skins",
+   "titre": "Conversion Tools et peintures (paint jobs)",
+   "domaine": "blender",
+   "fichier": "blender/02_conversion_et_skins.md",
+   "mots_cles": [
+    "conversion",
+    "paint job",
+    "skin",
+    "colormask",
+    "airbrush",
+    "flipflake",
+    "dds",
+    "scs"
+   ],
+   "sources": [
+    "https://modding.scssoft.com/wiki/Documentation/Tools/Conversion_Tools",
+    "https://modding.scssoft.com/wiki/Documentation/Engine/Units/accessory_paint_job_data"
+   ],
+   "statut": "verifie_partiel"
+  },
+  {
+   "id": "outils_libres",
+   "titre": "Outils existants et ressources libres",
+   "domaine": "outils",
+   "fichier": "outils/outils_et_ressources_libres.md",
+   "mots_cles": [
+    "licence",
+    "cc0",
+    "mcp",
+    "poly haven",
+    "freesound",
+    "ambientcg"
+   ],
+   "sources": [
+    "https://github.com/Poly-Haven/Public-API",
+    "https://freesound.org/help/tos_api"
+   ],
+   "statut": "verifie_partiel"
+  },
+  {
+   "id": "tsc_clapet",
+   "titre": "TSC Clapet : clapet d'échappement sur touche",
+   "domaine": "fmod",
+   "fichier": "fmod/06_tsc_clapet.md",
+   "mots_cles": [
+    "clapet",
+    "valve",
+    "open pipe",
+    "touche",
+    "multijoueur",
+    "plugin"
+   ],
+   "sources": [
+    "mod Scania R770 Valve Exhaust (Mendy)"
+   ],
+   "statut": "concu"
+  }
+ ]
+}

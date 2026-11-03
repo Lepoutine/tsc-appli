@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TSC Sound Forge</title>
+<link rel="stylesheet" href="forge.css">
+</head>
+<body>
+<div class="sft" id="onglets" role="tablist">
+ <button type="button" role="tab" data-v="studio" class="on">Studio</button>
+ <button type="button" role="tab" data-v="analyse">Analyse ETS2</button>
+ <button type="button" disabled title="Phase 3 : projet FMOD">FMOD</button>
+ <button type="button" disabled title="Phase 5 : mod ETS2">Export ETS2</button>
+ <span class="sp"></span>
+ <label class="nomp">Projet <input type="text" id="nomProjet" maxlength="40" spellcheck="false"></label>
+</div>
+
+<!-- ================= STUDIO ================= -->
+<section id="vStudio">
+ <div class="pipe">
+  <select id="selCamion" aria-label="Camion visé"></select><i>→</i>
+  <select id="selMoteur" aria-label="Moteur visé"></select><i>→</i>
+  <span class="cur">Sons du moteur</span><i>→</i>
+  <span>Projet FMOD</span><i>→</i>
+  <span>Créer mon mod audio ETS2</span>
+ </div>
+ <div class="ws">
+  <div class="col">
+   <div class="card">
+    <h3>Mes sons</h3>
+    <label class="drop" id="drop" tabindex="0"><b>Importer des sons</b>Glisse tes fichiers ici ou clique (WAV, OGG, MP3, FLAC)<input type="file" id="fic" accept=".wav,.ogg,.mp3,.flac,audio/*" multiple hidden></label>
+    <div class="lib" id="lib"></div>
+    <div class="libre"><b>Sons libres de droit</b><span class="mut">Prends seulement du CC0 ou du CC-BY. Le non commercial (NC) est refusé, parce que TSC est vendu.</span>
+     <a class="b" href="https://freesound.org/search/?q=truck+engine&amp;f=license:%22Creative+Commons+0%22" target="_blank" rel="noopener">Freesound (CC0)</a>
+     <a class="b" href="https://opengameart.org/art-search-advanced?field_art_type_tid%5B%5D=13&amp;field_art_licenses_tid%5B%5D=4" target="_blank" rel="noopener">OpenGameArt (CC0)</a>
+     <a class="b" href="https://pixabay.com/sound-effects/search/truck%20engine/" target="_blank" rel="noopener">Pixabay</a>
+    </div>
+   </div>
+   <div class="card">
+    <h3>Rôles du moteur</h3>
+    <ol class="etapes mut" id="roles"></ol>
+   </div>
+  </div>
+
+  <div class="col">
+   <div class="tl">
+    <div class="tlh">
+     <button class="tb" type="button" id="bJoue" title="Écouter la couche choisie"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+     <button class="tb" type="button" id="bStop" title="Arrêter"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg></button>
+     <button class="tb" type="button" id="bBoucle" title="Écouter en boucle"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4V8H7a3 3 0 0 0-3 3v1H2v-1a5 5 0 0 1 5-5h10zM7 21l-4-4 4-4v3h10a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7z"/></svg></button>
+     <button class="tb" type="button" id="bAvant" title="Comparer avec le son brut">Avant / après</button>
+     <button class="tb" type="button" id="bSuppr" title="Retirer la couche du projet">Retirer</button>
+     <span class="tc" id="tc">00:00.000</span>
+    </div>
+    <div id="pistes"></div>
+   </div>
+
+   <div class="card" id="edCarte">
+    <h3>Couche choisie<span class="sp"></span><span class="mut" id="edNom" style="font:500 12px var(--fb);letter-spacing:0;text-transform:none"></span></h3>
+    <div class="ed" id="ed">
+     <div class="wv" id="wv"><canvas id="wvc"></canvas><span class="hint">Tire les bords rouges pour couper, la zone or est la boucle</span></div>
+     <div class="grid2">
+      <div class="ctl"><span>Rôle</span><select id="eRole"></select></div>
+      <div class="ctl"><span>Régime</span><input type="range" id="eRpm" min="400" max="2600" step="50"><output id="oRpm"></output></div>
+      <div class="ctl"><span>Volume</span><input type="range" id="eGain" min="-24" max="12" step="0.5"><output id="oGain"></output></div>
+      <div class="ctl"><span>Graves</span><input type="range" id="eBas" min="-12" max="12" step="0.5"><output id="oBas"></output></div>
+      <div class="ctl"><span>Aigus</span><input type="range" id="eHaut" min="-12" max="12" step="0.5"><output id="oHaut"></output></div>
+      <div class="ctl"><span>Fondu boucle</span><input type="range" id="eFondu" min="0" max="400" step="10"><output id="oFondu"></output></div>
+      <label class="chk"><input type="checkbox" id="eBoucle"> Se répète en boucle (moteur)</label>
+      <label class="chk"><input type="checkbox" id="eNorm"> Volume égalisé (normalisé)</label>
+      <div class="ctl"><span>Licence</span><select id="eLic">
+       <option value="perso">Mon enregistrement</option>
+       <option value="tsc">Création TSC (générée)</option>
+       <option value="jeu">Son du jeu (SCS), retravaillé</option>
+       <option value="mod">Son d'un mod, retravaillé (auteur à noter)</option>
+       <option value="cc0">CC0 / domaine public</option>
+       <option value="ccby">CC-BY (citer l'auteur)</option>
+       <option value="refus">Non commercial, sans licence, extrait d'un jeu</option>
+      </select></div>
+      <div class="ctl"><span>Auteur, lien</span><input type="text" id="eSrc" placeholder="ex. Jean D. · freesound.org/s/123" style="grid-column:2/4" maxlength="160"></div>
+     </div>
+    </div>
+    <div class="vide" id="edVide">Importe un son puis clique dessus pour le régler.</div>
+   </div>
+
+   <div class="card">
+    <h3>Simulateur de régime et de charge<span class="sp"></span><span class="etat nv" id="simEtat">à l'arrêt</span></h3>
+    <div class="sim">
+     <div class="rpm" id="rpmG"><div><b id="rpmV">600</b><small>TR/MIN</small></div></div>
+     <div>
+      <div class="ctl"><span>Régime</span><input type="range" id="rpm" min="500" max="2400" step="10" value="600"><output id="rpmO">600</output></div>
+      <div class="ctl"><span>Charge</span><input type="range" id="load" min="0" max="100" step="1" value="0"><output id="loadO">0 %</output></div>
+      <div id="layers"></div>
+      <div class="simbt">
+       <button class="b red" type="button" id="bMoteur">Démarrer le moteur</button>
+       <button class="b" type="button" id="bAccel">Accélération auto</button>
+       <button class="b" type="button" id="bDemarre" title="Joue le son de démarrage s'il existe">Son de démarrage</button>
+       <button class="b" type="button" id="bClapet" title="TSC Clapet : ouvre ou ferme le clapet d'échappement (touche V)">Ouvrir le clapet (V)</button>
+      </div>
+     </div>
+    </div>
+   </div>
+  </div>
+
+  <div class="col">
+   <div class="card">
+    <h3>Projet</h3>
+    <div class="kv" id="kvProjet"></div>
+    <div class="simbt">
+     <button class="b gold" type="button" id="bExportWav">Exporter les couches (WAV)</button>
+     <button class="b" type="button" id="bExportJson">Sauver le projet</button>
+     <label class="b" for="ficProjet">Ouvrir un projet</label><input type="file" id="ficProjet" accept=".json,.tscforge" hidden>
+    </div>
+   </div>
+   <div class="card" id="genCarte">
+    <h3>Générateur TSC</h3>
+    <p class="mut" style="margin:0 0 8px;font-size:12.5px">On mesure un son de référence (des chiffres seulement), puis on fabrique un son neuf. Aucun morceau de la référence n'entre dans ta banque.</p>
+    <div class="ctl"><span>Référence</span><select id="gRef"></select></div>
+    <div class="ctl"><span>Cylindres</span><select id="gCyl"><option value="6">6 en ligne</option><option value="8">V8</option><option value="4">4</option><option value="5">5</option><option value="10">V10</option><option value="12">V12</option></select></div>
+    <label class="chk" style="margin:6px 0"><input type="checkbox" id="gRetire" checked> Retirer le son de référence après la mesure</label>
+    <div class="simbt" style="margin-top:4px"><button class="b gold" type="button" id="bMesure">Mesurer</button><button class="b red" type="button" id="bGenere" disabled>Générer mon moteur</button></div>
+    <div class="ctl" style="margin-top:8px"><span>Couleur</span><input type="range" id="gMel" min="0" max="100" value="60"><output id="oMel">60 %</output></div>
+    <div class="mut" id="gEtat" style="font-size:12px;margin-top:6px"></div>
+   </div>
+   <div class="card">
+    <h3>Étapes</h3>
+    <ol class="etapes" id="etapes"></ol>
+   </div>
+   <div class="card">
+    <h3>Assistant Claude</h3>
+    <div class="ai">
+     <div class="m">L'assistant arrive avec la connexion Claude TSC : tu lui décriras le son voulu, il proposera les réglages et rien ne sera appliqué sans ton accord. Sois précis (camion, moteur, régimes, effet voulu) : une création par jour, une heure au plus selon l'offre.</div>
+     <div class="in"><input type="text" placeholder="Bientôt disponible" disabled aria-label="Demande à l'assistant"><button class="b gold" type="button" disabled>Envoyer</button></div>
+    </div>
+   </div>
+   <button class="b red" type="button" id="bCreer" disabled title="Disponible en phase 5, après le projet FMOD et le vrai build">Créer mon mod audio ETS2</button>
+  </div>
+ </div>
+</section>
+
+<!-- ================= ANALYSE ================= -->
+<section id="vAnalyse" hidden>
+ <div class="card" id="anaVide" style="margin-bottom:12px">
+  <h3>Analyse de ton ETS2</h3>
+  <p class="mut" style="margin:0 0 10px">L'analyse lit ton jeu et tes mods sans rien modifier, puis écrit un fichier <span class="mono">base_connaissances.json</span>.</p>
+  <div class="simbt">
+   <button class="b red" type="button" id="bAnalyser">Analyser mon ETS2</button>
+   <label class="b" for="ficAna">Ouvrir un résultat d'analyse</label><input type="file" id="ficAna" accept=".json" hidden>
+  </div>
+  <p class="mut" id="anaMsg" style="margin:10px 0 0;font-size:12.5px"></p>
+ </div>
+ <div id="anaRes" hidden>
+  <div class="stats" id="stats"></div>
+  <div class="ana">
+   <div class="card">
+    <h3>Camions<span class="sp"></span><input type="text" id="filtre" placeholder="Chercher" style="width:150px;font:400 12.5px var(--fb);letter-spacing:0;text-transform:none"></h3>
+    <div class="filt" id="filtEtat"></div>
+    <div class="tblw"><table class="tbl"><thead><tr><th>Camion</th><th>Origine</th><th>Moteurs</th><th>État</th></tr></thead><tbody id="tCam"></tbody></table></div>
+   </div>
+   <div class="col">
+    <div class="card"><h3>Diagnostic</h3><div class="diag" id="diag"><span class="mut">Clique sur un camion.</span></div></div>
+    <div class="card"><h3>Ton installation</h3><div class="kv" id="kvEnv"></div></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<div class="toast" id="toast" hidden role="status"></div>
+<script src="forge_audio.js"></script>
+<script src="forge_gen.js"></script>
+<script src="forge.js"></script>
+</body>
+</html>
