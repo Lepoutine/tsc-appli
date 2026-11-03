@@ -15,6 +15,7 @@ QueryPerformanceFrequency
 GetModuleHandleExA
 CreateDirectoryA
 VirtualAlloc
+VirtualFree
 FlushInstructionCache
 GetCurrentProcess
 FindFirstFileA

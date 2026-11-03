@@ -112,6 +112,8 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
 
+0.13.1 : textures HD comprimees acceptees (BC1/BC3/BC7 sRGB, BC4, BC5, avec niveaux), budget memoire video (cle hd_budget_mo, 6000 Mo),
+         memoire des fichiers rendue apres chargement. Necessaire pour le lot complet de textures HD.
 0.13 (03/11/2026) - TSC Textures HD : remplacement a la volee
 - Au demarrage : liste de plugins\tsc_textures_hd\<empreinte>.dds. Au remplissage du niveau 0 d'une texture de decor dont l'empreinte a une version HD :
   creation de la texture HD (tous niveaux) + vue ; quand le jeu attache ses textures (PSSetShaderResources), sa vue est remplacee par la vue HD.

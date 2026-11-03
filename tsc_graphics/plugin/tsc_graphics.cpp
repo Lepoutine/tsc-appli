@@ -38,6 +38,7 @@ __declspec(dllimport) DWORD WINAPI GetFileSize(HANDLE, DWORD *);
 __declspec(dllimport) BOOL WINAPI CloseHandle(HANDLE);
 __declspec(dllimport) BOOL WINAPI CreateDirectoryA(const char *, void *);
 __declspec(dllimport) void *WINAPI VirtualAlloc(void *, SIZE_T, DWORD, DWORD);
+__declspec(dllimport) BOOL WINAPI VirtualFree(void *, SIZE_T, DWORD);
 __declspec(dllimport) BOOL WINAPI FlushInstructionCache(HANDLE, const void *, SIZE_T);
 __declspec(dllimport) HANDLE WINAPI GetCurrentProcess(void);
 __declspec(dllimport) HANDLE WINAPI FindFirstFileA(const char *, void *);
@@ -60,7 +61,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.13"
+#define VERSION "tsc-graphics 0.13.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -112,6 +113,7 @@ struct Reglages {
 	/* 0.9.3 : TSC Neural, donnees d'entrainement : changer ce nombre (N) = N images enregistrees, une toutes les 2 s, image du jeu
 	   SANS effet TSC (HDR, profondeur, albedo+feuillage, vue 8 bits du jeu) dans plugins\\tsc_neural */
 	float enregistre = 0;
+	float hd_budget_mo = 6000;   /* 0.13.1 : memoire video maximale des textures HD (Mo) ; au-dela, les suivantes restent celles du jeu */
 	float textures_hd = 1;   /* 0.13 : remplacement a la volee par plugins\\tsc_textures_hd\\<empreinte>.dds (1 = marche, 0 = textures du jeu) */
 	float vider_textures = 0;   /* 0.12 : TSC Textures, extraction du niveau 0 des textures de decor en .dds (Mo maximum ; 0 = coupe) -> plugins\\tsc_textures_brut */
 	float sonde_textures = 1;   /* 0.10 : TSC Textures, releve des textures chargees par le jeu (empreinte + format) -> tsc-textures.csv */
@@ -141,7 +143,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"hd_budget_mo", &R.hd_budget_mo} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -945,18 +947,29 @@ static void vider_dds(u64 h, const TEX2D_DESC &d, const void *data, UINT rp) {
    3) quand le jeu attache ses textures au pixel shader (PSSetShaderResources), on remplace la vue du jeu par la vue HD.
    Le jeu garde ses objets : couper (textures_hd = 0) rend instantanement les textures d'origine. Format HD accepte : le meme que
    le jeu, ou son equivalent non compresse (BC1/2/3 -> RGBA8, BC4 -> R8, BC5 -> R8G8, meme espace sRGB). */
-static u64 g_hd_liste[4096]; static int g_hd_n; static i64 g_hd_crees, g_hd_refus;
+static u64 g_hd_liste[16384]; static int g_hd_n; static i64 g_hd_crees, g_hd_refus, g_hd_octets, g_hd_budget_refus;
 static bool hd_existe(u64 h) { for (int i = 0; i < g_hd_n; i++) if (g_hd_liste[i] == h) return true; return false; }
 static u64 hex16(const char *n) { u64 v = 0; for (int k = 0; k < 16; k++) { char c = n[k]; int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; if (d < 0) return 0; v = v << 4 | (u64)d; } return v; }
 static void hd_lister() {
 	char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_textures_hd\\*.dds"); unsigned char fd[600];
 	HANDLE f = FindFirstFileA(p, fd); g_hd_n = 0;
-	if (f != INVALID) { do { const char *n = (const char *)fd + 44; u64 h = hex16(n); if (h && g_hd_n < 4096) g_hd_liste[g_hd_n++] = h; } while (FindNextFileA(f, fd)); FindClose(f); }
+	if (f != INVALID) { do { const char *n = (const char *)fd + 44; u64 h = hex16(n); if (h && g_hd_n < 16384) g_hd_liste[g_hd_n++] = h; } while (FindNextFileA(f, fd)); FindClose(f); }
 	Ligne l; l.s("TSC Textures HD : "); l.i(g_hd_n); l.s(" textures HD disponibles"); journal(l);
 }
+/* 0.13.1 : formats HD acceptes, comprimes ou non, a condition de garder le meme espace de couleur et les memes canaux.
+   Couleur sRGB avec alpha (BC2/BC3 sRGB du jeu : l'alpha porte souvent le speculaire) -> BC3 sRGB, BC2 sRGB, BC7 sRGB, RGBA8 sRGB ;
+   le BC1 n'est accepte que si le jeu est deja en BC1 (pas d'alpha a perdre). Meme logique en lineaire. BC4 -> BC4 ou R8, BC5 -> BC5 ou R8G8. */
 static bool hd_format_ok(UINT jeu, UINT hd) {
 	if (jeu == hd) return true;
-	switch (jeu) { case 72: case 75: case 78: return hd == 29 || hd == 91; case 71: case 74: case 77: return hd == 28 || hd == 87; case 80: return hd == 61; case 83: return hd == 49; default: return false; }
+	switch (jeu) {
+	case 72: return hd == 75 || hd == 78 || hd == 99 || hd == 29 || hd == 91;
+	case 75: case 78: case 99: case 29: case 91: return hd == 75 || hd == 78 || hd == 99 || hd == 29 || hd == 91;
+	case 71: return hd == 74 || hd == 77 || hd == 98 || hd == 28 || hd == 87;
+	case 74: case 77: case 98: case 28: case 87: return hd == 74 || hd == 77 || hd == 98 || hd == 28 || hd == 87;
+	case 80: return hd == 61; case 61: return hd == 80;
+	case 83: return hd == 49; case 49: return hd == 83;
+	default: return false;
+	}
 }
 static void hd_charger(void *tex_jeu, const TEX2D_DESC &dj, u64 h) {
 	char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_textures_hd\\"); char nom[24]; static const char hx[] = "0123456789abcdef";
@@ -966,9 +979,9 @@ static void hd_charger(void *tex_jeu, const TEX2D_DESC &dj, u64 h) {
 	unsigned char *b = (unsigned char *)VirtualAlloc(0, taille, 0x3000, 0x04); if (!b) { CloseHandle(f); g_hd_refus++; return; }
 	DWORD lu = 0; ReadFile(f, b, taille, &lu, 0); CloseHandle(f);
 	const UINT *e = (const UINT *)b; Ligne l; l.s("TSC Textures HD "); l.s(nom); l.s(" : ");
-	if (lu != taille || e[0] != 0x20534444 || e[21] != 0x30315844) { l.s("dds invalide (en-tete DX10 attendu)"); journal(l); g_hd_refus++; return; }
+	if (lu != taille || e[0] != 0x20534444 || e[21] != 0x30315844) { l.s("dds invalide (en-tete DX10 attendu)"); journal(l); g_hd_refus++; VirtualFree(b, 0, 0x8000); return; }
 	UINT H = e[3], W = e[4], mips = e[7] ? e[7] : 1, fmt = e[32];
-	if (!hd_format_ok(dj.Format, fmt) || W < dj.Width || (u64)W * dj.Height != (u64)H * dj.Width) { l.s("refusee (format "); l.i(fmt); l.s(" "); l.i(W); l.s("x"); l.i(H); l.s(" contre jeu "); l.i(dj.Format); l.s(" "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l); g_hd_refus++; return; }
+	if (!hd_format_ok(dj.Format, fmt) || W < dj.Width || (u64)W * dj.Height != (u64)H * dj.Width) { l.s("refusee (format "); l.i(fmt); l.s(" "); l.i(W); l.s("x"); l.i(H); l.s(" contre jeu "); l.i(dj.Format); l.s(" "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l); g_hd_refus++; VirtualFree(b, 0, 0x8000); return; }
 	SUBRES sr[16]; u64 o = 148; UINT ob; bool bloc = format_bloc(fmt, ob); UINT bp = bloc ? 0 : octets_pixel(fmt); if (mips > 16) mips = 16;
 	for (UINT m = 0; m < mips; m++) {
 		UINT w = W >> m ? W >> m : 1, hh = H >> m ? H >> m : 1;
@@ -976,16 +989,17 @@ static void hd_charger(void *tex_jeu, const TEX2D_DESC &dj, u64 h) {
 		if (!pitch || o + (u64)pitch * lignes > taille) { mips = m; break; }
 		sr[m].p = b + o; sr[m].pitch = pitch; sr[m].slice = pitch * lignes; o += (u64)pitch * lignes;
 	}
-	if (!mips) { l.s("aucun niveau lisible"); journal(l); g_hd_refus++; return; }
+	if (!mips) { l.s("aucun niveau lisible"); journal(l); g_hd_refus++; VirtualFree(b, 0, 0x8000); return; }
+	if (g_hd_octets + (i64)o > (i64)R.hd_budget_mo * 1048576) { VirtualFree(b, 0, 0x8000); if (g_hd_budget_refus++ < 5) { l.s("budget memoire atteint ("); l.i(g_hd_octets >> 20); l.s(" Mo), texture du jeu gardee"); journal(l); } return; }
 	TEX2D_DESC d; memset(&d, 0, sizeof d); d.Width = W; d.Height = H; d.MipLevels = mips; d.ArraySize = 1; d.Format = fmt; d.SampleCount = 1; d.Usage = 1 /*IMMUTABLE*/; d.BindFlags = 0x8;
 	void *t = 0, *v = 0;
 	g_nous++; HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, &d, sr, &t);
 	if (hr >= 0 && t) ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, t, 0, &v);
-	g_nous--;
+	g_nous--; VirtualFree(b, 0, 0x8000);   /* la carte graphique a sa copie : on rend la memoire du fichier */
 	if (!v) { REL(t); l.s("creation refusee "); l.x((u64)(hr & 0xffffffff)); journal(l); g_hd_refus++; return; }
 	REL(t);   /* la vue garde la texture */
 	tab_lock(); tab_mettre(g_t_cle, g_t_val, tex_jeu, v); tab_unlock();
-	__atomic_store_n(&g_hd_actif, 1, __ATOMIC_RELEASE); g_hd_crees++;
+	__atomic_store_n(&g_hd_actif, 1, __ATOMIC_RELEASE); g_hd_crees++; __atomic_fetch_add(&g_hd_octets, (i64)(o - 148), __ATOMIC_RELAXED);
 	l.s("posee "); l.i(W); l.s("x"); l.i(H); l.s(" "); l.i(mips); l.s(" niveaux, format "); l.i(fmt); l.s(" (jeu "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l);
 }
 static i64 g_brut, g_upd_decor, g_upd_boite_part, g_upd_niv;
@@ -1491,7 +1505,7 @@ static void apres_image(void *sc) {
 		{ Ligne z; z.s("etage apres tone mapping : images avec les 3 ecrans "); z.i(g_ldr_img3); z.s(", images incompletes "); z.i(g_ldr_imgpas3); z.s(", autres cibles 8 bits ignorees "); z.i(g_ldr_saut); journal(z); }
 		Ligne u; u.s("TSC Textures (tri) : updates vers decor "); u.i(g_upd_decor); u.s(", dont boite partielle "); u.i(g_upd_boite_part); u.s(", niveaux >0 "); u.i(g_upd_niv);
 		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); u.s(" ; extraites "); u.i(g_vide_n); u.s(" ("); u.i(g_vide_octets >> 20); u.s(" Mo, formats refuses "); u.i(g_vide_refus); u.s(")"); journal(u);
-		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees "); x.i(g_hd_crees); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
+		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees "); x.i(g_hd_crees); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(", memoire HD "); x.i(g_hd_octets >> 20); x.s(" Mo / budget "); x.i((i64)R.hd_budget_mo); x.s(", hors budget "); x.i(g_hd_budget_refus); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
