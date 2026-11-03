@@ -9,7 +9,26 @@
     "concu": "methode TSC ecrite, pas encore testee"
   },
   "bases_jointes": [
-    {"chemin": "sound_forge/connaissances/index.json", "version": "FMOD Studio 2.03, ETS2 1.61, SCS Blender Tools 2.4.1", "date_verif": "2026-11-03", "domaines": ["son", "textures"]}
+    {
+      "chemin": "sound_forge/connaissances/index.json",
+      "version": "FMOD Studio 2.03, ETS2 1.61, SCS Blender Tools 2.4.1",
+      "date_verif": "2026-11-03",
+      "domaines": [
+        "son",
+        "textures"
+      ]
+    },
+    {
+      "chemin": "Outils admin/tsc_graphics/base_savoir/index.json",
+      "lieu": "pc",
+      "version": "D3D11, DDS/BC1-7, sRGB, PBR (7 fiches, 6 verifie, 1 verifie_partiel)",
+      "date_verif": "2026-11-03",
+      "domaines": [
+        "graphics",
+        "textures"
+      ],
+      "note": "tenue par le fil TSC Graphics sur le PC de Mendy ; lue sur le PC, pas recopiee ici"
+    }
   ],
   "fiches": [
     {
@@ -18,11 +37,24 @@
       "domaine": "graphics",
       "lieu": "projet",
       "fichier": "tsc_graphics/audit_pipeline/SYNTHESE_AUDIT.md",
-      "sources": ["RenderDoc 30/10/2026 sur TSCF_Lab", "rapports socle tscf_probe v0.1-v0.9h"],
+      "sources": [
+        "RenderDoc 30/10/2026 sur TSCF_Lab",
+        "rapports socle tscf_probe v0.1-v0.9h"
+      ],
       "version": "ETS2 1.61.1.9 DX11",
       "date_verif": "2026-11-03",
       "statut": "verifie_partiel",
-      "mots_cles": ["gbuffer", "profondeur", "z inverse", "ssr", "reflets", "dx11", "rt0", "stencil", "pbr"]
+      "mots_cles": [
+        "gbuffer",
+        "profondeur",
+        "z inverse",
+        "ssr",
+        "reflets",
+        "dx11",
+        "rt0",
+        "stencil",
+        "pbr"
+      ]
     },
     {
       "id": "perf_shadow_constats",
@@ -30,11 +62,21 @@
       "domaine": "performance",
       "lieu": "memoire",
       "fichier": "tsc-performance-lab-suivi",
-      "sources": ["essais sur le Shadow du 24/10/2026 et du 03/11/2026"],
+      "sources": [
+        "essais sur le Shadow du 24/10/2026 et du 03/11/2026"
+      ],
       "version": "ETS2 1.61, client Shadow Beta 9.9.10488",
       "date_verif": "2026-11-03",
       "statut": "verifie",
-      "mots_cles": ["prismcachefix", "presentmon", "reshade", "fps", "shadow", "flux", "resolution"]
+      "mots_cles": [
+        "prismcachefix",
+        "presentmon",
+        "reshade",
+        "fps",
+        "shadow",
+        "flux",
+        "resolution"
+      ]
     },
     {
       "id": "piege_zip_scs",
@@ -42,11 +84,20 @@
       "domaine": "mods",
       "lieu": "memoire",
       "fichier": "tsc-build-cloud",
-      "sources": ["game.log ETS2 du 24/10/2026 : <ERROR> [zipfs] Failed to process incompatible zip entry"],
+      "sources": [
+        "game.log ETS2 du 24/10/2026 : <ERROR> [zipfs] Failed to process incompatible zip entry"
+      ],
       "version": "ETS2 1.61",
       "date_verif": "2026-10-24",
       "statut": "verifie",
-      "mots_cles": ["zip", "scs", "external_attr", "zipfs", "incompatible", "writestr"]
+      "mots_cles": [
+        "zip",
+        "scs",
+        "external_attr",
+        "zipfs",
+        "incompatible",
+        "writestr"
+      ]
     },
     {
       "id": "regle_noms_sii_11",
@@ -54,11 +105,21 @@
       "domaine": "mods",
       "lieu": "memoire",
       "fichier": "MEMORY.md",
-      "sources": ["constat de Mendy en jeu le 03/11/2026 01:24"],
+      "sources": [
+        "constat de Mendy en jeu le 03/11/2026 01:24"
+      ],
       "version": "ETS2 1.61",
       "date_verif": "2026-11-03",
       "statut": "verifie",
-      "mots_cles": ["sii", "unite", "nom", "token", "12", "11", "addon_hookup"]
+      "mots_cles": [
+        "sii",
+        "unite",
+        "nom",
+        "token",
+        "12",
+        "11",
+        "addon_hookup"
+      ]
     },
     {
       "id": "regles_mods_mendy",
@@ -66,11 +127,21 @@
       "domaine": "mods",
       "lieu": "memoire",
       "fichier": "MEMORY.md",
-      "sources": ["decisions de Mendy 23-24/10/2026"],
+      "sources": [
+        "decisions de Mendy 23-24/10/2026"
+      ],
       "version": "-",
       "date_verif": "2026-11-03",
       "statut": "verifie",
-      "mots_cles": ["uk", "mdt", "pack", "catalogue", "tablette", "copyright", "tscf"]
+      "mots_cles": [
+        "uk",
+        "mdt",
+        "pack",
+        "catalogue",
+        "tablette",
+        "copyright",
+        "tscf"
+      ]
     },
     {
       "id": "sdk_telemetrie_scs",
@@ -78,11 +149,22 @@
       "domaine": "conduite",
       "lieu": "code",
       "fichier": "plugin_src/sdk/include/scssdk_telemetry.h",
-      "sources": ["SCS Software Telemetry SDK (en-tetes inclus, licence plugin/LICENSE_SCS_SDK.txt)"],
+      "sources": [
+        "SCS Software Telemetry SDK (en-tetes inclus, licence plugin/LICENSE_SCS_SDK.txt)"
+      ],
       "version": "SCS_TELEMETRY_EUT2_GAME_VERSION_1_18",
       "date_verif": "2026-11-03",
       "statut": "verifie",
-      "mots_cles": ["telemetrie", "sdk", "canal", "evenement", "gameplay", "truck", "trailer", "job"]
+      "mots_cles": [
+        "telemetrie",
+        "sdk",
+        "canal",
+        "evenement",
+        "gameplay",
+        "truck",
+        "trailer",
+        "job"
+      ]
     },
     {
       "id": "build_cloud",
@@ -90,11 +172,21 @@
       "domaine": "logiciel",
       "lieu": "memoire",
       "fichier": "tsc-build-cloud",
-      "sources": ["builds 2.14.27 a 2.14.54"],
+      "sources": [
+        "builds 2.14.27 a 2.14.54"
+      ],
       "version": "appli 2.14.54",
       "date_verif": "2026-11-03",
       "statut": "verifie",
-      "mots_cles": ["build", "go", "lanceur", "bundle", "publication", "taille", "25 mo"]
+      "mots_cles": [
+        "build",
+        "go",
+        "lanceur",
+        "bundle",
+        "publication",
+        "taille",
+        "25 mo"
+      ]
     },
     {
       "id": "echelle_maturite",
@@ -102,11 +194,240 @@
       "domaine": "qualite",
       "lieu": "depot",
       "fichier": "registre/REGISTRE_MAITRE.md",
-      "sources": ["cahier des charges TSCF par.5.2, registre maitre v1.0 du 24/10/2026"],
+      "sources": [
+        "cahier des charges TSCF par.5.2, registre maitre v1.0 du 24/10/2026"
+      ],
       "version": "1.0",
       "date_verif": "2026-11-03",
       "statut": "verifie",
-      "mots_cles": ["maturite", "niveau", "preuve", "validation", "livrable"]
+      "mots_cles": [
+        "maturite",
+        "niveau",
+        "preuve",
+        "validation",
+        "livrable"
+      ]
+    },
+    {
+      "id": "presentmon",
+      "titre": "PresentMon : mesurer le frametime sans injection (ETW)",
+      "domaine": "performance",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/performance/presentmon.md",
+      "sources": [
+        "https://github.com/GameTechDev/PresentMon"
+      ],
+      "version": "PresentMon (GameTechDev, MIT) au 03/11/2026",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "presentmon",
+        "frametime",
+        "etw",
+        "fps",
+        "hags",
+        "gpu",
+        "mesure"
+      ]
+    },
+    {
+      "id": "formats_scs",
+      "titre": "Formats SCS (pmd, pmg, sii, sui, mat, tobj, soundref) et manifest.sii",
+      "domaine": "mods",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/mods/formats_scs.md",
+      "sources": [
+        "https://modding.scssoft.com/wiki/Documentation/Engine/Formats",
+        "https://modding.scssoft.com/wiki/Documentation/Engine/Mod_manager"
+      ],
+      "version": "wiki SCS au 03/11/2026, ETS2 1.61",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "formats",
+        "pmd",
+        "pmg",
+        "sii",
+        "sui",
+        "tobj",
+        "manifest",
+        "mod_package",
+        "icone",
+        "276x162",
+        "scs",
+        "zip"
+      ]
+    },
+    {
+      "id": "fmodstudiocl",
+      "titre": "fmodstudiocl : build des banques, -export-guids, .bank.guids pour ETS2",
+      "domaine": "forge",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/forge/fmodstudiocl.md",
+      "sources": [
+        "https://d1s9dnlmdewoh1.cloudfront.net/2.03/studio/advanced-topics.html",
+        "https://d1s9dnlmdewoh1.cloudfront.net/2.03/studio/getting-events-into-your-game.html",
+        "https://d1s9dnlmdewoh1.cloudfront.net/2.03/studio/scripting-terminal-reference.html",
+        "https://modding.scssoft.com/wiki/Documentation/Engine/Sound",
+        "https://modding.scssoft.com/wiki/Documentation/Engine/Sound/Downloads"
+      ],
+      "version": "FMOD Studio 2.03, ETS2 1.61",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "fmodstudiocl",
+        "build",
+        "banque",
+        "bank",
+        "guid",
+        "export-guids",
+        "guids",
+        "ligne de commande",
+        "vorbis",
+        "strings.bank"
+      ]
+    },
+    {
+      "id": "filtrage_cabine",
+      "titre": "Son interieur/exterieur : cabin_out, vitres, bus et EQ de cabine",
+      "domaine": "son",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/son/filtrage_cabine.md",
+      "sources": [
+        "https://modding.scssoft.com/wiki/Documentation/Engine/Sound/TruckCabinFiltering",
+        "https://modding.scssoft.com/wiki/Documentation/Engine/Sound"
+      ],
+      "version": "wiki SCS au 03/11/2026 (mecanisme depuis 1.43)",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "interieur",
+        "exterieur",
+        "cabine",
+        "cabin_out",
+        "vitre",
+        "wnd_left",
+        "eq",
+        "reverb",
+        "soundref",
+        "position_offset"
+      ]
+    },
+    {
+      "id": "reglement_561_2006",
+      "titre": "Temps de conduite, pauses et repos UE (561/2006, articles 6 a 9)",
+      "domaine": "conduite",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/conduite/reglement_561_2006.md",
+      "sources": [
+        "https://www.legislation.gov.uk/eur/2006/561/chapter/II/adopted/data.htm"
+      ],
+      "version": "texte adopte 2006 (hors modifications 2020/1054)",
+      "date_verif": "2026-11-03",
+      "statut": "verifie_partiel",
+      "mots_cles": [
+        "tachygraphe",
+        "conduite",
+        "pause",
+        "45 min",
+        "repos",
+        "9 h",
+        "561/2006",
+        "legal"
+      ]
+    },
+    {
+      "id": "webview2_runtime",
+      "titre": "WebView2 : runtime Evergreen, detection pv, installation",
+      "domaine": "logiciel",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/logiciel/webview2_runtime.md",
+      "sources": [
+        "https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution"
+      ],
+      "version": "Microsoft Learn au 03/11/2026",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "webview2",
+        "runtime",
+        "evergreen",
+        "tablette",
+        "registre",
+        "pv",
+        "installation"
+      ]
+    },
+    {
+      "id": "cloudflare_workers_limites",
+      "titre": "Cloudflare Workers : limites CPU, requetes, secrets",
+      "domaine": "logiciel",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/logiciel/cloudflare_workers_limites.md",
+      "sources": [
+        "https://developers.cloudflare.com/workers/platform/limits/"
+      ],
+      "version": "docs Cloudflare au 03/11/2026",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "worker",
+        "cloudflare",
+        "limites",
+        "cpu",
+        "secrets",
+        "requetes",
+        "service tsc"
+      ]
+    },
+    {
+      "id": "blender_ligne_commande",
+      "titre": "Blender 3.6 en arriere-plan (-b -P) et SCS Blender Tools",
+      "domaine": "atelier",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/atelier/blender_ligne_commande.md",
+      "sources": [
+        "https://docs.blender.org/manual/id/3.6/advanced/command_line/arguments.html",
+        "https://modding.scssoft.com/wiki/Documentation/Tools/SCS_Blender_Tools"
+      ],
+      "version": "Blender 3.6, SCS Blender Tools 2.4.1",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "blender",
+        "arriere-plan",
+        "script",
+        "python",
+        "-b",
+        "-P",
+        "scs blender tools",
+        "export"
+      ]
+    },
+    {
+      "id": "livraison_mod",
+      "titre": "Liste de controle de livraison d'un mod TSC",
+      "domaine": "qualite",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/qualite/livraison_mod.md",
+      "sources": [
+        "fiche formats_scs",
+        "fiche fmodstudiocl",
+        "fiche regle_noms_sii_11",
+        "fiche regles_mods_mendy"
+      ],
+      "version": "ETS2 1.61 au 03/11/2026",
+      "date_verif": "2026-11-03",
+      "statut": "concu",
+      "mots_cles": [
+        "livraison",
+        "controle",
+        "qualite",
+        "manifest",
+        "guids",
+        "game.log",
+        "tscf_lab"
+      ]
     }
   ]
 }

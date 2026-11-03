@@ -11,7 +11,7 @@
  "agents": [
   {
    "id": "graphics",
-   "nom": "TSC Neural Graphics Expert",
+   "nom": "IA Pro Photoréalisme",
    "specialite": "rendu DX11 d'ETS2, shaders HLSL, reflets, ombres, eclairage, photorealisme temps reel",
    "niveau": 3,
    "preuve_niveau": "plugin tsc-graphics 0.1 a 0.14 construit et pose dans TSCF_Lab, audit du pipeline prouve (G-buffer, Z inverse, cout SSR 1,1-2,0 ms) ; rendu final pas encore valide en jeu par Mendy ; sources : branche claude/project-thread-a76ees, plugin 0.14 commit 414d468 (meteo 0.14 pas encore posee)",
@@ -166,7 +166,8 @@
     }
    ],
    "connaissances": [
-    "perf_shadow_constats"
+    "perf_shadow_constats",
+    "presentmon"
    ],
    "manque": [
     "mesure frametime fiable derriere ReShade (PresentMon ne voit pas la vraie chaine)",
@@ -236,7 +237,8 @@
    ],
    "connaissances": [
     "regle_noms_sii_11",
-    "regles_mods_mendy"
+    "regles_mods_mendy",
+    "formats_scs"
    ],
    "manque": [
     "analyseur automatique de game.log (erreurs -> mod -> fichier)",
@@ -298,7 +300,8 @@
     "scs_sons_camion",
     "exemple_peterbilt",
     "guide_metier",
-    "tsc_clapet"
+    "tsc_clapet",
+    "filtrage_cabine"
    ],
    "manque": [
     "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
@@ -376,7 +379,8 @@
     "scs_mod_son",
     "recette_moteur",
     "structure_jeu_161",
-    "scs_sons_camion"
+    "scs_sons_camion",
+    "fmodstudiocl"
    ],
    "manque": [
     "pilotage fmodstudiocl de bout en bout (build + export GUID) teste sur le PC",
@@ -436,7 +440,8 @@
     }
    ],
    "connaissances": [
-    "sdk_telemetrie_scs"
+    "sdk_telemetrie_scs",
+    "reglement_561_2006"
    ],
    "manque": [
     "tests rejoues automatiquement sur traces.json a chaque version",
@@ -490,7 +495,9 @@
     }
    ],
    "connaissances": [
-    "build_cloud"
+    "build_cloud",
+    "webview2_runtime",
+    "cloudflare_workers_limites"
    ],
    "manque": [
     "sources dans un depot versionne (aujourd'hui des bundles)",
@@ -540,7 +547,9 @@
    ],
    "connaissances": [
     "echelle_maturite",
-    "regles_mods_mendy"
+    "regles_mods_mendy",
+    "livraison_mod",
+    "formats_scs"
    ],
    "manque": [
     "liste de controle de livraison par type (mod, appli, plugin)",
@@ -590,7 +599,8 @@
    "connaissances": [
     "scs_blender_tools",
     "conversion_skins",
-    "outils_libres"
+    "outils_libres",
+    "blender_ligne_commande"
    ],
    "manque": [
     "pilotage de Blender en arriere-plan (blender -b -P) teste",
