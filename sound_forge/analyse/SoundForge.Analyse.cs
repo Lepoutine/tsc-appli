@@ -300,8 +300,9 @@ public static class SfAnalyse {
       try {
         // 1) camions : def/vehicle/truck/<id>/ (tous les fichiers de definitions, sur 4 niveaux)
         foreach (var id in a.List("def/vehicle/truck", true)) {
-          s.Camions.Add(id);
+          int avant = s.Fichiers.Count;
           Parcourir(a, s, "def/vehicle/truck/" + id, 0, 4);
+          if (s.Fichiers.Count > avant) s.Camions.Add(id);            // la source apporte un moteur ou un son a ce camion
         }
         // 2) sons : sound/ (banques, guids, soundref) et def/sound/
         Parcourir(a, s, "sound", 0, 8);
@@ -332,23 +333,44 @@ public static class SfAnalyse {
       return;
     }
     byte[] d = null; try { d = a.Read(p); } catch { }
-    string nat = Nature(d);
-    s.Fichiers.Add(new string[] { p, d == null ? "illisible" : nat, d == null ? "-1" : d.Length.ToString(CultureInfo.InvariantCulture) });
-    if (d == null || nat != "texte" || d.Length > MaxTexte) return;
-    string t = Encoding.UTF8.GetString(d);
+    string nat = d == null ? "illisible" : Nature(d), taille = d == null ? "-1" : d.Length.ToString(CultureInfo.InvariantCulture);
+    bool nomSon = l.EndsWith(".sui") || l.EndsWith(".soundref") || l.EndsWith(".guids") || l.Contains("sound") || l.Contains("/engine/");
+    if (d == null || nat != "texte" || d.Length > MaxTexte) { if (nomSon) s.Fichiers.Add(new string[] { p, nat, taille }); return; }   // illisible/chiffre : garde seulement si c'est un fichier son ou moteur
+    string t = SansCommentaires(Encoding.UTF8.GetString(d));
     if (l.EndsWith(".guids")) {
+      s.Fichiers.Add(new string[] { p, nat, taille });
       foreach (Match m in RxGuid.Matches(t)) s.Evenements.Add(new string[] { p, m.Groups[1].Value, m.Groups[2].Value });
       return;
     }
+    var unites = new List<string[]>();
     foreach (Match m in RxUnite.Matches(t)) {
-      string nom = "";
-      int fin = t.IndexOf('}', m.Index); if (fin > m.Index) { var n = RxNom.Match(t.Substring(m.Index, Math.Min(fin - m.Index, 20000))); if (n.Success) nom = n.Groups[1].Value; }
-      if (m.Groups[1].Value == "SiiNunit") continue;
-      s.Unites.Add(new string[] { p, m.Groups[1].Value, m.Groups[2].Value, nom });
+      string ty = m.Groups[1].Value; if (ty == "SiiNunit" || !UniteUtile(ty)) continue;
+      string nom = ""; int fin = t.IndexOf('}', m.Index); if (fin > m.Index) { var n = RxNom.Match(t.Substring(m.Index, Math.Min(fin - m.Index, 20000))); if (n.Success) nom = n.Groups[1].Value; }
+      unites.Add(new string[] { p, ty, m.Groups[2].Value, nom });
     }
-    var vus = new HashSet<string>();
-    foreach (Match m in RxRef.Matches(t)) if (vus.Add(m.Groups[1].Value)) s.Refs.Add(new string[] { p, m.Groups[1].Value });
+    var refs = new List<string[]>(); var vus = new HashSet<string>(); string dossier = p.Contains("/") ? p.Substring(0, p.LastIndexOf('/')) : "";
+    foreach (Match m in RxRef.Matches(t)) {
+      string v = m.Groups[1].Value; int bar = v.LastIndexOf('|'); if (bar >= 0) v = v.Substring(bar + 1);   // entree .sui "nom|chemin"
+      v = v.Trim(); if (v.Length == 0 || v.IndexOf('[') >= 0) continue;
+      if (!v.StartsWith("/")) v = "/" + (dossier.Length > 0 ? dossier + "/" : "") + v;                   // chemin relatif au fichier
+      if (vus.Add(v)) refs.Add(new string[] { p, v });
+    }
+    if (unites.Count == 0 && refs.Count == 0 && !l.EndsWith(".sui") && !l.EndsWith(".soundref")) return;   // ni moteur ni son : ignore
+    s.Fichiers.Add(new string[] { p, nat, taille }); s.Unites.AddRange(unites); s.Refs.AddRange(refs);
     foreach (Match m in RxInclude.Matches(t)) s.Includes.Add(new string[] { p, m.Groups[1].Value });
+  }
+  static bool UniteUtile(string ty) { return ty == "accessory_engine_data" || ty == "accessory_transmission_data" || ty.Contains("horn") || ty.Contains("sound"); }
+  // retire les lignes de commentaire (# ou //) et les blocs /* */ : le texte d'aide des .sui ne doit pas compter comme reference
+  public static string SansCommentaires(string t) {
+    var b = new StringBuilder(t.Length); bool bloc = false;
+    foreach (var brut in t.Split('\n')) {
+      string l = brut;
+      if (bloc) { int f = l.IndexOf("*/"); if (f < 0) continue; l = l.Substring(f + 2); bloc = false; }
+      int o = l.IndexOf("/*"); if (o >= 0 && l.IndexOf('"') < 0) { int f = l.IndexOf("*/", o + 2); if (f < 0) { bloc = true; l = l.Substring(0, o); } else l = l.Substring(0, o) + l.Substring(f + 2); }
+      string tr = l.TrimStart(); if (tr.StartsWith("#") || tr.StartsWith("//")) continue;
+      b.Append(l).Append('\n');
+    }
+    return b.ToString();
   }
   // en-tete RIFF d'une banque FMOD : "RIFF <taille> FEV FMT <taille> <version> ..." (la version de format, jamais modifiee)
   public static string EnteteBanque(byte[] h) {
@@ -413,12 +435,15 @@ public static class SfAnalyse {
     // camions (vue fusionnee)
     var camions = new SortedDictionary<string, List<SfSource>>(StringComparer.OrdinalIgnoreCase);
     foreach (var s in sources) foreach (var c in s.Camions) { List<SfSource> l; if (!camions.TryGetValue(c, out l)) camions[c] = l = new List<SfSource>(); l.Add(s); }
-    int nMoteurs = 0, nCompat = 0, nPartiel = 0, nNon = 0, nNonVerif = 0;
-    J.Append("\"camions\": [\n"); first = true;
+    int nIgnores = 0, nMoteurs = 0, nCompat = 0, nPartiel = 0, nNon = 0, nNonVerif = 0;
+    J.Append("\"camions\": [\n"); first = true; int nCamions = 0;
     foreach (var kv in camions) {
       string id = kv.Key, pre = "def/vehicle/truck/" + id.ToLowerInvariant() + "/";
-      bool jeu = kv.Value.Exists(x => x.Role == "jeu"), actif = kv.Value.Exists(x => x.Role != "inactif");
-      var origine = kv.Value.Find(x => x.Role == "jeu") ?? kv.Value[0];
+      bool jeu, actif = kv.Value.Exists(x => x.Role != "inactif");
+      SfSource origine = null; int best = -1;                                   // la source qui apporte le plus de moteurs a ce camion
+      foreach (var s in kv.Value) { if (s.Role == "inactif" && actif) continue; int nb = s.Unites.FindAll(u => u[1] == "accessory_engine_data" && u[0].ToLowerInvariant().StartsWith(pre)).Count + (s.Role == "jeu" ? 1 : 0); if (nb > best) { best = nb; origine = s; } }
+      if (origine == null) origine = kv.Value[0];
+      jeu = origine.Role == "jeu";
       var moteurs = new List<string>(); var sons = new List<string>(); var refs = new List<string[]>(); var chiffres = new List<string>(); var illisibles = new List<string>();
       var vusMot = new HashSet<string>();
       foreach (var s in kv.Value) {
@@ -436,11 +461,12 @@ public static class SfAnalyse {
           if (f[0].ToLowerInvariant().Contains("sound")) sons.Add(f[0]);
         }
         foreach (var r in s.Refs) {
-          if (!r[0].ToLowerInvariant().StartsWith(pre)) continue;
+          if (!r[0].ToLowerInvariant().StartsWith(pre) || r[0].ToLowerInvariant().EndsWith(".soundref")) continue;   // les .soundref sont suivis par la chaine
           Entree e; if (vfs.TryGetValue(Norm(r[0]), out e) && e.Gagnant != s) continue;
           refs.Add(new string[] { r[0], r[1], s.Nom });
         }
       }
+      if (moteurs.Count == 0 && sons.Count == 0 && refs.Count == 0) { nIgnores++; continue; }   // dossier d'accessoires d'un mod, pas un camion
       // verification de chaque reference son
       int ok = 0, manque = 0, nonverif = 0; var details = new StringBuilder(); bool fd = true;
       foreach (var r in refs) {
@@ -459,7 +485,7 @@ public static class SfAnalyse {
       else if (chiffres.Count > 0) { compat = "partiel"; pourquoi = "Certaines definitions sont chiffrees : " + chiffres.Count + " fichier(s)."; }
       else { compat = "compatible"; pourquoi = "Moteurs et references son trouves, banques et evenements presents (verification statique ; a confirmer en jeu)."; }
       if (compat == "compatible") nCompat++; else if (compat == "partiel") nPartiel++; else if (compat == "non_pris_en_charge") nNon++; else nNonVerif++;
-      nMoteurs += moteurs.Count;
+      nMoteurs += moteurs.Count; nCamions++;
       if (!first) J.Append(",\n"); first = false;
       J.Append("{\"id\":" + Json(id) + ",\"origine\":" + Json(jeu ? "jeu (" + origine.Nom + ")" : "mod (" + origine.Nom + ")") + ",\"actif\":" + (actif ? "true" : "false") +
         ",\"compatibilite\":" + Json(compat) + ",\"raison\":" + Json(pourquoi) + ",\"moteurs\":[" + string.Join(",", moteurs.ConvertAll(Json).ToArray()) + "]" +
@@ -483,12 +509,12 @@ public static class SfAnalyse {
     J.Append("\n],\n");
 
     // conflits : meme fichier son fourni par plusieurs sources (hors jeu de base), ou fichier du jeu remplace par un mod
-    J.Append("\"conflits\": [\n"); first = true; int nConf = 0;
+    J.Append("\"conflits\": [\n"); first = true; int nConf = 0, nRemp = 0;
     foreach (var e in vfs.Values) {
       var mods = e.Sources.FindAll(x => x.Role == "actif"); bool base_ = e.Sources.Exists(x => x.Role == "jeu");
       if (mods.Count == 0 || (mods.Count < 2 && !base_)) continue;
       string type = mods.Count >= 2 ? "plusieurs_mods" : "remplace_le_jeu";
-      if (type == "plusieurs_mods") nConf++;
+      if (type == "plusieurs_mods") nConf++; else if (++nRemp > 3000) continue;
       if (!first) J.Append(",\n"); first = false;
       J.Append("{\"chemin\":" + Json(e.Chemin) + ",\"type\":" + Json(type) + ",\"gagnant\":" + Json(e.Gagnant.Nom) + ",\"sources\":[" + string.Join(",", e.Sources.ConvertAll(x => Json(x.Nom)).ToArray()) + "]}");
     }
@@ -505,16 +531,24 @@ public static class SfAnalyse {
     }
     J.Append("\n],\n");
 
-    J.Append("\"resume\": {\"camions\":" + camions.Count + ",\"moteurs\":" + nMoteurs + ",\"banques\":" + nBanques + ",\"mods_audio\":" + sources.FindAll(x => x.Role != "jeu" && x.Banques.Count + x.Refs.Count > 0).Count +
-      ",\"conflits\":" + nConf + ",\"compatibles\":" + nCompat + ",\"partiels\":" + nPartiel + ",\"non_pris_en_charge\":" + nNon + ",\"non_verifies\":" + nNonVerif + "}\n}\n");
+    J.Append("\"resume\": {\"camions\":" + nCamions + ",\"dossiers_accessoires_ignores\":" + nIgnores + ",\"moteurs\":" + nMoteurs + ",\"banques\":" + nBanques + ",\"mods_audio\":" + sources.FindAll(x => x.Role != "jeu" && x.Banques.Count + x.Refs.Count > 0).Count +
+      ",\"conflits\":" + nConf + ",\"remplacements_du_jeu\":" + nRemp + ",\"compatibles\":" + nCompat + ",\"partiels\":" + nPartiel + ",\"non_pris_en_charge\":" + nNon + ",\"non_verifies\":" + nNonVerif + "}\n}\n");
     return J.ToString();
   }
 
   // reference "/sound/x/y.bank#evenement/chemin" ou "/sound/x/y.soundref"
-  static void Verifier(string reference, Dictionary<string, Entree> vfs, Dictionary<string, HashSet<string>> evts, List<SfSource> sources, out string etat, out string raison) {
+  static void Verifier(string reference, Dictionary<string, Entree> vfs, Dictionary<string, HashSet<string>> evts, List<SfSource> sources, out string etat, out string raison) { Verifier(reference, vfs, evts, sources, out etat, out raison, 0); }
+  static void Verifier(string reference, Dictionary<string, Entree> vfs, Dictionary<string, HashSet<string>> evts, List<SfSource> sources, out string etat, out string raison, int profondeur) {
     string r = reference.Trim(); int h = r.IndexOf('#'); string fichier = Norm(h >= 0 ? r.Substring(0, h) : r), ev = h >= 0 ? r.Substring(h + 1).Trim().Trim('/').ToLowerInvariant() : "";
     if (!vfs.ContainsKey(fichier)) { etat = "manquant"; raison = "Fichier introuvable dans le jeu et les mods actifs : /" + fichier; return; }
-    if (fichier.EndsWith(".soundref")) { etat = "ok"; raison = "Fichier .soundref present (sa cible est verifiee dans la liste soundref)."; return; }
+    if (fichier.EndsWith(".soundref")) {
+      string cible = null; Entree es = vfs[fichier];
+      foreach (var r2 in es.Gagnant.Refs) if (Norm(r2[0]) == fichier) { cible = r2[1]; break; }
+      if (cible == null) { etat = "non_verifie"; raison = "Le .soundref est present mais sa cible n'est pas lisible."; return; }
+      if (profondeur > 3) { etat = "non_verifie"; raison = "Chaine de .soundref trop longue."; return; }
+      string e2, r3; Verifier(cible, vfs, evts, sources, out e2, out r3, profondeur + 1);
+      etat = e2; raison = ".soundref -> " + cible + " : " + r3; return;
+    }
     if (ev.Length == 0) { etat = "ok"; raison = "Banque presente."; return; }
     HashSet<string> set;
     if (!evts.TryGetValue(fichier, out set)) {
