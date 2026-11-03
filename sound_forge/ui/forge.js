@@ -220,7 +220,7 @@
 
   /* ---------- simulateur ---------- */
   let anim = 0, clapetOuvert = false, clapetK = 0, clapetAnim = 0;
-  const TOUCHE_CLAPET = 'v'; // en attente du choix de Mendy
+  const TOUCHE_CLAPET = 'v'; // touche validee par Mendy le 03/11/2026
   function clapet() {
     if (!P.couches.some(c => c.role === 'clapet')) { toast('Ajoute des couches « Clapet ouvert » pour essayer le clapet.'); return; }
     clapetOuvert = !clapetOuvert;

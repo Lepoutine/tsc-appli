@@ -18,7 +18,7 @@ Le moteur son d'ETS2 ne transmet aux événements moteur que rpm, load, brake, t
 - État K de 0 à 1. L'ouverture prend 180 ms, la fermeture 350 ms.
 - Couches normales (ralenti, charge, lever de pied) : poids × (1 − 0,6·K).
 - Couches clapet : fondu à puissance constante entre les régimes voisins, poids K × (0,55 + 0,45·charge). Vitesse de lecture = rpm / régime de la couche, bornée entre 0,5 et 2.
-- Touche d'essai dans Sound Forge : V (la touche définitive sera choisie par Mendy).
+- Touche : V, validée par Mendy le 03/11/2026 (Sound Forge et plugin en jeu).
 
 ## Sources de départ
 Le mod « Scania R770 Valve Exhaust » de Mendy (scania_ng_v8.bank) contient :
