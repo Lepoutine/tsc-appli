@@ -112,6 +112,12 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
 
+0.15 (03/11/2026) - TSC Neural Engine, 3 ameliorations choisies par le juge v2 (DLL + HLSL, jeu ferme ; contient 0.14.3)
+- anticrenelage (LDR) : bord detecte par la luminance (contraste local + sens du bord), melange avec le cote oppose. Cible : pique de synthese.
+- air + visibilite (HDR) : loi de Koschmieder T = exp(-3,912 z / V), lumiere du ciel lue a l'horizon dans l'image. Cible : perspective aerienne -1,1 sigma.
+- ao_horizons (HDR) : occlusion par horizons (3 directions x 2 cotes x 4 pas, rayon 1,5 m, normale depuis la profondeur).
+- Tout a 0 par defaut : rien ne change tant que la boucle de reglage ne les active pas. Constantes : 21 float4 (336 octets).
+
 0.14.3 (03/11/2026) - correction de plantage (seule la DLL change ; HLSL 0.14.2 inchange)
 - Plantage 0xc0000005 a RVA 0x19A29 (calcul d'empreinte des textures) a l'entree dans le camion : la lecture allait jusqu'a pas x lignes,
   alors que la derniere ligne du tampon du jeu ne fait que la largeur utile. Lecture bornee + verification du tampon avant lecture.

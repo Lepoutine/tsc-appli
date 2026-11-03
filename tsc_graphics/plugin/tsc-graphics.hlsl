@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -31,6 +31,7 @@ cbuffer P : register(b0) {
 	float4 p17; // 0.14 : rideau de pluie (force), vitesse de chute, inclinaison, temps (s, continu)
 	float4 p18; // 0.14 : nuages de pluie (force), ambiance pluie lissee 0-1, delavage, froid
 	float4 p19; // 0.14 : contraste sous la pluie, force de la table de pluie, taille de la table de pluie (0 = absente) ; 0.14.2 : w = optique
+	float4 p20; // 0.15 : anticrenelage (apres tone mapping), air (perspective aerienne physique), visibilite (m), occlusion par horizons (force, 0 = ancienne)
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -177,6 +178,52 @@ float lm_propre() {
 }
 float lm_vue() { return p15.y > 0.5 ? max(tLm.Load(int3(0, 0, 0)), 1e-4) : lm_propre(); }
 float4 ps_lm(VSO i) : SV_Target { return lm_propre(); }
+// ---------- 0.15 : occlusion par horizons (facon HBAO/GTAO, ecrite pour TSC) ----------
+// Pour 3 directions tournees par pixel, on cherche de chaque cote le point le plus « haut » au-dessus du plan de la surface
+// (normale reconstruite depuis la profondeur), dans un rayon de 1,5 m. Plus l'horizon monte, plus la lumiere du ciel est cachee.
+float ao_horizons(float2 uv, float3 P) {
+	float3 N = normale(uv, P);
+	float Rm = 1.5, pxm = p2.y / (2 * p0.z * max(P.z, p1.x));
+	float rpx = clamp(Rm * pxm, 3, 64);
+	float j = bruit(uv * p2.xy), occ = 0;
+	[unroll] for (int a = 0; a < 3; a++) {
+		float ang = (a + j) * 1.0471976;
+		float2 dir = float2(cos(ang), sin(ang)) * p2.zw;
+		[unroll] for (int sd = -1; sd <= 1; sd += 2) {
+			float hmax = 0;
+			[unroll] for (int k = 1; k <= 4; k++) {
+				float2 u2 = uv + dir * sd * rpx * (k - 0.5 + 0.5 * j) / 4;
+				float ds = tProf.SampleLevel(sPt, u2, 0);
+				if (ciel(ds) || cabine(ds)) continue;
+				float3 D = posVue(u2) - P; float l = length(D);
+				if (l < 1e-3 || l > Rm) continue;
+				float hh = saturate(dot(D / l, N) - 0.08) * (1 - (l * l) / (Rm * Rm));
+				hmax = max(hmax, hh);
+			}
+			occ += hmax;
+		}
+	}
+	return saturate(occ / 6 * 1.5);
+}
+// ---------- 0.15 : perspective aerienne physique (loi de Koschmieder) ----------
+// L'air transmet T = exp(-3,912 z / V) de la lumiere de l'objet (V = visibilite meteo, contraste 2 %) et ajoute (1-T) de la lumiere
+// du ciel a l'horizon. Couleur du ciel lue dans l'image (pixels de ciel autour de l'horizon, mip flou), sinon gris bleute.
+float3 ciel_horizon(float lm) {
+	float3 s = 0; float n = 0;
+	[unroll] for (int k = 0; k < 8; k++) {
+		float2 u = float2(0.0625 + k * 0.125, 0.38);
+		float d = tProf.SampleLevel(sPt, u, 0);
+		if (ciel(d)) { s += tCouleur.SampleLevel(sLin, u, max(p5.w - 2, 0)).rgb; n += 1; }
+	}
+	float3 def = lm * float3(0.95, 0.98, 1.05) * 1.3;
+	return n > 0 ? lerp(def, s / max(n, 1), saturate(n / 3)) : def;
+}
+float3 air(float2 uv, float3 c, float z, float lm, float nuit) {
+	float V = max(p20.z, 200);
+	float T = exp(-3.912 * max(z - 10, 0) / V);
+	float3 A = ciel_horizon(lm) * lerp(1, 0.4, nuit);
+	return lerp(c, c * T + A * (1 - T), saturate(p20.y));
+}
 float3 camera(float2 uv, float3 col) {
 	float k = p6.x; if (k <= 0) return col;
 	float d = tProf.SampleLevel(sPt, uv, 0);
@@ -214,10 +261,12 @@ float3 camera(float2 uv, float3 col) {
 				}
 			}
 			float ao = saturate(occ / 8 * 1.6) * 0.5 + saturate(occ2 / 8 * 1.4) * 0.35;
+			if (p20.w > 0) ao = ao_horizons(uv, P) * saturate(p20.w);   // 0.15 : occlusion par horizons, orientee par la normale
 			float3 alb = max(tGb2.SampleLevel(sPt, uv, 0).rgb, 0);
 			c = c * (1 - p7.z * ao) + rebond / 8 * (alb + 0.15) * p7.z * 0.25;
 		}
 		// perspective aerienne : le lointain se voile vers la couleur moyenne du ciel et se delave
+		if (p20.y > 0) c = air(uv, c, z, lm, nuit);   // 0.15 : perspective aerienne physique (transmission + lumiere du ciel)
 		float b = 1 - exp(-max(z - 20, 0) * k_br * 0.002);
 		float3 voile = lm * float3(0.95, 0.98, 1.05) * 1.3;
 		float l = lum(c);
@@ -474,8 +523,34 @@ float4 ps_principal(VSO i) : SV_Target {
 // Entree : la vue 8 bits sRGB du jeu (lue en lineaire par la vue sRGB), avant sa composition et avant l'interface.
 // L'auto-exposition du jeu a deja ete calculee : ce qu'on change ici reste a l'ecran (T3/boucle 0.8 : elle annulait tout en HDR).
 float epaule(float x, float s) { return x < s ? x : s + (1 - s) * (1 - exp(-(x - s) / max(1 - s, 1e-3))); }
+// ---------- 0.15 : anticrenelage apres tone mapping (detection de bord par la luminance, ecrit pour TSC) ----------
+// Juge v2 : bords en escalier et pique de synthese font « jeu ». On repere un bord (contraste local), son sens
+// (horizontal ou vertical), et on melange le pixel avec le cote oppose du bord, d'autant plus que le pixel est isole.
+float rl(float3 c) { return sqrt(max(lum(c), 0)); }
+float3 anticrenelage(float2 uv, float3 c0) {
+	float2 t = p2.zw;
+	float l0 = rl(c0);
+	float ln = rl(tCouleur.SampleLevel(sPt, uv + float2(0, -t.y), 0).rgb), ls = rl(tCouleur.SampleLevel(sPt, uv + float2(0, t.y), 0).rgb);
+	float le = rl(tCouleur.SampleLevel(sPt, uv + float2(t.x, 0), 0).rgb), lw = rl(tCouleur.SampleLevel(sPt, uv + float2(-t.x, 0), 0).rgb);
+	float mx = max(l0, max(max(ln, ls), max(le, lw))), mn = min(l0, min(min(ln, ls), min(le, lw)));
+	float rg = mx - mn;
+	if (rg < max(0.04, mx * 0.15)) return c0;
+	float lne = rl(tCouleur.SampleLevel(sPt, uv + float2(t.x, -t.y), 0).rgb), lsw = rl(tCouleur.SampleLevel(sPt, uv + float2(-t.x, t.y), 0).rgb);
+	float lnw = rl(tCouleur.SampleLevel(sPt, uv + float2(-t.x, -t.y), 0).rgb), lse = rl(tCouleur.SampleLevel(sPt, uv + float2(t.x, t.y), 0).rgb);
+	float eh = abs(lnw + 2 * ln + lne - 2 * (lw + 2 * l0 + le) + lsw + 2 * ls + lse);
+	float ev = abs(lnw + 2 * lw + lsw - 2 * (ln + 2 * l0 + ls) + lne + 2 * le + lse);
+	bool horiz = eh >= ev;
+	float g1 = horiz ? abs(ln - l0) : abs(lw - l0), g2 = horiz ? abs(ls - l0) : abs(le - l0);
+	float2 pas = horiz ? float2(0, t.y) : float2(t.x, 0);
+	if (g1 > g2) pas = -pas;
+	float moy = (ln + ls + le + lw) * 0.25;
+	float sub = saturate(abs(moy - l0) / rg); sub = sub * sub * (3 - 2 * sub);
+	float3 voisin = tCouleur.SampleLevel(sLin, uv + pas * 0.5, 0).rgb;
+	return lerp(c0, voisin, saturate(p20.x) * (0.35 + 0.5 * sub));
+}
 float4 ps_ldr(VSO i) : SV_Target {
 	float4 t = tCouleur.SampleLevel(sPt, i.uv, 0);
+	if (p20.x > 0) t.rgb = anticrenelage(i.uv, t.rgb);
 	float3 c = max(t.rgb, 0);
 	// balance : temperature (+ chaud / - froid) et teinte (+ vert / - magenta)
 	c *= float3(1 + 0.08 * p14.y, 1 + 0.06 * p14.z, 1 - 0.08 * p14.y);
