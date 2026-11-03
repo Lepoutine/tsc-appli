@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.4.2"
+#define VERSION "tsc-graphics 0.4.3"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -136,7 +136,13 @@ enum { D_CreateBuffer = 3, D_CreateTexture2D = 5, D_CreateSRV = 7, D_CreateRTV =
 	D_CreateSampler = 23, D_CreateQuery = 24, D_GetFeatureLevel = 37, D1_CreateDeviceContextState = 47 };
 enum { C_VSSetCB = 7, C_PSSetSRV = 8, C_PSSetShader = 9, C_PSSetSamplers = 10, C_VSSetShader = 11, C_DrawIndexed = 12, C_Draw = 13, C_Map = 14, C_Unmap = 15,
 	C_PSSetCB = 16, C_DrawIndexedInstanced = 20, C_DrawInstanced = 21, C_IASetTopology = 24, C_Begin = 27, C_End = 28, C_GetData = 29,
-	C_OMSetRT = 33, C_RSSetViewports = 44, C_CopySubresourceRegion = 46, C_CopyResource = 47, C_UpdateSubresource = 48, C_ClearRTV = 50, C_ClearDSV = 53, C_GenerateMips = 54, C1_SwapState = 131 };
+	C_OMSetRT = 33, C_RSSetViewports = 44, C_CopySubresourceRegion = 46, C_CopyResource = 47, C_UpdateSubresource = 48, C_ClearRTV = 50, C_ClearDSV = 53, C_GenerateMips = 54, C1_SwapState = 131,
+	/* 0.4.3 : sauvegarde / restauration manuelle (T1c : SwapDeviceContextState faisait perdre au jeu la suite de l'image) */
+	C_IASetInputLayout = 17, C_GSSetShader = 23, C_OMSetBlend = 35, C_OMSetDSS = 36, C_RSSetState = 43, C_RSSetScissor = 45,
+	C_HSSetShader = 60, C_DSSetShader = 64,
+	C_PSGetSRV = 73, C_PSGetShader = 74, C_PSGetSamplers = 75, C_VSGetShader = 76, C_PSGetCB = 77, C_IAGetInputLayout = 78,
+	C_GSGetShader = 82, C_IAGetTopology = 83, C_OMGetRT = 89, C_OMGetBlend = 91, C_OMGetDSS = 92, C_RSGetState = 94, C_RSGetViewports = 95,
+	C_RSGetScissor = 96, C_HSGetShader = 98, C_DSGetShader = 102 };
 enum { S_GetDevice = 7, S_Present = 8, S_GetBuffer = 9, S_ResizeBuffers = 13, S1_Present1 = 22 };
 enum { V_GetResource = 7, V_GetDesc = 8, T_GetDesc = 10 };
 
@@ -363,6 +369,58 @@ static bool copies_pretes(void *hdr, void *prof) {
 	return g_coul_srv && g_prof_srv;
 }
 
+
+/* ---------- 0.4.3 : etat du jeu sauve puis remis a l'identique autour de la passe TSC ---------- */
+struct EtatJeu {
+	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[2], *smp[2], *cb;
+	float bf[4]; UINT masque, sref, topo, nvp, nsc; VIEWPORT vp[16]; long sc[16][4];
+};
+typedef void (WINAPI *GetSh)(void *, void **, void **, UINT *);
+typedef void (WINAPI *SetSh)(void *, void *, void *const *, UINT);
+static void sauver(EtatJeu &e) {
+	memset(&e, 0, sizeof e); void *c = g_ctx;
+	((void (WINAPI *)(void *, UINT, void **, void **))VT(c)[C_OMGetRT])(c, 8, e.rtv, &e.dsv);
+	UINT n = 0;
+	((GetSh)VT(c)[C_VSGetShader])(c, &e.vs, 0, &n); n = 0;
+	((GetSh)VT(c)[C_PSGetShader])(c, &e.ps, 0, &n); n = 0;
+	((GetSh)VT(c)[C_GSGetShader])(c, &e.gs, 0, &n); n = 0;
+	((GetSh)VT(c)[C_HSGetShader])(c, &e.hs, 0, &n); n = 0;
+	((GetSh)VT(c)[C_DSGetShader])(c, &e.ds, 0, &n);
+	((void (WINAPI *)(void *, void **))VT(c)[C_IAGetInputLayout])(c, &e.il);
+	((void (WINAPI *)(void *, UINT *))VT(c)[C_IAGetTopology])(c, &e.topo);
+	((void (WINAPI *)(void *, void **, float *, UINT *))VT(c)[C_OMGetBlend])(c, &e.bl, e.bf, &e.masque);
+	((void (WINAPI *)(void *, void **, UINT *))VT(c)[C_OMGetDSS])(c, &e.dss, &e.sref);
+	((void (WINAPI *)(void *, void **))VT(c)[C_RSGetState])(c, &e.rs);
+	e.nvp = 16; ((void (WINAPI *)(void *, UINT *, VIEWPORT *))VT(c)[C_RSGetViewports])(c, &e.nvp, e.vp);
+	e.nsc = 16; ((void (WINAPI *)(void *, UINT *, void *))VT(c)[C_RSGetScissor])(c, &e.nsc, e.sc);
+	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 2, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSamplers])(c, 0, 2, e.smp);
+	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetCB])(c, 0, 1, &e.cb);
+}
+static void remettre(EtatJeu &e) {
+	void *c = g_ctx;
+	((SetSh)VT(c)[C_VSSetShader])(c, e.vs, 0, 0);
+	((SetSh)VT(c)[C_PSSetShader])(c, e.ps, 0, 0);
+	((SetSh)VT(c)[C_GSSetShader])(c, e.gs, 0, 0);
+	((SetSh)VT(c)[C_HSSetShader])(c, e.hs, 0, 0);
+	((SetSh)VT(c)[C_DSSetShader])(c, e.ds, 0, 0);
+	((void (WINAPI *)(void *, void *))VT(c)[C_IASetInputLayout])(c, e.il);
+	((void (WINAPI *)(void *, UINT))VT(c)[C_IASetTopology])(c, e.topo);
+	((void (WINAPI *)(void *, void *, const float *, UINT))VT(c)[C_OMSetBlend])(c, e.bl, e.bf, e.masque);
+	((void (WINAPI *)(void *, void *, UINT))VT(c)[C_OMSetDSS])(c, e.dss, e.sref);
+	((void (WINAPI *)(void *, void *))VT(c)[C_RSSetState])(c, e.rs);
+	((void (WINAPI *)(void *, UINT, const VIEWPORT *))VT(c)[C_RSSetViewports])(c, e.nvp, e.vp);
+	((void (WINAPI *)(void *, UINT, const void *))VT(c)[C_RSSetScissor])(c, e.nsc, e.sc);
+	/* cibles d'abord, puis ressources (sinon le pilote delie une SRV encore liee en cible) */
+	UINT nrt = 0; for (UINT k = 0; k < 8; k++) if (e.rtv[k]) nrt = k + 1;
+	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(c)[C_OMSetRT])(c, nrt, e.rtv, e.dsv);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 2, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSamplers])(c, 0, 2, e.smp);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetCB])(c, 0, 1, &e.cb);
+	for (int k = 0; k < 8; k++) REL(e.rtv[k]);
+	REL(e.dsv); REL(e.vs); REL(e.ps); REL(e.gs); REL(e.hs); REL(e.ds); REL(e.il); REL(e.bl); REL(e.dss); REL(e.rs);
+	REL(e.srv[0]); REL(e.srv[1]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
+}
 /* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
 static void passe_vue(void *hdr, void *prof) {
 	if (g_arret || !g_shaders_ok || !g_etat || g_vues_traitees >= (int)R.max_vues) return;
@@ -377,9 +435,17 @@ static void passe_vue(void *hdr, void *prof) {
 		R.intensite, R.rugosite, R.flou, R.trainees,
 		R.etirement, R.pas, R.epaisseur, R.f0,
 		(float)g_vues_traitees, R.assombrir, R.peinture, (float)(g_coul_mips - 1) };
-	void *old = 0;
+	EtatJeu sv;
 	g_nous++;
-	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, g_etat, &old);
+	sauver(sv);
+	/* etats par defaut pour notre triangle plein ecran (melange, profondeur, rasterisation, autres etages) */
+	((void (WINAPI *)(void *, void *, const float *, UINT))VT(g_ctx)[C_OMSetBlend])(g_ctx, 0, 0, 0xffffffff);
+	((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_OMSetDSS])(g_ctx, 0, 0);
+	((void (WINAPI *)(void *, void *))VT(g_ctx)[C_RSSetState])(g_ctx, 0);
+	((void (WINAPI *)(void *, void *))VT(g_ctx)[C_IASetInputLayout])(g_ctx, 0);
+	((SetSh)VT(g_ctx)[C_GSSetShader])(g_ctx, 0, 0, 0); ((SetSh)VT(g_ctx)[C_HSSetShader])(g_ctx, 0, 0, 0); ((SetSh)VT(g_ctx)[C_DSSetShader])(g_ctx, 0, 0, 0);
+	/* la cible HDR du jeu ne doit pas etre liee en lecture pendant qu'on la copie / y ecrit */
+	{ void *nr = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nr, 0); }
 	int qi = g_q_i % NQ, qv = g_q_n[qi];
 	if (qv < QV && g_q_dis[qi]) {
 		if (!g_q_ouvert) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_Begin])(g_ctx, g_q_dis[qi]); g_q_ouvert = 1; }
@@ -406,8 +472,7 @@ static void passe_vue(void *hdr, void *prof) {
 	void *nul[2] = {0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 2, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	if (qv < QV && g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_b[qi][qv]); g_q_n[qi] = qv + 1; }
-	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, old, 0);
-	REL(old);
+	remettre(sv);
 	g_nous--;
 	g_vues_traitees++;
 	if (g_trace) { Ligne l; l.s("  >>> passe TSC sur la vue "); l.i(g_vues_traitees); l.s(" : "); dire_tex(l, hdr); trace_txt(l); }

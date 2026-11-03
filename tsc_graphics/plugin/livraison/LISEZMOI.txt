@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.4.2 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.4.3 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -25,3 +25,6 @@ vues principales (taille_min = 512 dans l'ini). Pour mesurer sans plafond : gard
 (t_limit_fps_inactive = 30 dans config.cfg limite le jeu a 30 img/s des que la fenetre n'est plus active).
 0.4.2 (apres T1b) : taches bleues/violettes corrigees (valeurs HDR invalides ecartees), trace d'une image demandee
 depuis l'ini (cle trace : changer le nombre), passe TSC notee dans la trace (pour comprendre pourquoi 1 vue sur 3).
+0.4.3 (apres T1c) : la passe TSC ne bascule plus tout l'etat du contexte (SwapDeviceContextState) : elle sauve et remet
+a l'identique chaque reglage qu'elle touche. T1c montrait qu'apres la passe le jeu perdait la suite de l'image
+(vues 2 et 3 et passe des gouttes) -> 1 vue sur 3 et taches sur la vitre.
