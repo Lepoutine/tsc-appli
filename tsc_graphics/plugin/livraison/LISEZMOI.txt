@@ -88,3 +88,9 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   (saut de 14 octets + trampoline), seulement si les octets sont exactement ceux releves sur le Shadow ; sinon rien. Retire a l'arret.
 - Empreinte des textures de decor remplies par UpdateSubresource(1) -> tsc-textures.csv (chemin upd / upd1 / copie_*).
 - Journal 30 s : ligne « (en ligne) » = crochets poses + variantes vues dans la table. Seule la DLL change. Rien n'est remplace.
+
+0.11.1 (03/11/2026)
+- 0.11 : crochets en ligne poses, trafic enfin vu (UpdateSubresource1 2D 43 733, CopySubresourceRegion1 115 851) mais 0 empreinte :
+  la condition « sans boite » etait trop stricte, et chaque fonction a une 2e implementation (variante) ou la table alterne.
+- 0.11.1 : boite couvrant tout le niveau 0 acceptee ; 300 premiers appels notes bruts (brut_upd/brut_upd1) ; compteurs de tri ;
+  la variante de chaque fonction est accrochee en ligne aussi (decodeur de prologue limite, refuse toute instruction inconnue). Seule la DLL change.

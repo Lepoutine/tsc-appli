@@ -57,7 +57,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.11"
+#define VERSION "tsc-graphics 0.11.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -784,10 +784,13 @@ typedef void (WINAPI *PFN_UPD)(void *, void *, UINT, const void *, const void *,
 static PFN_UPD o_upd; static i64 g_tx_upd2;
 /* 0.10 : textures 2D remplies APRES creation (UpdateSubresource) : si ce compte est grand, le remplacement devra se faire ici aussi */
 static void releve_upd(void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, const char *chemin);
-static void WINAPI h_upd(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) {
+static PFN_UPD o_upd_b;
+static inline void corps_upd(PFN_UPD o, void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) {
 	if (!g_nous && r) { int dim = 0; ((void (WINAPI *)(void *, int *))VT(r)[7 /*GetType*/])(r, &dim); if (dim == 3) { __atomic_fetch_add(&g_tx_upd2, 1, __ATOMIC_RELAXED); releve_upd(r, sub, box, data, rp, dp, "upd"); } }
-	o_upd(c, r, sub, box, data, rp, dp);
+	o(c, r, sub, box, data, rp, dp);
 }
+static void WINAPI h_upd(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) { corps_upd(o_upd, c, r, sub, box, data, rp, dp); }
+static void WINAPI h_upd_b(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) { corps_upd(o_upd_b, c, r, sub, box, data, rp, dp); }
 /* 0.10.1 : la 0.10 a montre que le jeu cree TOUTES ses textures vides (2 531 en 2 min) et ne les remplit ni a la creation
    ni par UpdateSubresource. On surveille donc les autres chemins : Map en ecriture (textures staging / dynamic),
    Unmap (empreinte des donnees ecrites), CopyResource / CopySubresourceRegion(1) vers une texture de decor, UpdateSubresource1,
@@ -848,28 +851,50 @@ static void copie_vers(void *dst, UINT dsub, void *src, UINT ssub, const char *c
 	TEX2D_DESC ds; if (src && est_tex2d(src)) desc_tex(src, ds); else memset(&ds, 0, sizeof ds);
 	Ligne l; l.s(chemin); l.s(";"); l.x(h); l.s(";"); tx_desc(l, d, niv); l.s("src "); l.i(ds.Width); l.s("x"); l.i(ds.Height); l.s(" u"); l.i(ds.Usage); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
+/* 0.11.1 : la 0.11 a vu 43 733 UpdateSubresource1 2D sans aucune ligne : la condition « pas de boite » etait trop stricte.
+   On accepte une boite qui couvre tout le niveau 0, et les 300 premiers appels sont notes BRUTS (description, boite, pas) pour comprendre. */
+struct BOXx { UINT l, t, f, r, b, k; };
+static i64 g_brut, g_upd_decor, g_upd_boite_part, g_upd_niv;
 static void releve_upd(void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, const char *chemin) {
-	TEX2D_DESC d; if (R.sonde_textures <= 0 || !data || !rp || box || !decor(r, d)) return;
-	UINT mips = d.MipLevels ? d.MipLevels : 1, niv = sub % mips; if (niv || d.Width < 16 || d.Height < 16) return;
-	SUBRES m = {data, rp, dp}; u64 taille; u64 h = empreinte(&m, &d, taille);
-	Ligne l; l.s(chemin); l.s(";"); l.x(h); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
+	if (R.sonde_textures <= 0 || !data || !rp) return;
+	TEX2D_DESC d; desc_tex(r, d); UINT mips = d.MipLevels ? d.MipLevels : 1, niv = sub % mips;
+	UINT w = d.Width >> niv ? d.Width >> niv : 1, h0 = d.Height >> niv ? d.Height >> niv : 1;
+	const BOXx *b = (const BOXx *)box;
+	if (__atomic_fetch_add(&g_brut, 1, __ATOMIC_RELAXED) < 300) {
+		Ligne l; l.s("brut_"); l.s(chemin); l.s(";;"); tx_desc(l, d, niv); l.s("sub "); l.i(sub); l.s(" pas "); l.i(rp); l.s("/"); l.i(dp);
+		if (b) { l.s(" boite "); l.i(b->l); l.s(","); l.i(b->t); l.s("-"); l.i(b->r); l.s(","); l.i(b->b); } l.s(" misc "); l.i(d.MiscFlags); l.s(" cpu "); l.i(d.CPUAccessFlags); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
+	}
+	if (!(d.BindFlags & 0x8) || (d.BindFlags & 0xA0) || d.Usage != 0) return;
+	__atomic_fetch_add(&g_upd_decor, 1, __ATOMIC_RELAXED);
+	if (b && (b->l || b->t || b->r < w || b->b < h0)) { __atomic_fetch_add(&g_upd_boite_part, 1, __ATOMIC_RELAXED); return; }
+	if (niv) { __atomic_fetch_add(&g_upd_niv, 1, __ATOMIC_RELAXED); return; }
+	if (d.Width < 16 || d.Height < 16) return;
+	SUBRES m = {data, rp, dp}; u64 taille; u64 hh = empreinte(&m, &d, taille);
+	Ligne l; l.s(chemin); l.s(";"); l.x(hh); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
 static void WINAPI h_copyres(void *c, void *dst, void *src) {
 	if (!g_nous) { g_cp_res++; ctx_vu(c); copie_vers(dst, 0, src, 0, "copie_res"); }
 	o_copyres(c, dst, src);
 }
-static void WINAPI h_copysub(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) {
+static PFN_COPYSUB o_copysub_b; static PFN_COPYSUB1 o_copysub1_b; static PFN_UPD1 o_upd1_b;
+static inline void corps_copysub(PFN_COPYSUB o, void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) {
 	if (!g_nous) { __atomic_fetch_add(&g_cp_sub, 1, __ATOMIC_RELAXED); ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub"); }
-	o_copysub(c, dst, dsub, x, y, z, src, ssub, box);
+	o(c, dst, dsub, x, y, z, src, ssub, box);
 }
-static void WINAPI h_copysub1(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box, UINT fl) {
+static inline void corps_copysub1(PFN_COPYSUB1 o, void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box, UINT fl) {
 	if (!g_nous) { __atomic_fetch_add(&g_cp_sub1, 1, __ATOMIC_RELAXED); ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub1"); }
-	o_copysub1(c, dst, dsub, x, y, z, src, ssub, box, fl);
+	o(c, dst, dsub, x, y, z, src, ssub, box, fl);
 }
-static void WINAPI h_upd1(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, UINT fl) {
+static inline void corps_upd1(PFN_UPD1 o, void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, UINT fl) {
 	if (!g_nous && est_tex2d(r)) { __atomic_fetch_add(&g_upd1_2d, 1, __ATOMIC_RELAXED); ctx_vu(c); releve_upd(r, sub, box, data, rp, dp, "upd1"); }
-	o_upd1(c, r, sub, box, data, rp, dp, fl);
+	o(c, r, sub, box, data, rp, dp, fl);
 }
+static void WINAPI h_copysub(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) { corps_copysub(o_copysub, c, dst, dsub, x, y, z, src, ssub, box); }
+static void WINAPI h_copysub_b(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) { corps_copysub(o_copysub_b, c, dst, dsub, x, y, z, src, ssub, box); }
+static void WINAPI h_copysub1(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box, UINT fl) { corps_copysub1(o_copysub1, c, dst, dsub, x, y, z, src, ssub, box, fl); }
+static void WINAPI h_copysub1_b(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box, UINT fl) { corps_copysub1(o_copysub1_b, c, dst, dsub, x, y, z, src, ssub, box, fl); }
+static void WINAPI h_upd1(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, UINT fl) { corps_upd1(o_upd1, c, r, sub, box, data, rp, dp, fl); }
+static void WINAPI h_upd1_b(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, UINT fl) { corps_upd1(o_upd1_b, c, r, sub, box, data, rp, dp, fl); }
 static HRESULT WINAPI h_map(void *c, void *r, UINT sub, UINT type, UINT fl, void *m) {
 	if (!g_nous && est_tex2d(r)) {
 		g_mx[type < 6 ? type : 0]++; if (c != g_ctx) { g_mx_autre_ctx++; ctx_vu(c); }
@@ -909,9 +934,10 @@ static EnLigne g_el[] = {
 	{C_CopySubresourceRegion, (void *)h_copysub, (void **)&o_copysub, "CopySubresourceRegion", 15, {0x48,0x8b,0xc4,0x48,0x89,0x58,0x08,0x48,0x89,0x68,0x10,0x48,0x89,0x70,0x18}, {0}, 0, 0},
 	{115, (void *)h_copysub1, (void **)&o_copysub1, "CopySubresourceRegion1", 20, {0x48,0x89,0x5c,0x24,0x08,0x57,0x48,0x83,0xec,0x60,0x4c,0x8b,0xd2,0x48,0x8d,0x99,0x28,0xff,0xff,0xff}, {0}, 0, 0},
 	{116, (void *)h_upd1, (void **)&o_upd1, "UpdateSubresource1", 18, {0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8d,0x6c,0x24,0xf9}, {0}, 0, 0} };
+static unsigned char *g_mem_el; static void octets_de(Ligne &l, const void *f);
 static void ecrire_saut(unsigned char *a, const void *vers) { a[0] = 0xff; a[1] = 0x25; a[2] = a[3] = a[4] = a[5] = 0; u64 v = (u64)vers; for (int k = 0; k < 8; k++) a[6 + k] = (unsigned char)(v >> (8 * k)); }
 static void poser_en_ligne(void **vt) {
-	static unsigned char *mem; if (!mem) mem = (unsigned char *)VirtualAlloc(0, 4096, 0x3000, 0x40 /*PAGE_EXECUTE_READWRITE*/);
+	static unsigned char *mem; if (!mem) mem = (unsigned char *)VirtualAlloc(0, 4096, 0x3000, 0x40 /*PAGE_EXECUTE_READWRITE*/); g_mem_el = mem;
 	if (!mem) { logline("crochets en ligne : memoire refusee"); return; }
 	int k = 0;
 	for (auto &e : g_el) {
@@ -941,11 +967,52 @@ static void retirer_en_ligne() {
 }
 /* diagnostic : la table pointe-t-elle parfois vers une AUTRE fonction (variante) pour ces entrees ? */
 static void *g_var[4][4]; static int g_var_n[4];
+/* 0.11.1 : la 0.11 a vu une 2e implementation (variante) pour chacune des 4 fonctions : la table alterne entre les deux.
+   On accroche aussi la variante en ligne, avec un petit decodeur de longueur d'instructions limite aux prologues usuels
+   (push, mov/lea/sub/test/xor avec modrm, sans adresse relative a RIP ni saut) : toute autre instruction = on ne pose pas. */
+static int longueur_instr(const unsigned char *p) {
+	int n = 0; if ((p[0] & 0xf0) == 0x40) n = 1; unsigned char op = p[n++];
+	if (op >= 0x50 && op <= 0x57) return n;
+	int imm = 0;
+	switch (op) { case 0x89: case 0x8b: case 0x8d: case 0x85: case 0x33: case 0x31: case 0x3b: case 0x39: case 0x2b: case 0x03: case 0x29: case 0x01: break;
+	case 0x83: imm = 1; break; case 0x81: case 0xc7: imm = 4; break; default: return 0; }
+	unsigned char m = p[n++]; int mod = m >> 6, rm = m & 7;
+	if (mod != 3 && rm == 4) { unsigned char sib = p[n++]; if (mod == 0 && (sib & 7) == 5) n += 4; }
+	if (mod == 0 && rm == 5) return 0;   /* relatif a RIP : on refuse */
+	if (mod == 1) n += 1; else if (mod == 2) n += 4;
+	return n + imm;
+}
+struct Variante { void *f; void **o; unsigned char *cible; unsigned char sauve[24]; int n, actif, tente; };
+static Variante g_vb[4] = { {(void *)h_upd_b, (void **)&o_upd_b, 0, {0}, 0, 0, 0}, {(void *)h_copysub_b, (void **)&o_copysub_b, 0, {0}, 0, 0, 0},
+	{(void *)h_copysub1_b, (void **)&o_copysub1_b, 0, {0}, 0, 0, 0}, {(void *)h_upd1_b, (void **)&o_upd1_b, 0, {0}, 0, 0, 0} };
+static void poser_variante(int k, unsigned char *c) {
+	Variante &v = g_vb[k]; if (v.tente) return; v.tente = 1;
+	Ligne l; l.s("crochet en ligne variante "); l.s(g_el[k].nom); l.s(" "); l.x((u64)c); l.s(" "); module_de(l, c); l.s(" : "); octets_de(l, c);
+	int n = 0; while (n < 14) { int k2 = longueur_instr(c + n); if (!k2) { n = -1; break; } n += k2; }
+	if (n < 14 || n > 24 || !g_mem_el) { l.s(" -> NON pose (instruction inconnue)"); journal(l); return; }
+	unsigned char *t = g_mem_el + 64 * (4 + k); for (int j = 0; j < n; j++) t[j] = c[j]; ecrire_saut(t + n, c + n); FlushInstructionCache(GetCurrentProcess(), t, 64);
+	*v.o = (void *)t; for (int j = 0; j < n; j++) v.sauve[j] = c[j];
+	DWORD old; if (!VirtualProtect(c, n, 0x40, &old)) { l.s(" -> protection refusee"); journal(l); return; }
+	unsigned char s14[14]; ecrire_saut(s14, v.f);
+	c[0] = 0xeb; c[1] = 0xfe; for (int j = 2; j < 14; j++) c[j] = s14[j]; for (int j = 14; j < n; j++) c[j] = 0x90;
+	__atomic_store_n((unsigned short *)c, (unsigned short)(s14[0] | (s14[1] << 8)), __ATOMIC_SEQ_CST);
+	VirtualProtect(c, n, old, &old); FlushInstructionCache(GetCurrentProcess(), c, n);
+	v.cible = c; v.n = n; v.actif = 1; l.s(" -> pose ("); l.i(n); l.s(" octets)"); journal(l);
+}
 static void noter_variantes() {
 	if (!g_vt_ctx) return;
 	for (int k = 0; k < 4; k++) { void *f = g_vt_ctx[g_el[k].i]; if (f == g_el[k].f) continue; int vu = 0;
 		for (int j = 0; j < g_var_n[k]; j++) if (g_var[k][j] == f) vu = 1;
-		if (!vu && g_var_n[k] < 4) g_var[k][g_var_n[k]++] = f; }
+		if (!vu && g_var_n[k] < 4) g_var[k][g_var_n[k]++] = f;
+		if (f != (void *)g_el[k].cible && g_el[k].actif && R.sonde_textures > 0) poser_variante(k, (unsigned char *)f); }
+}
+static void retirer_variantes() {
+	for (auto &v : g_vb) if (v.actif) {
+		DWORD old; if (!VirtualProtect(v.cible, v.n, 0x40, &old)) continue;
+		v.cible[0] = 0xeb; v.cible[1] = 0xfe; for (int j = 2; j < v.n; j++) v.cible[j] = v.sauve[j];
+		__atomic_store_n((unsigned short *)v.cible, (unsigned short)(v.sauve[0] | (v.sauve[1] << 8)), __ATOMIC_SEQ_CST);
+		VirtualProtect(v.cible, v.n, old, &old); FlushInstructionCache(GetCurrentProcess(), v.cible, v.n); v.actif = 0;
+	}
 }
 static void accrocher_contexte() {
 	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
@@ -1278,6 +1345,8 @@ static void apres_image(void *sc) {
 		static int prol; if (!prol) { prol = 1; journal_prologues(); }
 		Ligne q; q.s("TSC Textures (en ligne) :"); for (int k = 0; k < 4; k++) { q.s(" "); q.s(g_el[k].nom); q.s(g_el[k].actif ? "=pose" : "=non"); q.s(" variantes "); q.i(g_var_n[k]);
 			for (int j = 0; j < g_var_n[k]; j++) { q.s(" "); q.x((u64)g_var[k][j]); q.s(g_var[k][j] == (void *)g_el[k].cible ? "(=accrochee)" : "(AUTRE)"); } } journal(q);
+		Ligne u; u.s("TSC Textures (tri) : updates vers decor "); u.i(g_upd_decor); u.s(", dont boite partielle "); u.i(g_upd_boite_part); u.s(", niveaux >0 "); u.i(g_upd_niv);
+		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); journal(u);
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
@@ -1360,7 +1429,7 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 extern "C" void scs_telemetry_shutdown(void) {
 	if (!g_hooks) return;
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
-	retirer_en_ligne();
+	retirer_variantes(); retirer_en_ligne();
 	for (auto &e : g_el) if (!e.actif && g_vt_ctx[e.i] == e.f) retirer(g_vt_ctx, e.i, *e.o);
 	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] == c.f) retirer(g_vt_dev, c.i, *c.o);
 	for (i64 j = g_p_img - NR + 1; j <= g_p_img; j++) if (j > 0) { ProfLigne &r = g_pl[j % NR]; if (r.pleine && r.img == j) prof_emettre(r); }
