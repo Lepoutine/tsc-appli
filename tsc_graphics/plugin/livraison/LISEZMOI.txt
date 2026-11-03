@@ -101,3 +101,7 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   0.11.2 apprend les 3 vraies cibles du tone mapping (120 images) et ne traite qu'elles, une fois chacune par image. Journal : cibles apprises,
   images completes / incompletes.
 - Shader : gouttes v2 (claires, bord doux, jamais de tache sombre) apres la capture de Mendy 17:27. Seulement quand le jeu fait pleuvoir.
+
+0.11.3 (03/11/2026)
+- Trace 0.11.1 : la 4e cible 8 bits de taille vue arrive apres la passe HDR de la vue 1, avant les vues 2-3 ; l'ecran droit sautait l'etage (+32 au joint x2560).
+- 0.11.3 : une cible 8 bits n'est acceptee qu'apres toutes les vues HDR de l'image (autant qu'a l'image precedente). Remplace la 0.11.2 (meme shader).

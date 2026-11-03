@@ -57,7 +57,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.11.2"
+#define VERSION "tsc-graphics 0.11.3"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -711,6 +711,10 @@ static void fin_mesure_gpu() {
    (celles qui reviennent a chaque image) et on ne traite qu'elles, une fois chacune par image. */
 static void *g_lc_p[8]; static i64 g_lc_n[8]; static int g_lc_nb; static void *g_lt[3]; static int g_lt_ok; static unsigned g_lt_fait;   /* bit par cible traitee cette image */
 static i64 g_ldr_saut, g_ldr_img3, g_ldr_imgpas3;
+/* 0.11.3 : la trace 0.11.1 montre la 4e cible 8 bits de taille vue juste APRES la passe HDR de la vue 1 et AVANT celles des vues 2-3 ;
+   le vrai tone mapping des 3 ecrans vient apres TOUTES les vues HDR. On n'accepte donc une cible 8 bits qu'une fois traitees autant
+   de vues HDR qu'a l'image precedente (3 en multi-ecran, 1 sinon). */
+static int g_vues_prec;
 static bool ldr_accepte(void *rt) {
 	if (g_lt_ok) { for (int k = 0; k < 3; k++) if (g_lt[k] == rt) { if (g_lt_fait & (1u << k)) return false; g_lt_fait |= 1u << k; return true; } g_ldr_saut++; return false; }
 	int i = 0; for (; i < g_lc_nb; i++) if (g_lc_p[i] == rt) break;
@@ -746,7 +750,7 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 			REL(g_ldr_tex);
 		}
 		if (!g_ldr_tex && n == 1 && rt0 && (d0.Format == 29 || d0.Format == 28) && g_coul_w && d0.Width == g_coul_w && d0.Height == g_coul_h
-			&& g_vues_traitees > 0 && d0.SampleCount <= 1 && ldr_accepte(rt0)) {
+			&& g_vues_traitees > 0 && g_vues_traitees >= g_vues_prec && d0.SampleCount <= 1 && ldr_accepte(rt0)) {
 			g_ldr_tex = rt0; ((UINT (WINAPI *)(void *))VT(rt0)[1])(rt0); g_ldr_n++;
 		}
 		const bool grande = rt0 && d0.Width >= (UINT)R.taille_min && d0.Height >= (UINT)R.taille_min;
@@ -1382,7 +1386,7 @@ static void apres_image(void *sc) {
 	if (!g_bw) { void *bb = 0; if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) >= 0 && bb) { TEX2D_DESC d; desc_tex(bb, d); g_bw = d.Width; g_bh = d.Height; Ligne l; l.s("image presentee : "); dire_tex(l, bb); journal(l); ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); } }
 	g_vues_rapport += g_vues_traitees;
 	int vues_g = g_vues_image, vues_t = g_vues_traitees;
-	g_vues_image = 0; g_vues_traitees = 0; g_ldr_n = 0; ldr_fin_image();
+	g_vues_prec = g_vues_traitees; g_vues_image = 0; g_vues_traitees = 0; g_ldr_n = 0; ldr_fin_image();
 	reposer();
 	prof_fin_image(t0, image_ms, vues_g, vues_t, now);   /* en dernier : son horodatage GPU est la fin de l'image */
 
