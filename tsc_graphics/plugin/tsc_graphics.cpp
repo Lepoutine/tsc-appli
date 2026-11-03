@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.7.0"
+#define VERSION "tsc-graphics 0.8.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -91,7 +91,10 @@ struct Reglages {
 	/* 0.6 : modes (0 personnalise, 1 performance extreme, 2 photorealisme optimise), budget GPU, ambiances, eau sur vitre */
 	float mode = 2, budget_ms = 4, ambiance_auto = 1, nuit_lum = 0.02f, jour_lum = 0.25f, vitre = 1, gouttes_taille = 1;
 	/* 0.7 : T2 a montre une image quasi inchangee (< 1 point de luminosite) : devoile du jeu, contraste local, noirs, lumiere du soleil, vegetation */
-	float devoile = 0.5f, clarte = 0.35f, noirs = 0.3f, chaleur = 0.3f, vegetation = 0.6f;
+	float devoile = 0.5f, clarte = 0.12f, noirs = 0.08f, chaleur = 0.12f, vegetation = 0.6f;
+	/* 0.8 : T3 = image 10 % plus sombre, noirs bouches, vegetation jaune-olive, route brune ; le reel (mesures_reel.json) a une
+	   route claire et neutre, des hautes lumieres plus hautes et plus saturees. Tout est reglable a chaud pour caler sans nouveau test. */
+	float exposition = 1.15f, gamma_monde = 0.1f, hautes = 0.35f, saturation = 1, veg_teinte = 0.6f, neutre = 0.5f;
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -114,7 +117,9 @@ static void lire_ini(bool force) {
 		{"ext_desat", &R.ext_desat}, {"ombres", &R.ombres},
 		{"mode", &R.mode}, {"budget_ms", &R.budget_ms}, {"ambiance_auto", &R.ambiance_auto}, {"nuit_lum", &R.nuit_lum},
 		{"jour_lum", &R.jour_lum}, {"vitre", &R.vitre}, {"gouttes_taille", &R.gouttes_taille},
-		{"devoile", &R.devoile}, {"clarte", &R.clarte}, {"noirs", &R.noirs}, {"chaleur", &R.chaleur}, {"vegetation", &R.vegetation} };
+		{"devoile", &R.devoile}, {"clarte", &R.clarte}, {"noirs", &R.noirs}, {"chaleur", &R.chaleur}, {"vegetation", &R.vegetation},
+		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
+		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -312,7 +317,7 @@ static bool init_appareil(void *sc) {
 	int fl = ((int (WINAPI *)(void *))VT(g_dev)[D_GetFeatureLevel])(g_dev), choisi = 0;
 	HRESULT hr = ((HRESULT (WINAPI *)(void *, UINT, const int *, UINT, UINT, const GUIDx *, int *, void **))VT(g_dev1)[D1_CreateDeviceContextState])(g_dev1, 0, &fl, 1, 7, &IID_Dev, &choisi, &g_etat);
 	if (hr < 0 || !g_etat) { logline("CreateDeviceContextState refuse", hr & 0xffffffffLL); g_etat = 0; return false; }
-	BUF_DESC bd = {224, 2, 4, 0x10000, 0, 0};
+	BUF_DESC bd = {256, 2, 4, 0x10000, 0, 0};
 	((HRESULT (WINAPI *)(void *, const BUF_DESC *, const void *, void **))VT(g_dev)[D_CreateBuffer])(g_dev, &bd, 0, &g_cb);
 	SAMP_DESC s = {0x15, 3, 3, 3, 0, 1, 1, {0, 0, 0, 0}, 0, 3.4e38f};
 	((HRESULT (WINAPI *)(void *, const SAMP_DESC *, void **))VT(g_dev)[D_CreateSampler])(g_dev, &s, &g_samp_lin);
@@ -464,7 +469,7 @@ static void passe_vue(void *hdr, void *prof) {
 	if ((int)R.mode == 1) { m_omb = 0; m_dif *= 0.5f; m_gr = 0; m_vit = 0; q = q < 0.5f ? q : 0.5f; }
 	float m_veg = R.vegetation; if ((int)R.mode == 1) m_veg *= 0.5f;
 	const bool gb2_ok = g_gb2_valide;
-	float cbv[56] = {
+	float cbv[64] = {
 		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
 		R.proche, R.plage_min, R.plage_max, R.decalage_z,
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
@@ -476,7 +481,8 @@ static void passe_vue(void *hdr, void *prof) {
 		q, R.ambiance_auto, R.nuit_lum, R.jour_lum,
 		m_vit, R.gouttes_taille, g_pluie ? 1.0f : 0.0f, (float)((GetTickCount64() / 1000) % 100000),
 		R.devoile, R.clarte, R.noirs, R.chaleur,
-		gb2_ok ? m_veg : 0.0f, 0, 0, 0 };
+		gb2_ok ? m_veg : 0.0f, R.veg_teinte, R.neutre, gb2_ok ? 1.0f : 0.0f,
+		R.exposition, R.gamma_monde, R.hautes, R.saturation };
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);

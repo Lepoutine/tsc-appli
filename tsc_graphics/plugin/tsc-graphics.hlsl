@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -19,7 +19,8 @@ cbuffer P : register(b0) {
 	float4 p8; // 0.6 : qualite (budget GPU, 0,4-1), ambiance automatique, luminance moyenne de nuit, de jour (a caler)
 	float4 p9; // 0.6 : eau sur vitre (force), taille des gouttes, pluie detectee par le jeu, secondes
 	float4 p10; // 0.7 : devoile (retire la brume du jeu), clarte (contraste local), noirs, chaleur (soleil chaud / ombres froides)
-	float4 p11; // 0.7 : vegetation (0 si pas de copie du G-buffer), reserve
+	float4 p11; // 0.7 : vegetation (0 si pas de copie du G-buffer) ; 0.8 : teinte vegetation, neutre (surfaces grises), G-buffer present
+	float4 p12; // 0.8 : exposition, gamma du monde (eclaircit les tons sombres), hautes lumieres, saturation globale
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -276,6 +277,15 @@ float3 monde_photo(float2 uv, float3 c, float lm, float nuit) {
 		float3 j = (c - A * a) / max(1 - a, 0.3);
 		c = max(j, c * 0.3);
 	}
+	if (p11.w > 0.5 && p11.z > 0) {
+		// 0.8 : surfaces grises (route, beton, glissieres) : albedo peu sature et pas du feuillage -> on retire la dominante brune
+		float4 g0 = tGb2.SampleLevel(sPt, uv, 0);
+		float mx = max(g0.r, max(g0.g, g0.b)), mn = min(g0.r, min(g0.g, g0.b));
+		float sat_alb = (mx - mn) / max(mx, 1e-3);
+		float k = saturate(p11.z) * saturate(1 - sat_alb / 0.25) * saturate(1 - g0.a * 4);
+		float l0 = lum(c);
+		c = lerp(c, l0 * float3(0.98, 1.0, 1.0), k * 0.7);
+	}
 	if (p11.x > 0) {
 		float4 g = tGb2.SampleLevel(sPt, uv, 0);
 		float f = saturate(g.a * 2.5) * saturate(p11.x);
@@ -284,13 +294,13 @@ float3 monde_photo(float2 uv, float3 c, float lm, float nuit) {
 			float3 v = c;
 			// verts du jeu trop saturés et trop jaunes : vers un vert olive / bleu-vert naturel
 			v = lerp(float3(l, l, l), v, 0.78);
-			v *= float3(0.96, 1.0, 0.97);
+			v *= lerp(float3(1, 1, 1), float3(0.90, 1.0, 1.10), saturate(p11.y));   // 0.8 : contre le jaune-olive vu en T3
 			// profondeur du feuillage : les parties sombres s'assombrissent (ombre interne des houppiers)
 			float x = l / max(lm, 1e-4);
-			v *= lerp(0.72, 1.0, saturate(x * 1.2));
-			// translucidite : le soleil traverse les feuilles fines, lueur chaude jaune-vert
+			v *= lerp(0.85, 1.0, saturate(x * 1.2));
+			// translucidite : le soleil traverse les feuilles fines, lueur vert clair
 			float3 alb = max(g.rgb, 0);
-			v += alb * float3(0.9, 1.0, 0.45) * lm * 0.35 * (1 - nuit) * saturate(1 - x);
+			v += alb * float3(0.75, 1.0, 0.6) * lm * 0.35 * (1 - nuit) * saturate(1 - x);
 			c = lerp(c, v, f);
 		}
 	}
@@ -314,6 +324,14 @@ float3 finition(float2 uv, float3 c, float lm, float nuit) {
 		float w = saturate((l / lm - 0.6) / 1.5) * 2 - 1;     // -1 ombres, +1 lumieres
 		float k = p10.w * 0.12 * (1 - nuit);
 		c *= 1 + k * w * float3(0.6, 0.1, -0.7);
+	}
+	// 0.8 : calage sur le reel (route claire, hautes lumieres plus hautes et saturees)
+	{
+		float l2 = max(lum(c), 1e-6), x = l2 / lm;
+		if (p12.y != 0) c *= clamp(pow(max(x, 1e-3), -p12.y * saturate(1 - x)), 0.5, 2.0);   // eclaircit les tons sombres et moyens
+		if (p12.z > 0) c *= 1 + p12.z * saturate((x - 1.5) / 4);                            // hautes lumieres plus hautes
+		if (p12.w != 1) { float l3 = lum(c); c = max(l3 + (c - l3) * p12.w, 0); }          // saturation globale
+		c *= max(p12.x, 0.1);                                                               // exposition
 	}
 	return c;
 }

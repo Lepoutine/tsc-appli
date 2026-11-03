@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.7 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.8 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -40,3 +40,6 @@ avec la distance), contraste local (clarte), noirs profonds, soleil chaud / ombr
 du feuillage = alpha de la cible 2 du G-buffer : verts moins criards, feuillage plus profond, translucide au soleil),
 ombres de contact + occlusion ambiante ~2 m + lumiere indirecte, gouttes SEULEMENT quand le jeu fait pleuvoir (moins
 nombreuses, sans grille), halo et brouillard reduits de jour, budget 4 ms. Cles devoile, clarte, noirs, chaleur, vegetation.
+0.8 (apres T3 : image 10 % plus sombre, noirs bouches, vegetation jaune-olive, route brune) : nouvelles cles a chaud
+exposition, gamma_monde, hautes, saturation, veg_teinte, neutre ; clarte/noirs/chaleur adoucis. Le calage se fait
+ensuite dans l'ini seul, jeu ouvert, sans nouvelle DLL.
