@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.8.0"
+#define VERSION "tsc-graphics 0.9.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -87,14 +87,19 @@ struct Reglages {
 	float flou = 0.25f, etirement = 0.8f, peinture = 0.6f, decalage_z = -0.000194f, bascule_auto = 0;
 	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 	float profil = 1;   /* 1 = profileur : une ligne par image dans tsc-profil.csv */
-	float camera = 1, brouillard = 0, diffusion = 0.3f, grain = 0.012f, sat_hautes = 0.3f, ext_desat = 0.1f, ombres = 0.8f;   /* camera v1 (0.5) */
+	float camera = 1, brouillard = 0, diffusion = 0.3f, grain = 0.012f, sat_hautes = 0, ext_desat = 0.1f, ombres = 0.8f;   /* camera v1 (0.5) */
 	/* 0.6 : modes (0 personnalise, 1 performance extreme, 2 photorealisme optimise), budget GPU, ambiances, eau sur vitre */
 	float mode = 2, budget_ms = 4, ambiance_auto = 1, nuit_lum = 0.02f, jour_lum = 0.25f, vitre = 1, gouttes_taille = 1;
 	/* 0.7 : T2 a montre une image quasi inchangee (< 1 point de luminosite) : devoile du jeu, contraste local, noirs, lumiere du soleil, vegetation */
 	float devoile = 0.5f, clarte = 0.12f, noirs = 0.08f, chaleur = 0.12f, vegetation = 0.6f;
 	/* 0.8 : T3 = image 10 % plus sombre, noirs bouches, vegetation jaune-olive, route brune ; le reel (mesures_reel.json) a une
 	   route claire et neutre, des hautes lumieres plus hautes et plus saturees. Tout est reglable a chaud pour caler sans nouveau test. */
-	float exposition = 1.15f, gamma_monde = 0.1f, hautes = 0.35f, saturation = 1, veg_teinte = 0.6f, neutre = 0.5f;
+	float exposition = 1, gamma_monde = 0.1f, hautes = 0.35f, saturation = 1, veg_teinte = 0.6f, neutre = 0.5f;
+	/* 0.9 : etage APRES l'auto-exposition et le tone mapping du jeu (cible 1280x1080 R8G8B8A8_UNORM_SRGB de chaque vue, avant
+	   sa composition dans l'image 3840 et avant l'interface ; trace 0.8 du 03/11). L'auto-exposition ne peut plus l'annuler. */
+	/* valeurs de depart d'apres mesures_reel_v2 (jour) contre le jeu : p50 0,49 -> 0,61, p99 0,84 -> 0,99, vegetation trop sombre et
+	   trop saturee (75/94/40 contre 132/152/112), hautes lumieres PLUS saturees que le reel (0,26-0,29 contre 0,19 en HSV) */
+	float ldr = 1, ldr_expo = 1.5f, ldr_contraste = 1, ldr_epaule = 0.75f, ldr_sat = 0.88f, ldr_sat_hautes = -0.3f, ldr_temperature = 0, ldr_teinte = 0, ldr_noirs = 0, ldr_verts = 0.4f;
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
 	float taille_min = 512;   /* T1 03/11 : ignorer les petites vues (sondes de reflets 256x128/256x256), seulement les vues principales */
 };
@@ -119,7 +124,9 @@ static void lire_ini(bool force) {
 		{"jour_lum", &R.jour_lum}, {"vitre", &R.vitre}, {"gouttes_taille", &R.gouttes_taille},
 		{"devoile", &R.devoile}, {"clarte", &R.clarte}, {"noirs", &R.noirs}, {"chaleur", &R.chaleur}, {"vegetation", &R.vegetation},
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
-		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre} };
+		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
+		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -225,6 +232,7 @@ static float g_val_effacement = -1;
 
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
+static void *g_ps_ldr, *g_ldr, *g_ldr_srv, *g_ldr_tex; static UINT g_ldr_w, g_ldr_h, g_ldr_fmt; static int g_ldr_n; static i64 g_n_ldr;   /* 0.9 */
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
 /* 0.7 : cible 2 du G-buffer de la vue (albedo RGB, alpha = masque du feuillage, audit socle v0.3) et sa copie */
@@ -297,6 +305,16 @@ static void compiler() {
 	REL(bv); REL(bp);
 	if (c1 < 0 || c2 < 0) { REL(vs); REL(ps); logline("creation des shaders refusee"); g_shaders_ok = 0; return; }
 	REL(g_vs); REL(g_ps); g_vs = vs; g_ps = ps; g_shaders_ok = 1; logline("shaders compiles (tsc-graphics.hlsl)");
+	/* 0.9 : etage apres tone mapping ; s'il ne compile pas, seul cet etage est coupe */
+	void *bl = 0, *pl = 0;
+	if (g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "ps_ldr", "ps_5_0", fl, 0, &bl, &err) < 0) {
+		Ligne l; l.s("erreur shader ps_ldr (etage apres tone mapping coupe) : "); if (err) l.s((const char *)((void *(WINAPI *)(void *))VT(err)[3])(err)); journal(l); REL(err); REL(g_ps_ldr); return; }
+	REL(err);
+	g_nous++;
+	HRESULT c3 = ((HRESULT (WINAPI *)(void *, const void *, SIZE_T, void *, void **))VT(g_dev)[D_CreatePS])(g_dev, ((PTR)VT(bl)[3])(bl), ((TAILLE)VT(bl)[4])(bl), 0, &pl);
+	g_nous--; REL(bl);
+	if (c3 < 0) { REL(pl); REL(g_ps_ldr); logline("creation ps_ldr refusee"); return; }
+	REL(g_ps_ldr); g_ps_ldr = pl; logline("etage apres tone mapping pret (ps_ldr)");
 }
 
 static void accrocher_contexte();
@@ -482,7 +500,9 @@ static void passe_vue(void *hdr, void *prof) {
 		m_vit, R.gouttes_taille, g_pluie ? 1.0f : 0.0f, (float)((GetTickCount64() / 1000) % 100000),
 		R.devoile, R.clarte, R.noirs, R.chaleur,
 		gb2_ok ? m_veg : 0.0f, R.veg_teinte, R.neutre, gb2_ok ? 1.0f : 0.0f,
-		R.exposition, R.gamma_monde, R.hautes, R.saturation };
+		R.exposition, R.gamma_monde, R.hautes, R.saturation,
+		R.ldr_expo, R.ldr_contraste, R.ldr_epaule, R.ldr_sat,
+		R.ldr_sat_hautes, R.ldr_temperature, R.ldr_teinte, R.ldr_noirs };
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);
@@ -526,6 +546,56 @@ static void passe_vue(void *hdr, void *prof) {
 	g_vues_traitees++;
 	if (g_trace) { Ligne l; l.s("  >>> passe TSC sur la vue "); l.i(g_vues_traitees); l.s(" : "); dire_tex(l, hdr); trace_txt(l); }
 }
+/* 0.9 : etage apres l'auto-exposition et le tone mapping du jeu, sur la vue 8 bits sRGB, avant composition et interface */
+static void passe_ldr(void *tex) {
+	if (g_arret || !g_shaders_ok || !g_ps_ldr || !g_etat || R.ldr < 0.5f) return;
+	TEX2D_DESC d; desc_tex(tex, d);
+	if (d.SampleCount > 1) return;
+	if (!g_ldr || g_ldr_w != d.Width || g_ldr_h != d.Height || g_ldr_fmt != d.Format) {
+		REL(g_ldr_srv); REL(g_ldr);
+		TEX2D_DESC n = {d.Width, d.Height, 1, 1, d.Format, 1, 0, 0, 8, 0, 0};
+		if (dev_tex(&n, &g_ldr) < 0) { g_ldr = 0; static int dit; if (!dit++) logline("copie 8 bits refusee : etage apres tone mapping coupe"); return; }
+		((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_ldr, 0, &g_ldr_srv);
+		g_ldr_w = d.Width; g_ldr_h = d.Height; g_ldr_fmt = d.Format;
+		Ligne l; l.s("copie 8 bits creee (etage apres tone mapping) : "); dire_tex(l, g_ldr); journal(l);
+	}
+	if (!g_ldr_srv) return;
+	void *rtv = rtv_de(tex); if (!rtv) return;
+	float cbv[64]; memset(cbv, 0, sizeof cbv);
+	cbv[8] = (float)d.Width; cbv[9] = (float)d.Height; cbv[10] = 1.0f / d.Width; cbv[11] = 1.0f / d.Height;
+	cbv[52] = R.ldr_expo; cbv[53] = R.ldr_contraste; cbv[54] = R.ldr_epaule; cbv[55] = R.ldr_sat;
+	cbv[56] = R.ldr_sat_hautes; cbv[57] = R.ldr_temperature; cbv[58] = R.ldr_teinte; cbv[59] = R.ldr_noirs; cbv[60] = R.ldr_verts;
+	EtatJeu sv;
+	g_nous++;
+	sauver(sv);
+	((void (WINAPI *)(void *, void *, const float *, UINT))VT(g_ctx)[C_OMSetBlend])(g_ctx, 0, 0, 0xffffffff);
+	((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_OMSetDSS])(g_ctx, 0, 0);
+	((void (WINAPI *)(void *, void *))VT(g_ctx)[C_RSSetState])(g_ctx, 0);
+	((void (WINAPI *)(void *, void *))VT(g_ctx)[C_IASetInputLayout])(g_ctx, 0);
+	((SetSh)VT(g_ctx)[C_GSSetShader])(g_ctx, 0, 0, 0); ((SetSh)VT(g_ctx)[C_HSSetShader])(g_ctx, 0, 0, 0); ((SetSh)VT(g_ctx)[C_DSSetShader])(g_ctx, 0, 0, 0);
+	{ void *nr = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nr, 0); }
+	{ void *nul[3] = {0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, nul); }
+	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_ldr, tex);
+	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
+	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
+	VIEWPORT vp = {0, 0, (float)d.Width, (float)d.Height, 0, 1};
+	((void (WINAPI *)(void *, UINT, const VIEWPORT *))VT(g_ctx)[C_RSSetViewports])(g_ctx, 1, &vp);
+	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &rtv, 0);
+	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
+	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
+	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps_ldr, 0, 0);
+	void *srv[3] = {g_ldr_srv, 0, 0}; void *smp[2] = {g_samp_lin, g_samp_pt};
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, srv);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
+	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
+	void *nul[3] = {0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, nul);
+	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
+	remettre(sv);
+	g_nous--;
+	g_n_ldr++;
+	if (g_trace) { Ligne l; l.s("  >>> etage TSC apres tone mapping : "); dire_tex(l, tex); trace_txt(l); }
+}
 static void fin_mesure_gpu() {
 	if (!g_ctx || !g_q_ouvert) return;
 	int qi = g_q_i % NQ;
@@ -557,6 +627,15 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 		if (g_etape == E_HDR && rt0 != g_hdr_tex) {
 			if (g_hdr_tex && g_vue_prof && R.actif > 0.5f && g_effet_on > 0.5f && g_etat) passe_vue(g_hdr_tex, g_vue_prof);
 			quitter_vue();
+		}
+		/* 0.9 : le jeu quitte la vue 8 bits qu'il vient de tone-mapper -> etage TSC apres tone mapping */
+		if (g_ldr_tex && rt0 != g_ldr_tex) {
+			if (R.actif > 0.5f && g_effet_on > 0.5f) passe_ldr(g_ldr_tex);
+			REL(g_ldr_tex);
+		}
+		if (!g_ldr_tex && n == 1 && rt0 && (d0.Format == 29 || d0.Format == 28) && g_coul_w && d0.Width == g_coul_w && d0.Height == g_coul_h
+			&& g_vues_traitees > 0 && g_ldr_n < 3 && d0.SampleCount <= 1) {
+			g_ldr_tex = rt0; ((UINT (WINAPI *)(void *))VT(rt0)[1])(rt0); g_ldr_n++;
 		}
 		const bool grande = rt0 && d0.Width >= (UINT)R.taille_min && d0.Height >= (UINT)R.taille_min;
 		if (n >= 4 && rt0 && d0.Format == 10 && pt) {
@@ -839,7 +918,7 @@ static void apres_image(void *sc) {
 	if (!g_bw) { void *bb = 0; if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) >= 0 && bb) { TEX2D_DESC d; desc_tex(bb, d); g_bw = d.Width; g_bh = d.Height; Ligne l; l.s("image presentee : "); dire_tex(l, bb); journal(l); ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); } }
 	g_vues_rapport += g_vues_traitees;
 	int vues_g = g_vues_image, vues_t = g_vues_traitees;
-	g_vues_image = 0; g_vues_traitees = 0;
+	g_vues_image = 0; g_vues_traitees = 0; g_ldr_n = 0;
 	reposer();
 	prof_fin_image(t0, image_ms, vues_g, vues_t, now);   /* en dernier : son horodatage GPU est la fin de l'image */
 

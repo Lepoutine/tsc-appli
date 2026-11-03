@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.8 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.9 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -43,3 +43,7 @@ nombreuses, sans grille), halo et brouillard reduits de jour, budget 4 ms. Cles 
 0.8 (apres T3 : image 10 % plus sombre, noirs bouches, vegetation jaune-olive, route brune) : nouvelles cles a chaud
 exposition, gamma_monde, hautes, saturation, veg_teinte, neutre ; clarte/noirs/chaleur adoucis. Le calage se fait
 ensuite dans l'ini seul, jeu ouvert, sans nouvelle DLL.
+0.9 (boucle 0.8 : l'exposition automatique du jeu annulait toute retouche faite en HDR) : nouvel etage APRES l'exposition et
+le tone mapping du jeu, sur chaque vue 8 bits avant sa composition et avant l'interface (trace du 03/11). Cles ldr, ldr_expo,
+ldr_contraste, ldr_epaule, ldr_sat, ldr_sat_hautes, ldr_temperature, ldr_teinte, ldr_noirs, ldr_verts, toutes a chaud.
+Valeurs de depart d'apres mesures_reel_v2 (jour). Si ps_ldr ne compile pas, seul cet etage est coupe (ligne dans le log).

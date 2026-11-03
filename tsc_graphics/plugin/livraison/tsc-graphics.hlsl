@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -21,6 +21,9 @@ cbuffer P : register(b0) {
 	float4 p10; // 0.7 : devoile (retire la brume du jeu), clarte (contraste local), noirs, chaleur (soleil chaud / ombres froides)
 	float4 p11; // 0.7 : vegetation (0 si pas de copie du G-buffer) ; 0.8 : teinte vegetation, neutre (surfaces grises), G-buffer present
 	float4 p12; // 0.8 : exposition, gamma du monde (eclaircit les tons sombres), hautes lumieres, saturation globale
+	float4 p13; // 0.9 apres tone mapping : exposition, contraste, epaule (debut de la compression des blancs), saturation
+	float4 p14; // 0.9 : saturation des hautes lumieres (negatif = moins), temperature, teinte (vert/magenta), point noir
+	float4 p15; // 0.9 : verts (desature les verts jaunes trop vifs du jeu)
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -350,4 +353,39 @@ float4 ps_principal(VSO i) : SV_Target {
 	f = lerp(v, f, saturate(p6.x));
 	if (any(isnan(f)) || any(isinf(f))) f = v;
 	return float4(min(max(f, 0), 65504), r.a);
+}
+
+// ---------- 0.9 : etage APRES l'auto-exposition et le tone mapping du jeu ----------
+// Entree : la vue 8 bits sRGB du jeu (lue en lineaire par la vue sRGB), avant sa composition et avant l'interface.
+// L'auto-exposition du jeu a deja ete calculee : ce qu'on change ici reste a l'ecran (T3/boucle 0.8 : elle annulait tout en HDR).
+float epaule(float x, float s) { return x < s ? x : s + (1 - s) * (1 - exp(-(x - s) / max(1 - s, 1e-3))); }
+float4 ps_ldr(VSO i) : SV_Target {
+	float4 t = tCouleur.SampleLevel(sPt, i.uv, 0);
+	float3 c = max(t.rgb, 0);
+	// balance : temperature (+ chaud / - froid) et teinte (+ vert / - magenta)
+	c *= float3(1 + 0.08 * p14.y, 1 + 0.06 * p14.z, 1 - 0.08 * p14.y);
+	// exposition puis epaule douce : on eclaircit sans bruler les blancs
+	c *= max(p13.x, 0.1);
+	c = float3(epaule(c.r, p13.z), epaule(c.g, p13.z), epaule(c.b, p13.z));
+	// contraste autour du gris moyen (0,18 lineaire)
+	if (p13.y != 1) c = 0.18 * pow(max(c, 1e-5) / 0.18, p13.y);
+	// point noir
+	if (p14.w != 0) { float b = p14.w * 0.02; c = max(c - b, 0) / (1 - b); }
+	float l = lum(c);
+	// verts jaunes trop vifs (vegetation du jeu) : moins satures, un peu plus clairs
+	if (p15.x > 0) {
+		float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+		float vert = saturate((c.g - max(c.r, c.b)) / max(mx, 1e-4) * 4) * saturate((c.g - c.b) / max(mx, 1e-4) * 2);
+		float k = saturate(p15.x) * vert;
+		c = lerp(c, l + (c - l) * 0.6, k);
+		c *= 1 + 0.15 * k;
+		l = lum(c);
+	}
+	// saturation globale, puis hautes lumieres
+	c = l + (c - l) * max(p13.w, 0);
+	float w = smoothstep(0.35, 0.85, l);
+	c = l + (c - l) * max(1 + p14.x * w, 0);
+	c = saturate(c);
+	if (any(isnan(c))) c = t.rgb;
+	return float4(c, t.a);
 }
