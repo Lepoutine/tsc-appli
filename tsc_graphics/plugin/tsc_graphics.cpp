@@ -1,20 +1,22 @@
 /* tsc-graphics.dll : TSC Neural Graphics, rendu temps reel dans ETS2 (DirectX 11). Plugin SDK SCS charge par le jeu
    (bin/win_x64/plugins). Copyright (c) 2026 Truck So Clean France. Sans CRT, sans SDK Windows (clang + lld).
 
-   0.1 = prototype de laboratoire :
-   - SONDE : trace d'une image complete (Ctrl+Maj+T, et une fois automatiquement apres 20 s) dans tsc-graphics-trace.log :
-     chaque changement de cibles (couleur + profondeur : taille, format, nombre d'echantillons), effacements (valeur de
-     profondeur -> Z inverse ou non), viewports, nombre de dessins entre deux. C'est la preuve de ce que le jeu fournit.
-   - PROFONDEUR : choisit la profondeur principale (celle de la taille de l'image qui recoit le plus de dessins), la copie
-     (avant son effacement ou a Present) dans notre texture lisible. Rien n'est modifie dans les ressources du jeu.
-   - EFFET (tsc-graphics.hlsl a cote de la DLL, recharge a chaud) : reflets d'ecran sur route mouillee calcules a chaque
-     image depuis la profondeur reelle (suivent la camera, les vehicules, les lumieres). Vues de controle : profondeur,
-     normales, masque mouille.
-   - Ctrl+Maj+G : effet marche / arret immediat. Ctrl+Maj+D : vue de controle suivante. Ctrl+Maj+T : trace.
-   - MESURES toutes les 2 s dans tsc-graphics.log : images/s, temps d'image moyen et pire, cout CPU de nos passes, cout
-     GPU mesure (requetes horodatees), memoire video ajoutee.
-   Etat du jeu : toutes nos passes tournent dans notre propre etat de contexte (SwapDeviceContextState), l'etat du jeu est
-   rendu tel quel. A l'arret, toutes les entrees d'origine sont remises. Reglages : tsc-graphics.ini (recharge a chaud). */
+   0.2 : branche sur le pipeline reel d'ETS2 1.61 releve par l'audit (sonde + RenderDoc, 03/11/2026) :
+   rendu differe par vue (multi-ecran mode 4 = 3 vues 1280x1080) : G-buffer (4 cibles, la 1re RGBA16F), profondeur D32S8 en
+   Z inverse (monde dans 0,01-0,9, cabine dans 0,9-1, ciel 0), eclairage dans une cible HDR RGBA16F, gouttes de pluie
+   (cible R8G8B8A8_SNORM), puis exposition, tone mapping par vue et composition dans l'image 3840x1080 ou l'interface est
+   dessinee en dernier.
+   - EFFET PAR VUE, AVANT L'INTERFACE ET AVANT LE TONE MAPPING : quand le jeu quitte la cible HDR d'une vue, la profondeur de
+     cette vue est encore intacte. On copie HDR + profondeur et on ajoute, dans la cible HDR du jeu, les reflets de la route
+     mouillee calcules depuis la profondeur reelle : les lumieres gardent leur intensite HDR, l'interface n'est jamais
+     touchee, la cabine (profondeur > 0,9) est exclue exactement.
+   - HUMIDITE : la passe des gouttes du jeu sert de detecteur de pluie ; la route se mouille en ~40 s et seche en ~5 min.
+   - Les entrees de la table du contexte que d'autres couches remettent a chaque image sont reposees a chaque Present.
+   - SONDE : trace d'une image (Ctrl+Maj+T, et automatiquement apres 20 s) dans tsc-graphics-trace.log.
+   - Ctrl+Maj+G : effet marche / arret. Ctrl+Maj+D : vue de controle suivante (profondeur, normales, masque mouille).
+   - MESURES toutes les 2 s dans tsc-graphics.log : img/s, temps d'image moyen et pire, cout CPU et cout GPU (requetes
+     horodatees autour de chacune de nos passes), vues traitees, pluie detectee, humidite, memoire video ajoutee.
+   Toutes nos passes tournent dans notre propre etat de contexte (SwapDeviceContextState). Reglages : tsc-graphics.ini. */
 typedef unsigned int UINT; typedef unsigned long DWORD; typedef int BOOL; typedef long HRESULT; typedef long LONG;
 typedef void *HANDLE; typedef void *HMODULE; typedef unsigned long long SIZE_T; typedef unsigned short WORD;
 typedef unsigned long long u64; typedef long long i64;
@@ -45,7 +47,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.1.0"
+#define VERSION "tsc-graphics 0.2.0"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -71,10 +73,12 @@ static int lire_fichier(const char *nom, char *buf, int max) {
 }
 
 /* ---------- reglages (tsc-graphics.ini, cle = valeur, recharge a chaud) ---------- */
+
+/* ---------- reglages (tsc-graphics.ini, cle = valeur, recharge a chaud) ---------- */
 struct Reglages {
-	float actif = 1, humidite = 1, fov_v = 55, proche = 0.1f, loin = 5000, z_inverse = -1 /* -1 = auto */, ecrans = 1;
-	float intensite = 1, rugosite = 0.15f, trainees = 1.5f, cabine_m = 2.5f, pas = 0.15f, epaisseur = 0.6f, f0 = 0.04f;
-	float vue = 0, copie = 0 /* 0 auto (avant effacement sinon Present), 1 Present seulement */, assombrir = 0.35f;
+	float actif = 1, humidite = -1 /* -1 = auto (pluie du jeu) */, fov_v = 43, proche = 0.2f, plage_min = 0.01f, plage_max = 0.9f;
+	float intensite = 1, rugosite = 0.12f, trainees = 1.5f, pas = 0.12f, epaisseur = 0.5f, f0 = 0.04f, assombrir = 0.35f;
+	float vue = 0, seuil_gouttes = 500, mouille_s = 40, seche_s = 300, max_vues = 3;
 };
 static Reglages R; static u64 g_ini_hash;
 static double nombre(const char *&p) { double s = 1, v = 0, d = 0.1; while (*p == ' ' || *p == '\t') p++; if (*p == '-') { s = -1; p++; }
@@ -84,9 +88,10 @@ static void lire_ini(bool force) {
 	static char b[8192]; int n = lire_fichier("tsc-graphics.ini", b, sizeof b); if (n < 0) return;
 	u64 h = 1469598103934665603ULL; for (int i = 0; i < n; i++) h = (h ^ (unsigned char)b[i]) * 1099511628211ULL;
 	if (!force && h == g_ini_hash) return; g_ini_hash = h;
-	struct { const char *k; float *v; } t[] = { {"actif", &R.actif}, {"humidite", &R.humidite}, {"fov_v", &R.fov_v}, {"proche", &R.proche}, {"loin", &R.loin},
-		{"z_inverse", &R.z_inverse}, {"ecrans", &R.ecrans}, {"intensite", &R.intensite}, {"rugosite", &R.rugosite}, {"trainees", &R.trainees},
-		{"cabine_m", &R.cabine_m}, {"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"vue", &R.vue}, {"copie", &R.copie}, {"assombrir", &R.assombrir} };
+	struct { const char *k; float *v; } t[] = { {"actif", &R.actif}, {"humidite", &R.humidite}, {"fov_v", &R.fov_v}, {"proche", &R.proche},
+		{"plage_min", &R.plage_min}, {"plage_max", &R.plage_max}, {"intensite", &R.intensite}, {"rugosite", &R.rugosite}, {"trainees", &R.trainees},
+		{"pas", &R.pas}, {"epaisseur", &R.epaisseur}, {"f0", &R.f0}, {"assombrir", &R.assombrir}, {"vue", &R.vue}, {"seuil_gouttes", &R.seuil_gouttes},
+		{"mouille_s", &R.mouille_s}, {"seche_s", &R.seche_s}, {"max_vues", &R.max_vues} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -94,7 +99,7 @@ static void lire_ini(bool force) {
 		while (*p && *p != '\n') p++;
 	}
 	Ligne l; l.s("reglages relus : actif "); l.f(R.actif, 0); l.s(", humidite "); l.f(R.humidite); l.s(", fov_v "); l.f(R.fov_v, 1); l.s(", proche "); l.f(R.proche, 3);
-	l.s(", loin "); l.f(R.loin, 0); l.s(", z_inverse "); l.f(R.z_inverse, 0); l.s(", ecrans "); l.f(R.ecrans, 0); l.s(", vue "); l.f(R.vue, 0); journal(l);
+	l.s(", plage "); l.f(R.plage_min, 3); l.s("-"); l.f(R.plage_max, 3); l.s(", vue "); l.f(R.vue, 0); journal(l);
 }
 
 /* ---------- D3D11 : structures minimales ---------- */
@@ -166,43 +171,43 @@ static void dire_tex(Ligne &l, void *tex) {
 	l.s(" liaisons "); l.x(d.BindFlags); l.s(" @"); l.x((u64)tex);
 }
 
-/* ---------- etat par image ---------- */
-static UINT g_bw, g_bh;                 /* taille de l'image presentee */
-static int g_trace;                     /* >0 : trace en cours (images restantes) */
-static i64 g_trace_dessins;             /* dessins depuis le dernier evenement trace */
-static int g_trace_auto_fait;
+
+/* ---------- sonde ---------- */
+static UINT g_bw, g_bh;
+static int g_trace, g_trace_auto_fait; static i64 g_trace_dessins;
 static char g_tbuf[1 << 20]; static int g_tn;
 static void trace_txt(Ligne &l) { l.s("\r\n"); if (g_tn + l.n < (int)sizeof g_tbuf) { memcpy(g_tbuf + g_tn, l.t, l.n); g_tn += l.n; } }
 static void trace_dessins() { if (g_trace && g_trace_dessins) { Ligne l; l.s("    dessins : "); l.i(g_trace_dessins); trace_txt(l); g_trace_dessins = 0; } }
 
-struct Cand { void *tex; i64 dessins; UINT fmt, w, h, ms; };
-static Cand g_cand[8]; static int g_ncand;
-static void *g_dsv_tex_courant;          /* profondeur liee en ce moment (texture, pas de reference) */
-static i64 g_dessins_profond;            /* dessins depuis le dernier effacement de la profondeur principale */
-static void *g_prof_jeu;                 /* profondeur principale choisie (reference gardee) */
-static int g_copiee;                     /* copiee depuis son dernier effacement */
-static float g_val_effacement = -1;      /* valeur d'effacement de la profondeur principale */
-static int g_effacements_image;
-
-static void compter(UINT n = 1) {
-	if (g_nous) return;
-	(void)n; if (g_dsv_tex_courant && g_dsv_tex_courant == g_prof_jeu) g_dessins_profond++;
-	if (g_trace) g_trace_dessins++;
-	if (g_dsv_tex_courant) for (int i = 0; i < g_ncand; i++) if (g_cand[i].tex == g_dsv_tex_courant) { g_cand[i].dessins++; break; }
-}
+/* ---------- suivi des vues du jeu ---------- */
+enum { E_RIEN, E_GBUF, E_HDR };
+static int g_etape;                       /* ou en est la vue en cours */
+static void *g_hdr_tex, *g_vue_prof;      /* cible HDR et profondeur de la vue en cours (references gardees) */
+static int g_vues_image, g_vues_traitees; /* vues vues / traitees sur l'image en cours */
+static int g_dans_gouttes; static i64 g_gouttes, g_gouttes_rapport;
+static float g_mouille = 0; static int g_pluie;
+static i64 g_n_gbuf, g_n_hdr;             /* diagnostics */
+static float g_val_effacement = -1;
 
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
-static void *g_bb_tex, *g_bb_rtv;
-static void *g_q_dis[4], *g_q_a[4], *g_q_b[4]; static int g_q_i;
+struct Rtv { void *tex, *rtv; }; static Rtv g_rtv[8]; static int g_nrtv;
+#define NQ 4
+#define QV 4
+static void *g_q_dis[NQ], *g_q_a[NQ][QV], *g_q_b[NQ][QV]; static int g_q_n[NQ], g_q_i, g_q_ouvert;
 static PFN_COMPILE g_compile; static u64 g_hlsl_hash; static int g_shaders_ok;
 static float g_effet_on = 1; static int g_vue = 0;
-static i64 g_freq, g_t_prec; static double g_somme_ms, g_pire_ms, g_cpu_ms, g_gpu_ms; static int g_n_img, g_n_gpu; static u64 g_t_rapport;
+static i64 g_freq, g_t_prec; static double g_somme_ms, g_pire_ms, g_cpu_ms, g_gpu_ms; static int g_n_img, g_n_gpu; static u64 g_t_rapport; static i64 g_vues_rapport;
 static u64 g_vram;
 
-static HRESULT dev_call_tex(const TEX2D_DESC *d, void **out) { return ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, d, 0, out); }
+static void compter() {
+	if (g_nous) return;
+	if (g_trace) g_trace_dessins++;
+	if (g_dans_gouttes) g_gouttes++;
+}
+static HRESULT dev_tex(const TEX2D_DESC *d, void **out) { return ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, d, 0, out); }
 
 static void compiler() {
 	static char src[65536]; int n = lire_fichier("tsc-graphics.hlsl", src, sizeof src);
@@ -211,13 +216,13 @@ static void compiler() {
 	if (h == g_hlsl_hash) return; g_hlsl_hash = h;
 	if (!g_compile) { HMODULE c = LoadLibraryA("d3dcompiler_47.dll"); if (c) g_compile = (PFN_COMPILE)GetProcAddress(c, "D3DCompile"); }
 	if (!g_compile) { logline("d3dcompiler_47.dll introuvable : effet coupe"); g_shaders_ok = 0; return; }
-	void *bv = 0, *bp = 0, *err = 0; void *vs = 0, *ps = 0;
-	const UINT fl = 1 << 15 /*OPTIMIZATION_LEVEL3*/;
-	HRESULT a = g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "vs_principal", "vs_5_0", fl, 0, &bv, &err);
-	if (a < 0) { Ligne l; l.s("erreur shader VS : "); if (err) l.s((const char *)((void *(WINAPI *)(void *))VT(err)[3])(err)); journal(l); REL(err); g_shaders_ok = 0; return; }
+	void *bv = 0, *bp = 0, *err = 0, *vs = 0, *ps = 0;
+	const UINT fl = 1 << 15;
+	if (g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "vs_principal", "vs_5_0", fl, 0, &bv, &err) < 0) {
+		Ligne l; l.s("erreur shader VS : "); if (err) l.s((const char *)((void *(WINAPI *)(void *))VT(err)[3])(err)); journal(l); REL(err); g_shaders_ok = 0; return; }
 	REL(err);
-	HRESULT b = g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "ps_principal", "ps_5_0", fl, 0, &bp, &err);
-	if (b < 0) { Ligne l; l.s("erreur shader PS : "); if (err) l.s((const char *)((void *(WINAPI *)(void *))VT(err)[3])(err)); journal(l); REL(err); REL(bv); g_shaders_ok = 0; return; }
+	if (g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "ps_principal", "ps_5_0", fl, 0, &bp, &err) < 0) {
+		Ligne l; l.s("erreur shader PS : "); if (err) l.s((const char *)((void *(WINAPI *)(void *))VT(err)[3])(err)); journal(l); REL(err); REL(bv); g_shaders_ok = 0; return; }
 	REL(err);
 	typedef void *(WINAPI *PTR)(void *); typedef SIZE_T (WINAPI *TAILLE)(void *);
 	HRESULT c1 = ((HRESULT (WINAPI *)(void *, const void *, SIZE_T, void *, void **))VT(g_dev)[D_CreateVS])(g_dev, ((PTR)VT(bv)[3])(bv), ((TAILLE)VT(bv)[4])(bv), 0, &vs);
@@ -230,160 +235,105 @@ static void compiler() {
 static bool init_appareil(void *sc) {
 	if (g_dev) return g_etat != 0;
 	if (((HRESULT (WINAPI *)(void *, const GUIDx *, void **))VT(sc)[S_GetDevice])(sc, &IID_Dev, &g_dev) < 0 || !g_dev) { logline("GetDevice refuse"); g_dev = 0; return false; }
-	((void (WINAPI *)(void *, void **))VT(g_dev)[40])(g_dev, &g_ctx);   /* GetImmediateContext */
+	((void (WINAPI *)(void *, void **))VT(g_dev)[40])(g_dev, &g_ctx);
 	((HRESULT (WINAPI *)(void *, const GUIDx *, void **))VT(g_dev)[0])(g_dev, &IID_Dev1, &g_dev1);
 	if (g_ctx) ((HRESULT (WINAPI *)(void *, const GUIDx *, void **))VT(g_ctx)[0])(g_ctx, &IID_Ctx1, &g_ctx1);
 	if (!g_dev1 || !g_ctx1) { logline("D3D11.1 indisponible : effet impossible (sonde seule)"); return false; }
 	int fl = ((int (WINAPI *)(void *))VT(g_dev)[D_GetFeatureLevel])(g_dev), choisi = 0;
 	HRESULT hr = ((HRESULT (WINAPI *)(void *, UINT, const int *, UINT, UINT, const GUIDx *, int *, void **))VT(g_dev1)[D1_CreateDeviceContextState])(g_dev1, 0, &fl, 1, 7, &IID_Dev, &choisi, &g_etat);
 	if (hr < 0 || !g_etat) { logline("CreateDeviceContextState refuse", hr & 0xffffffffLL); g_etat = 0; return false; }
-	BUF_DESC bd = {128, 2 /*DYNAMIC*/, 4 /*CONSTANT*/, 0x10000 /*CPU_WRITE*/, 0, 0};
+	BUF_DESC bd = {128, 2, 4, 0x10000, 0, 0};
 	((HRESULT (WINAPI *)(void *, const BUF_DESC *, const void *, void **))VT(g_dev)[D_CreateBuffer])(g_dev, &bd, 0, &g_cb);
-	SAMP_DESC s = {0x15 /*MIN_MAG_MIP_LINEAR*/, 3, 3, 3, 0, 1, 1, {0, 0, 0, 0}, 0, 3.4e38f};
+	SAMP_DESC s = {0x15, 3, 3, 3, 0, 1, 1, {0, 0, 0, 0}, 0, 3.4e38f};
 	((HRESULT (WINAPI *)(void *, const SAMP_DESC *, void **))VT(g_dev)[D_CreateSampler])(g_dev, &s, &g_samp_lin);
 	s.Filter = 0; ((HRESULT (WINAPI *)(void *, const SAMP_DESC *, void **))VT(g_dev)[D_CreateSampler])(g_dev, &s, &g_samp_pt);
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < NQ; i++) {
 		QUERY_DESC q0 = {3 /*TIMESTAMP_DISJOINT*/, 0}, q1 = {2 /*TIMESTAMP*/, 0};
 		((HRESULT (WINAPI *)(void *, const QUERY_DESC *, void **))VT(g_dev)[D_CreateQuery])(g_dev, &q0, &g_q_dis[i]);
-		((HRESULT (WINAPI *)(void *, const QUERY_DESC *, void **))VT(g_dev)[D_CreateQuery])(g_dev, &q1, &g_q_a[i]);
-		((HRESULT (WINAPI *)(void *, const QUERY_DESC *, void **))VT(g_dev)[D_CreateQuery])(g_dev, &q1, &g_q_b[i]);
+		for (int v = 0; v < QV; v++) {
+			((HRESULT (WINAPI *)(void *, const QUERY_DESC *, void **))VT(g_dev)[D_CreateQuery])(g_dev, &q1, &g_q_a[i][v]);
+			((HRESULT (WINAPI *)(void *, const QUERY_DESC *, void **))VT(g_dev)[D_CreateQuery])(g_dev, &q1, &g_q_b[i][v]);
+		}
 	}
 	logline("appareil du jeu pris, etat de contexte TSC cree, niveau", (i64)fl);
+	compiler();
 	return true;
 }
 
-/* format lisible d'une copie de profondeur */
 static bool formats_prof(UINT f, UINT &tex, UINT &srv) {
 	switch (f) {
-	case 40: case 39: case 41: tex = 39; srv = 41; return true;            /* D32_FLOAT */
-	case 45: case 44: tex = 44; srv = 46; return true;                     /* D24S8 -> R24_UNORM_X8 */
-	case 20: case 19: tex = 19; srv = 21; return true;                     /* D32S8 -> R32_FLOAT_X8X24 */
-	case 55: case 53: case 56: tex = 53; srv = 56; return true;            /* D16 */
+	case 40: case 39: case 41: tex = 39; srv = 41; return true;
+	case 45: case 44: tex = 44; srv = 46; return true;
+	case 20: case 19: tex = 19; srv = 21; return true;
+	case 55: case 53: case 56: tex = 53; srv = 56; return true;
 	}
 	return false;
 }
-static void copier_profondeur() {
-	if (!g_prof_jeu || !g_dev) return;
-	TEX2D_DESC d; desc_tex(g_prof_jeu, d);
-	if (d.SampleCount > 1) { static int dit; if (!dit++) logline("profondeur MSAA : copie directe impossible (resolution a ecrire)"); return; }
-	UINT ft, fs; if (!formats_prof(d.Format, ft, fs)) { static int dit; if (!dit++) logline("format de profondeur inconnu", d.Format); return; }
+static void *rtv_de(void *tex) {
+	for (int i = 0; i < g_nrtv; i++) if (g_rtv[i].tex == tex) return g_rtv[i].rtv;
+	void *r = 0;
+	if (((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateRTV])(g_dev, tex, 0, &r) < 0 || !r) return 0;
+	if (g_nrtv == 8) { REL(g_rtv[0].rtv); ((UINT (WINAPI *)(void *))VT(g_rtv[0].tex)[2])(g_rtv[0].tex); for (int i = 1; i < 8; i++) g_rtv[i - 1] = g_rtv[i]; g_nrtv--; }
+	((UINT (WINAPI *)(void *))VT(tex)[1])(tex);
+	g_rtv[g_nrtv++] = {tex, r};
+	Ligne l; l.s("vue de rendu creee sur la cible HDR du jeu : "); dire_tex(l, tex); journal(l);
+	return r;
+}
+static bool copies_pretes(void *hdr, void *prof) {
+	TEX2D_DESC h, d; desc_tex(hdr, h); desc_tex(prof, d);
+	if (h.SampleCount > 1 || d.SampleCount > 1) { static int dit; if (!dit++) logline("cible MSAA : passe TSC sautee"); return false; }
+	if (!g_coul || g_coul_w != h.Width || g_coul_h != h.Height || g_coul_fmt != h.Format) {
+		REL(g_coul_srv); REL(g_coul);
+		TEX2D_DESC n = {h.Width, h.Height, 1, 1, h.Format, 1, 0, 0, 8, 0, 0};
+		if (dev_tex(&n, &g_coul) < 0) { g_coul = 0; return false; }
+		((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_coul, 0, &g_coul_srv);
+		g_coul_w = h.Width; g_coul_h = h.Height; g_coul_fmt = h.Format;
+	}
+	UINT ft, fs; if (!formats_prof(d.Format, ft, fs)) { static int dit; if (!dit++) logline("format de profondeur inconnu", d.Format); return false; }
 	if (!g_prof || g_prof_w != d.Width || g_prof_h != d.Height || g_prof_fmt != ft) {
 		REL(g_prof_srv); REL(g_prof);
-		TEX2D_DESC n = {d.Width, d.Height, 1, 1, ft, 1, 0, 0, 8 /*SHADER_RESOURCE*/, 0, 0};
-		if (dev_call_tex(&n, &g_prof) < 0) { g_prof = 0; logline("copie de profondeur : creation refusee"); return; }
-		SRV_DESC sd = {fs, 4 /*TEXTURE2D*/, 0, 1, {0, 0}};
+		TEX2D_DESC n = {d.Width, d.Height, 1, 1, ft, 1, 0, 0, 8, 0, 0};
+		if (dev_tex(&n, &g_prof) < 0) { g_prof = 0; return false; }
+		SRV_DESC sd = {fs, 4, 0, 1, {0, 0}};
 		((HRESULT (WINAPI *)(void *, void *, const SRV_DESC *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_prof, &sd, &g_prof_srv);
 		g_prof_w = d.Width; g_prof_h = d.Height; g_prof_fmt = ft;
-		Ligne l; l.s("copie de profondeur creee : "); dire_tex(l, g_prof); journal(l);
+		g_vram = (u64)h.Width * h.Height * 8 + (u64)d.Width * d.Height * 8;
+		Ligne l; l.s("copies creees : HDR "); dire_tex(l, g_coul); l.s(" ; profondeur "); dire_tex(l, g_prof); l.s(" ; memoire video ajoutee ~"); l.i((i64)(g_vram >> 20)); l.s(" Mo"); journal(l);
 	}
-	g_nous++; ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, g_prof_jeu); g_nous--;
-	g_copiee = 1;
+	return g_coul_srv && g_prof_srv;
 }
 
-/* ---------- crochets du contexte ---------- */
-static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
-	if (!g_nous) {
-		void *t = dsv ? ressource(dsv) : 0;
-		g_dsv_tex_courant = t;
-		if (t) {
-			TEX2D_DESC d; desc_tex(t, d);
-			if (d.Width == g_bw && d.Height == g_bh) {
-				int i = 0; for (; i < g_ncand; i++) if (g_cand[i].tex == t) break;
-				/* candidat de cette image : on garde sa reference jusqu'a Present (rendue par choisir_profondeur) */
-				if (i == g_ncand && g_ncand < 8) { g_cand[g_ncand] = {t, 0, d.Format, d.Width, d.Height, d.SampleCount}; g_ncand++; t = 0; }
-			}
-			if (t) ((UINT (WINAPI *)(void *))VT(t)[2])(t);
-		}
-		if (g_trace) {
-			trace_dessins();
-			Ligne l; l.s("  cibles : "); l.i(n); l.s(" couleur");
-			for (UINT k = 0; k < n && k < 8; k++) { l.s(n > 1 ? "\r\n      c" : " "); if (n > 1) { l.i(k); l.s(" "); } void *r = rtv && rtv[k] ? ressource(rtv[k]) : 0; dire_tex(l, r); REL(r); }
-			l.s("\r\n      profondeur "); void *r = dsv ? ressource(dsv) : 0; dire_tex(l, r); REL(r); trace_txt(l);
-		}
-	}
-	o_omsrt(ctx, n, rtv, dsv);
-}
-static void WINAPI h_clrdsv(void *ctx, void *dsv, UINT fl, float z, unsigned char st) {
-	if (!g_nous && dsv) {
-		void *t = ressource(dsv);
-		if (t && t == g_prof_jeu) {
-			g_effacements_image++; g_val_effacement = (fl & 1) ? z : g_val_effacement;
-			if (R.copie < 0.5f && !g_copiee && g_dessins_profond > 20) copier_profondeur();
-			g_dessins_profond = 0; g_copiee = 0;
-		}
-		if (g_trace) { trace_dessins(); Ligne l; l.s("  effacement profondeur "); if (fl & 1) { l.s("z="); l.f(z, 3); } if (fl & 2) { l.s(" stencil="); l.i(st); } l.s(" sur "); dire_tex(l, t); trace_txt(l); }
-		REL(t);
-	}
-	o_clrdsv(ctx, dsv, fl, z, st);
-}
-static void WINAPI h_clrrtv(void *ctx, void *rtv, const float *c) {
-	if (!g_nous && g_trace && rtv) { trace_dessins(); void *t = ressource(rtv); Ligne l; l.s("  effacement couleur ("); for (int k = 0; k < 4; k++) { l.f(c[k], 2); if (k < 3) l.s(" "); } l.s(") sur "); dire_tex(l, t); trace_txt(l); REL(t); }
-	o_clrrtv(ctx, rtv, c);
-}
-static void WINAPI h_rsvp(void *ctx, UINT n, const VIEWPORT *v) {
-	if (!g_nous && g_trace && n && v) { trace_dessins(); Ligne l; l.s("  viewports "); l.i(n); l.s(" :"); for (UINT k = 0; k < n && k < 4; k++) { l.s(" ["); l.f(v[k].x, 0); l.s(","); l.f(v[k].y, 0); l.s(" "); l.f(v[k].w, 0); l.s("x"); l.f(v[k].h, 0); l.s(" z "); l.f(v[k].zmin, 2); l.s("-"); l.f(v[k].zmax, 2); l.s("]"); } trace_txt(l); }
-	o_rsvp(ctx, n, v);
-}
-static void WINAPI h_drawidx(void *c, UINT a, UINT b, int d) { compter(); o_drawidx(c, a, b, d); }
-static void WINAPI h_draw(void *c, UINT a, UINT b) { compter(); o_draw(c, a, b); }
-static void WINAPI h_drawidxi(void *c, UINT a, UINT b, UINT d, int e, UINT f) { compter(); o_drawidxi(c, a, b, d, e, f); }
-static void WINAPI h_drawi(void *c, UINT a, UINT b, UINT d, UINT e) { compter(); o_drawi(c, a, b, d, e); }
-
-/* ---------- passe TSC ---------- */
-static void liberer_cibles() { REL(g_bb_rtv); g_bb_tex = 0; REL(g_coul_srv); REL(g_coul); g_coul_w = g_coul_h = 0; }
-static bool cibles(void *sc) {
-	void *bb = 0;
-	if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) < 0 || !bb) return false;
-	TEX2D_DESC d; desc_tex(bb, d);
-	if (bb != g_bb_tex) {
-		REL(g_bb_rtv); g_bb_tex = bb;
-		UINT f = d.Format; if (f == 27) f = 28; if (f == 90) f = 87; if (f == 23) f = 24;   /* typeless -> unorm */
-		UINT rd[5] = {f, 4 /*TEXTURE2D*/, 0, 0, 0};
-		if (((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateRTV])(g_dev, bb, rd, &g_bb_rtv) < 0) { g_bb_rtv = 0; logline("vue de l'image presentee refusee"); }
-	}
-	if (!g_coul || g_coul_w != d.Width || g_coul_h != d.Height || g_coul_fmt != d.Format) {
-		REL(g_coul_srv); REL(g_coul);
-		TEX2D_DESC n = {d.Width, d.Height, 1, 1, d.Format, 1, 0, 0, 8, 0, 0};
-		if (dev_call_tex(&n, &g_coul) < 0) { g_coul = 0; ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); return false; }
-		UINT f = d.Format; if (f == 27) f = 28; if (f == 90) f = 87; if (f == 23) f = 24;
-		SRV_DESC sd = {f, 4, 0, 1, {0, 0}};
-		((HRESULT (WINAPI *)(void *, void *, const SRV_DESC *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_coul, &sd, &g_coul_srv);
-		g_coul_w = d.Width; g_coul_h = d.Height; g_coul_fmt = d.Format;
-		g_vram = (u64)d.Width * d.Height * 4 * 2;
-		Ligne l; l.s("image presentee : "); dire_tex(l, bb); l.s(" ; memoire video ajoutee ~"); l.i((i64)(g_vram >> 20)); l.s(" Mo"); journal(l);
-	}
-	g_bw = d.Width; g_bh = d.Height;
-	((UINT (WINAPI *)(void *))VT(bb)[2])(bb);   /* la chaine garde la sienne */
-	return g_bb_rtv && g_coul_srv;
-}
-
-static void passe() {
-	if (!g_shaders_ok || !g_etat || !g_bb_rtv) return;
-	/* constantes */
-	float tan_v = 0; { float a = R.fov_v * 0.5f * 3.14159265f / 180.0f; float s = a - a * a * a / 6 + a * a * a * a * a / 120, c = 1 - a * a / 2 + a * a * a * a / 24 - a * a * a * a * a * a / 720; tan_v = s / c; }
-	float ecr = R.ecrans < 1 ? 1 : R.ecrans;
-	float aspect = g_bh ? (float)g_bw / ecr / (float)g_bh : 1.7777f;
-	float zinv = R.z_inverse >= 0 ? R.z_inverse : (g_val_effacement == 0.0f ? 1.0f : 0.0f);
+/* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
+static void passe_vue(void *hdr, void *prof) {
+	if (!g_shaders_ok || !g_etat || g_vues_traitees >= (int)R.max_vues) return;
+	if (!copies_pretes(hdr, prof)) return;
+	void *rtv = rtv_de(hdr); if (!rtv) return;
+	float tan_v; { float a = R.fov_v * 0.5f * 3.14159265f / 180.0f; float a2 = a * a; tan_v = (a * (1 - a2 / 6 + a2 * a2 / 120)) / (1 - a2 / 2 + a2 * a2 / 24 - a2 * a2 * a2 / 720); }
+	float mouille = R.humidite >= 0 ? R.humidite : g_mouille;
 	static float t; t += 0.016f;
 	float cbv[32] = {
-		(float)g_vue, R.humidite, tan_v, aspect,
-		R.proche, R.loin, zinv, t,
-		(float)g_bw, (float)g_bh, g_bw ? 1.0f / g_bw : 0, g_bh ? 1.0f / g_bh : 0,
-		R.intensite, R.rugosite, g_prof_srv ? 1.0f : 0.0f, R.trainees,
-		R.cabine_m, R.pas, R.epaisseur, R.f0,
-		ecr, R.assombrir, 0, 0 };
-	void *old_state = 0;
+		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
+		R.proche, R.plage_min, R.plage_max, t,
+		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
+		R.intensite, R.rugosite, 1, R.trainees,
+		0, R.pas, R.epaisseur, R.f0,
+		(float)g_vues_traitees, R.assombrir, 0, 0 };
+	void *old = 0;
 	g_nous++;
-	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, g_etat, &old_state);
-	int qi = g_q_i & 3;
-	if (g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_Begin])(g_ctx, g_q_dis[qi]); ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_a[qi]); }
-	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, g_bb_tex);
+	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, g_etat, &old);
+	int qi = g_q_i % NQ, qv = g_q_n[qi];
+	if (qv < QV && g_q_dis[qi]) {
+		if (!g_q_ouvert) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_Begin])(g_ctx, g_q_dis[qi]); g_q_ouvert = 1; }
+		((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_a[qi][qv]);
+	}
+	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
+	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
-	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4 /*WRITE_DISCARD*/, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
-	VIEWPORT vp = {0, 0, (float)g_bw, (float)g_bh, 0, 1};
+	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
+	VIEWPORT vp = {0, 0, (float)g_coul_w, (float)g_coul_h, 0, 1};
 	((void (WINAPI *)(void *, UINT, const VIEWPORT *))VT(g_ctx)[C_RSSetViewports])(g_ctx, 1, &vp);
-	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &g_bb_rtv, 0);
-	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4 /*TRIANGLELIST*/);
+	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &rtv, 0);
+	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps, 0, 0);
 	void *srv[2] = {g_coul_srv, g_prof_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
@@ -392,42 +342,110 @@ static void passe() {
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
 	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
 	void *nul[2] = {0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 2, nul);
-	if (g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_b[qi]); ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_dis[qi]); }
-	g_q_i++;
-	/* lecture des mesures GPU d'il y a 3 images, sans attendre */
-	if (g_q_i > 3) {
-		int r = (g_q_i - 3) & 3; DISJOINT dj; u64 a = 0, b = 0;
-		typedef HRESULT (WINAPI *GD)(void *, void *, void *, UINT, UINT);
-		if (((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_dis[r], &dj, sizeof dj, 1) == 0 && !dj.Disjoint && dj.Frequency &&
-		    ((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_a[r], &a, 8, 1) == 0 && ((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_b[r], &b, 8, 1) == 0 && b >= a) {
-			g_gpu_ms += (double)(b - a) * 1000.0 / (double)dj.Frequency; g_n_gpu++;
-		}
-	}
-	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, old_state, 0);
-	REL(old_state);
+	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
+	if (qv < QV && g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_b[qi][qv]); g_q_n[qi] = qv + 1; }
+	((void (WINAPI *)(void *, void *, void **))VT(g_ctx1)[C1_SwapState])(g_ctx1, old, 0);
+	REL(old);
 	g_nous--;
+	g_vues_traitees++;
+}
+static void fin_mesure_gpu() {
+	if (!g_ctx || !g_q_ouvert) return;
+	int qi = g_q_i % NQ;
+	g_nous++; ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_dis[qi]); g_nous--;
+	g_q_ouvert = 0; g_q_i++;
+	int r = (g_q_i + 1) % NQ;   /* la plus ancienne */
+	if (g_q_i >= NQ && g_q_n[r]) {
+		typedef HRESULT (WINAPI *GD)(void *, void *, void *, UINT, UINT);
+		DISJOINT dj; double ms = 0; int ok = ((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_dis[r], &dj, sizeof dj, 1) == 0 && !dj.Disjoint && dj.Frequency;
+		for (int v = 0; ok && v < g_q_n[r]; v++) { u64 a = 0, b = 0; if (((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_a[r][v], &a, 8, 1) || ((GD)VT(g_ctx)[C_GetData])(g_ctx, g_q_b[r][v], &b, 8, 1) || b < a) ok = 0; else ms += (double)(b - a) * 1000.0 / (double)dj.Frequency; }
+		if (ok) { g_gpu_ms += ms; g_n_gpu++; }
+		g_q_n[r] = 0;
+	}
+	g_q_n[(g_q_i) % NQ] = 0;
 }
 
+static void quitter_vue() { REL(g_hdr_tex); REL(g_vue_prof); g_etape = E_RIEN; }
+
+/* ---------- crochets du contexte ---------- */
+static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
+	if (!g_nous) {
+		void *rt0 = n && rtv && rtv[0] ? ressource(rtv[0]) : 0;
+		void *pt = dsv ? ressource(dsv) : 0;
+		TEX2D_DESC d0; if (rt0) desc_tex(rt0, d0); else memset(&d0, 0, sizeof d0);
+		/* l'eclairage HDR de la vue est fini quand le jeu quitte sa cible : passe TSC maintenant */
+		if (g_etape == E_HDR && rt0 != g_hdr_tex) {
+			if (g_hdr_tex && g_vue_prof && R.actif > 0.5f && g_effet_on > 0.5f && g_etat) passe_vue(g_hdr_tex, g_vue_prof);
+			quitter_vue();
+		}
+		if (n >= 4 && rt0 && d0.Format == 10 && pt) { quitter_vue(); g_etape = E_GBUF; g_vues_image++; g_n_gbuf++; }
+		else if (n == 1 && rt0 && d0.Format == 10 && pt && g_etape == E_GBUF) {
+			TEX2D_DESC dp; desc_tex(pt, dp);
+			if (dp.Width == d0.Width && dp.Height == d0.Height) {
+				g_etape = E_HDR; g_n_hdr++;
+				g_hdr_tex = rt0; ((UINT (WINAPI *)(void *))VT(rt0)[1])(rt0);
+				g_vue_prof = pt; ((UINT (WINAPI *)(void *))VT(pt)[1])(pt);
+			}
+		}
+		g_dans_gouttes = (rt0 && d0.Format == 31 /*R8G8B8A8_SNORM*/ && pt) ? 1 : 0;
+		if (g_trace) {
+			trace_dessins();
+			Ligne l; l.s("  cibles : "); l.i(n); l.s(" couleur");
+			for (UINT k = 0; k < n && k < 8; k++) { l.s(n > 1 ? "\r\n      c" : " "); if (n > 1) { l.i(k); l.s(" "); } void *r = rtv && rtv[k] ? ressource(rtv[k]) : 0; dire_tex(l, r); REL(r); }
+			l.s("\r\n      profondeur "); dire_tex(l, pt); l.s(g_etape == E_GBUF ? "   [TSC : G-buffer]" : g_etape == E_HDR ? "   [TSC : HDR]" : ""); trace_txt(l);
+		}
+		REL(rt0); REL(pt);
+	}
+	o_omsrt(ctx, n, rtv, dsv);
+}
+static void WINAPI h_clrdsv(void *ctx, void *dsv, UINT fl, float z, unsigned char st) {
+	if (!g_nous && dsv) {
+		if (fl & 1) g_val_effacement = z;
+		if (g_trace) { trace_dessins(); void *t = ressource(dsv); Ligne l; l.s("  effacement profondeur "); if (fl & 1) { l.s("z="); l.f(z, 3); } if (fl & 2) { l.s(" stencil="); l.i(st); } l.s(" sur "); dire_tex(l, t); trace_txt(l); REL(t); }
+	}
+	o_clrdsv(ctx, dsv, fl, z, st);
+}
+static void WINAPI h_clrrtv(void *ctx, void *rtv, const float *c) {
+	if (!g_nous && g_trace && rtv) { trace_dessins(); void *t = ressource(rtv); Ligne l; l.s("  effacement couleur ("); for (int k = 0; k < 4; k++) { l.f(c[k], 2); if (k < 3) l.s(" "); } l.s(") sur "); dire_tex(l, t); trace_txt(l); REL(t); }
+	o_clrrtv(ctx, rtv, c);
+}
+static void WINAPI h_rsvp(void *ctx, UINT n, const VIEWPORT *v) {
+	if (!g_nous && g_trace && n && v) { trace_dessins(); Ligne l; l.s("  viewports "); l.i(n); l.s(" :"); for (UINT k = 0; k < n && k < 4; k++) { l.s(" ["); l.f(v[k].x, 0); l.s(","); l.f(v[k].y, 0); l.s(" "); l.f(v[k].w, 0); l.s("x"); l.f(v[k].h, 0); l.s(" z "); l.f(v[k].zmin, 3); l.s("-"); l.f(v[k].zmax, 3); l.s("]"); } trace_txt(l); }
+	o_rsvp(ctx, n, v);
+}
+static void WINAPI h_drawidx(void *c, UINT a, UINT b, int d) { compter(); o_drawidx(c, a, b, d); }
+static void WINAPI h_draw(void *c, UINT a, UINT b) { compter(); o_draw(c, a, b); }
+static void WINAPI h_drawidxi(void *c, UINT a, UINT b, UINT d, int e, UINT f) { compter(); o_drawidxi(c, a, b, d, e, f); }
+static void WINAPI h_drawi(void *c, UINT a, UINT b, UINT d, UINT e) { compter(); o_drawi(c, a, b, d, e); }
+
+/* d'autres couches remettent certaines entrees a chaque image : on les repose (en enchainant sur ce qui est en place) */
+struct Crochet { int i; void *f; void **o; };
+static Crochet g_cr[] = {
+	{C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt}, {C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv}, {C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv},
+	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
+	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi} };
+static i64 g_reposes;
+static void reposer() {
+	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) g_reposes++; }
+}
+
+/* ---------- par image ---------- */
 static bool touche(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 static bool frappe(int vk, int &mem) { bool b = touche(0x11) && touche(0x10) && touche(vk); bool r = b && !mem; mem = b; return r; }
-
-static void choisir_profondeur() {
-	int best = -1; for (int i = 0; i < g_ncand; i++) if (g_cand[i].dessins > 0 && (best < 0 || g_cand[i].dessins > g_cand[best].dessins)) best = i;
-	void *t = best >= 0 ? g_cand[best].tex : 0;
-	if (t && t != g_prof_jeu) {
-		/* reprise d'une reference propre : la texture est encore liee au jeu (vue de profondeur) */
-		REL(g_prof_jeu); g_prof_jeu = t; ((UINT (WINAPI *)(void *))VT(t)[1])(t);
-		Ligne l; l.s("profondeur principale : "); dire_tex(l, t); l.s(" ("); l.i(g_cand[best].dessins); l.s(" dessins sur l'image)"); journal(l);
-	}
-	for (int i = 0; i < g_ncand; i++) ((UINT (WINAPI *)(void *))VT(g_cand[i].tex)[2])(g_cand[i].tex);
-	g_ncand = 0;
-}
 
 static void apres_image(void *sc) {
 	i64 t0; QueryPerformanceCounter(&t0);
 	if (!g_freq) QueryPerformanceFrequency(&g_freq);
-	if (g_t_prec) { double ms = (double)(t0 - g_t_prec) * 1000.0 / (double)g_freq; g_somme_ms += ms; if (ms > g_pire_ms) g_pire_ms = ms; g_n_img++; }
+	double dt = 0;
+	if (g_t_prec) { double ms = (double)(t0 - g_t_prec) * 1000.0 / (double)g_freq; dt = ms / 1000.0; g_somme_ms += ms; if (ms > g_pire_ms) g_pire_ms = ms; g_n_img++; }
 	g_t_prec = t0;
+	if (g_etape == E_HDR) quitter_vue();
+	fin_mesure_gpu();
+
+	/* pluie : la passe des gouttes du jeu ; la route se mouille puis seche progressivement */
+	g_pluie = g_gouttes > (i64)R.seuil_gouttes; g_gouttes_rapport = g_gouttes > g_gouttes_rapport ? g_gouttes : g_gouttes_rapport; g_gouttes = 0;
+	if (dt > 0 && dt < 1) { if (g_pluie) g_mouille += (float)(dt / (R.mouille_s > 1 ? R.mouille_s : 1)); else g_mouille -= (float)(dt / (R.seche_s > 1 ? R.seche_s : 1)); }
+	if (g_mouille < 0) g_mouille = 0; if (g_mouille > 1) g_mouille = 1;
 
 	static int kg, kd, kt;
 	if (frappe('G', kg)) { g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE" : "effet TSC : ARRET"); }
@@ -435,23 +453,24 @@ static void apres_image(void *sc) {
 	if (frappe('T', kt) && !g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee"); }
 
 	static u64 t_ini; u64 now = GetTickCount64();
-	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) compiler(); if (R.vue >= 0 && R.vue < 4 && (int)R.vue != 0) g_vue = (int)R.vue; }
+	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) compiler(); if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	if (!g_trace_auto_fait && g_n_img > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }
 
-	if (init_appareil(sc) && cibles(sc)) {
-		choisir_profondeur();
-		if (!g_copiee) copier_profondeur();
-		if (R.actif > 0.5f && g_effet_on > 0.5f) passe();
-	} else if (g_dev) { cibles(sc); choisir_profondeur(); }
-	g_copiee = 0; g_effacements_image = 0;
+	init_appareil(sc);
+	if (!g_bw) { void *bb = 0; if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) >= 0 && bb) { TEX2D_DESC d; desc_tex(bb, d); g_bw = d.Width; g_bh = d.Height; Ligne l; l.s("image presentee : "); dire_tex(l, bb); journal(l); ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); } }
+	g_vues_rapport += g_vues_traitees;
+	g_vues_image = 0; g_vues_traitees = 0;
+	reposer();
 
 	i64 t1; QueryPerformanceCounter(&t1); g_cpu_ms += (double)(t1 - t0) * 1000.0 / (double)g_freq;
 	if (now - g_t_rapport > 2000 && g_n_img) {
 		Ligne l; l.s("mesure : "); l.f(1000.0 * g_n_img / (g_somme_ms > 0 ? g_somme_ms : 1), 1); l.s(" img/s, image moy "); l.f(g_somme_ms / g_n_img); l.s(" ms, pire ");
-		l.f(g_pire_ms); l.s(" ms, TSC CPU "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms, effet ");
-		l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(", profondeur "); l.s(g_prof_srv ? "lue" : "absente"); l.s(", effacement z="); l.f(g_val_effacement, 3);
+		l.f(g_pire_ms); l.s(" ms, TSC CPU "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
+		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
+		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(", HDR vus "); l.i(g_n_hdr);
+		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes);
 		journal(l);
-		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0;
+		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0;
 	}
 	if (g_trace) {
 		if (--g_trace == 0) { Ligne l; l.s("=== fin de la trace ==="); trace_txt(l); ecrire("tsc-graphics-trace.log", g_tbuf, g_tn); logline("trace ecrite dans tsc-graphics-trace.log"); }
@@ -459,18 +478,9 @@ static void apres_image(void *sc) {
 	}
 }
 
-static HRESULT WINAPI h_present(void *sc, UINT sync, UINT fl) {
-	if (!(fl & 1 /*TEST*/)) apres_image(sc);
-	return o_present(sc, sync, fl);
-}
-static HRESULT WINAPI h_present1(void *sc, UINT sync, UINT fl, const void *p) {
-	if (!(fl & 1)) apres_image(sc);
-	return o_present1(sc, sync, fl, p);
-}
-static HRESULT WINAPI h_resize(void *sc, UINT n, UINT w, UINT h, UINT f, UINT fl) {
-	liberer_cibles(); logline("changement de taille de l'image");
-	return o_resize(sc, n, w, h, f, fl);
-}
+static HRESULT WINAPI h_present(void *sc, UINT sync, UINT fl) { if (!(fl & 1)) apres_image(sc); return o_present(sc, sync, fl); }
+static HRESULT WINAPI h_present1(void *sc, UINT sync, UINT fl, const void *p) { if (!(fl & 1)) apres_image(sc); return o_present1(sc, sync, fl, p); }
+static HRESULT WINAPI h_resize(void *sc, UINT n, UINT w, UINT h, UINT f, UINT fl) { g_bw = g_bh = 0; logline("changement de taille de l'image"); return o_resize(sc, n, w, h, f, fl); }
 
 /* ---------- branchement ---------- */
 static i64 WINAPI proc_fen(void *h, UINT m, u64 w, i64 l) { return DefWindowProcA(h, m, w, l); }
@@ -484,7 +494,7 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 	RegisterClassExA(&wc);
 	void *fen = CreateWindowExA(0, "TSCGraphicsSonde", "", 0, 0, 0, 64, 64, 0, 0, g_mod, 0);
 	if (!fen) { logline("fenetre jetable impossible"); return 0; }
-	SWAP_DESC sd; memset(&sd, 0, sizeof sd); sd.w = 64; sd.h = 64; sd.fmt = 28; sd.cnt = 1; sd.usage = 0x20 /*RENDER_TARGET_OUTPUT*/; sd.nbuf = 1; sd.hwnd = fen; sd.windowed = 1;
+	SWAP_DESC sd; memset(&sd, 0, sizeof sd); sd.w = 64; sd.h = 64; sd.fmt = 28; sd.cnt = 1; sd.usage = 0x20; sd.nbuf = 1; sd.hwnd = fen; sd.windowed = 1;
 	void *sc = 0, *dev = 0, *ctx = 0; int fl = 0;
 	HRESULT hr = cr(0, 1, 0, 0, 0, 0, 7, &sd, &sc, &dev, &fl, &ctx);
 	if (hr < 0 || !sc) { logline("appareil et chaine jetables impossibles", hr & 0xffffffffLL); DestroyWindow(fen); return 0; }
@@ -493,28 +503,19 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 	ok &= poser(g_vt_sc, S_Present, (void *)h_present, (void **)&o_present);
 	ok &= poser(g_vt_sc, S_ResizeBuffers, (void *)h_resize, (void **)&o_resize);
 	poser(g_vt_sc, S1_Present1, (void *)h_present1, (void **)&o_present1);
-	ok &= poser(g_vt_ctx, C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt);
-	ok &= poser(g_vt_ctx, C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv);
-	ok &= poser(g_vt_ctx, C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv);
-	ok &= poser(g_vt_ctx, C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp);
-	ok &= poser(g_vt_ctx, C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx);
-	ok &= poser(g_vt_ctx, C_Draw, (void *)h_draw, (void **)&o_draw);
-	ok &= poser(g_vt_ctx, C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi);
-	ok &= poser(g_vt_ctx, C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi);
+	for (auto &c : g_cr) ok &= poser(g_vt_ctx, c.i, c.f, c.o);
 	g_hooks = 1;
 	logline(ok ? "crochets poses (Present, ResizeBuffers, cibles, effacements, viewports, dessins)" : "certains crochets n'ont pas pu etre poses");
 	REL(ctx); REL(dev); REL(sc); DestroyWindow(fen);
-	HMODULE h; GetModuleHandleExA(5 /*PIN | FROM_ADDRESS*/, (const char *)&scs_telemetry_init, &h);   /* le jeu garde nos adresses */
+	HMODULE h; GetModuleHandleExA(5, (const char *)&scs_telemetry_init, &h);
 	return 0;
 }
 extern "C" void scs_telemetry_shutdown(void) {
 	if (!g_hooks) return;
-	retirer(g_vt_ctx, C_DrawInstanced, (void *)o_drawi); retirer(g_vt_ctx, C_DrawIndexedInstanced, (void *)o_drawidxi);
-	retirer(g_vt_ctx, C_Draw, (void *)o_draw); retirer(g_vt_ctx, C_DrawIndexed, (void *)o_drawidx);
-	retirer(g_vt_ctx, C_RSSetViewports, (void *)o_rsvp); retirer(g_vt_ctx, C_ClearRTV, (void *)o_clrrtv);
-	retirer(g_vt_ctx, C_ClearDSV, (void *)o_clrdsv); retirer(g_vt_ctx, C_OMSetRT, (void *)o_omsrt);
-	if (o_present1) retirer(g_vt_sc, S1_Present1, (void *)o_present1);
-	retirer(g_vt_sc, S_ResizeBuffers, (void *)o_resize); retirer(g_vt_sc, S_Present, (void *)o_present);
+	for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
+	if (o_present1 && g_vt_sc[S1_Present1] == (void *)h_present1) retirer(g_vt_sc, S1_Present1, (void *)o_present1);
+	if (g_vt_sc[S_ResizeBuffers] == (void *)h_resize) retirer(g_vt_sc, S_ResizeBuffers, (void *)o_resize);
+	if (g_vt_sc[S_Present] == (void *)h_present) retirer(g_vt_sc, S_Present, (void *)o_present);
 	g_hooks = 0; logline("crochets retires");
 }
 extern "C" BOOL WINAPI DllMain(HMODULE h, DWORD r, void *x) {
