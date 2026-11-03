@@ -43,7 +43,7 @@ if ($Restaurer) {
   }
   if ($s.plan) { powercfg /setactive $s.plan | Out-Null; Dire "  plan d'alimentation remis : $($s.plan)" }
   foreach ($n in $s.reseau) {
-    if ($n.EEE -ne $null) { Set-NetAdapterAdvancedProperty -Name $n.Nom -RegistryKeyword '*EEE' -RegistryValue $n.EEE -NoRestart; Dire "  $($n.Nom) : Ethernet econome remis a $($n.EEE)" }
+    if ($n.EEE -ne $null) { Set-NetAdapterAdvancedProperty -Name $n.Nom -RegistryKeyword $n.CleEEE -RegistryValue $n.EEE -NoRestart; Dire "  $($n.Nom) : Ethernet econome ($($n.CleEEE)) remis a $($n.EEE)" }
     if ($n.Veille) { Enable-NetAdapterPowerManagement -Name $n.Nom -NoRestart; Dire "  $($n.Nom) : mise en veille de la carte reautorisee" }
   }
   Dire "Termine. Redemarre la session Windows pour que tout soit pris en compte." Green
@@ -61,9 +61,9 @@ else {
   $g = (powercfg /getactivescheme) -replace '.*:\s*([0-9a-fA-F-]{36}).*', '$1'
   $s.plan = $g.Trim()
   foreach ($a in (Get-NetAdapter -Physical | Where-Object Status -eq 'Up')) {
-    $e = Get-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword '*EEE'
+    $e = Get-NetAdapterAdvancedProperty -Name $a.Name | Where-Object { $_.RegistryKeyword -match 'EEE' } | Select-Object -First 1
     $pm = Get-NetAdapterPowerManagement -Name $a.Name
-    $s.reseau += [ordered]@{ Nom = $a.Name; EEE = if ($e) { $e.RegistryValue[0] } else { $null }; Veille = ($pm -and $pm.AllowComputerToTurnOffDevice -eq 'Enabled') }
+    $s.reseau += [ordered]@{ Nom = $a.Name; CleEEE = if ($e) { $e.RegistryKeyword } else { $null }; EEE = if ($e) { $e.RegistryValue[0] } else { $null }; Veille = ($pm -and $pm.AllowComputerToTurnOffDevice -eq 'Enabled') }
   }
   $s | ConvertTo-Json -Depth 5 | Set-Content -Path $sauvegarde -Encoding UTF8
   Dire "Sauvegarde de l'etat d'origine : $sauvegarde" Green
@@ -83,7 +83,9 @@ Dire "  OK  Plan d'alimentation : Performances elevees"
 # 3. carte reseau : pas de mise en veille, pas d'Ethernet econome (evite les micro-coupures du flux)
 foreach ($a in (Get-NetAdapter -Physical | Where-Object Status -eq 'Up')) {
   Disable-NetAdapterPowerManagement -Name $a.Name -NoRestart
-  if (Get-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword '*EEE') { Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword '*EEE' -RegistryValue 0 -NoRestart }
+  # le mot-cle varie selon le fabricant : *EEE (standard), EEELinkAdvertisement (Intel I217/I219), ...
+  $e = Get-NetAdapterAdvancedProperty -Name $a.Name | Where-Object { $_.RegistryKeyword -match 'EEE' } | Select-Object -First 1
+  if ($e) { Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $e.RegistryKeyword -RegistryValue 0 -NoRestart; if ($?) { Dire "  OK  $($a.Name) : Ethernet econome ($($e.RegistryKeyword)) coupe" } else { Dire "  !!  $($a.Name) : Ethernet econome NON coupe (a faire dans le Gestionnaire de peripheriques)" Yellow } }
   Dire "  OK  Carte reseau $($a.Name) ($($a.LinkSpeed)) : veille et mode econome coupes"
 }
 # 4. pour cette session seulement : programmes gourmands fermes, Shadow en priorite haute
