@@ -7,7 +7,8 @@ choix={'jour':('videoplayback__2_/videoplayback__2__00995s.jpg','jour/ets2_20261
  'gris':(None,'gris/ets2_20261021_031421_00.png'),
  'pluie':(None,'pluie/fil_737ac766.png'),
  'crepuscule':(None,'crepuscule/ets2_20261013_085045_00.png'),
- 'nuit':(None,'nuit/ets2_20261021_031432_00.png')}
+ 'nuit':(None,'nuit/ets2_20261021_031432_00.png'),
+ 'nuit_pluie':('PLUIE_SOMBRE','nuit/ets2_20261021_031432_00.png')}
 import csv
 rows=list(csv.reader(open(R+'index.csv',encoding='utf-8-sig'),delimiter=';'))[1:]
 amb=sys.argv[2:] or list(choix)
@@ -18,6 +19,8 @@ for a in amb:
     if reel is None:
         c=sorted([r for r in rows if r[3]==a and r[4]!='arret'],key=lambda r:float(r[5].replace(',','.')))
         reel=c[len(c)//2][2].replace(chr(92),'/').replace(chr(92),'/')
+    if reel=='PLUIE_SOMBRE':
+        reel=sorted([r for r in rows if r[3]=='pluie'],key=lambda r:float(r[5].replace(',','.')))[0][2]
     reel=reel.replace(chr(92),'/')
     im=Image.open(R+reel).convert('RGB')
     g=Image.open(G+jeu).convert('RGB')
