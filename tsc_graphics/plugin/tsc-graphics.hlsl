@@ -410,7 +410,7 @@ float4 ps_ldr(VSO i) : SV_Target {
 		float3 o = pow(saturate(tLut.SampleLevel(sLin, uvw, 0).rgb), 2.2);
 		// 0.9.3 : les surfaces neutres (route, beton, plafond) ne prennent que le changement de lumiere, pas de teinte (marbrure jaune vue au reglage)
 		float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
-		float wn = smoothstep(0.06, 0.2, (mx - mn) / max(mx, 1e-4));
+		float wn = smoothstep(0.02, 0.35, (mx - mn) / max(mx, 1e-4)); // 0.9.4 : transition elargie (joint montant droit : pare-brise sature / cabine neutre traites trop differemment)
 		float3 oneutre = c * (lum(o) / max(lum(c), 1e-4));
 		o = lerp(oneutre, o, wn);
 		c = lerp(c, saturate(o), saturate(p15.z));

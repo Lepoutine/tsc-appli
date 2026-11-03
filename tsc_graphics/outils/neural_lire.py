@@ -14,10 +14,17 @@ def lire(f):
     if fmt in (28, 29): return d.reshape(h, w, 4)
     if fmt in (87, 91): return d.reshape(h, w, 4)[..., [2, 1, 0, 3]]
     raise SystemExit(f'format {fmt} inconnu ({f})')
+# 0.9.3 : le jeu rend les vues HDR dans l'ordre gauche, droite, centre mais les tonemappe gauche, centre, droite.
+# Les fichiers hdr/prof/albedo et jeu8 d'un meme indice v ne sont donc PAS le meme ecran : on renomme par ecran.
+ECRAN = {'hdr': ['gauche', 'droite', 'centre'], 'prof': ['gauche', 'droite', 'centre'], 'albedo': ['gauche', 'droite', 'centre'], 'jeu8': ['gauche', 'centre', 'droite']}
+def nom_ecran(n):
+    try:
+        img, v, quoi = n.split('_'); e = ECRAN[quoi][int(v[1:])]; return f'{img}_{e}_{quoi}'
+    except Exception: return n
 def main():
     src, dst = sys.argv[1], sys.argv[2]; os.makedirs(dst, exist_ok=True)
     for f in sorted(glob.glob(os.path.join(src, '*.raw'))):
-        a = lire(f); base = os.path.join(dst, os.path.basename(f)[:-4])
+        a = lire(f); base = os.path.join(dst, nom_ecran(os.path.basename(f)[:-4]))
         np.save(base + '.npy', a)
         if a.ndim == 3 and a.dtype == np.uint8: Image.fromarray(a[..., :3]).save(base + '.png')
         elif a.ndim == 3: Image.fromarray(np.clip((a[..., :3] / (1 + a[..., :3])) ** (1 / 2.2) * 255, 0, 255).astype(np.uint8)).save(base + '.png')
