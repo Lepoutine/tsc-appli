@@ -99,11 +99,11 @@ if ($sh) { Dire "  OK  Shadow en priorite haute pour cette session" } else { Dir
 $ecrans = Get-WmiObject Win32_VideoController | Select-Object -First 1
 Dire ""
 Dire "A regler dans l'application Shadow (Parametres > Streaming), d'apres ton PC :" Cyan
-Dire "  - Images par seconde : 60 (tes ecrans sont a 60 Hz ; 100 fps surcharge le decodage sans rien afficher de plus)"
+Dire "  - Images par seconde : 60 (en Collage 3840x1080, la carte Intel HD 4400 decode au mieux ~60 images/s ; au-dela ca saccade)"
 Dire "  - Codec : H.264 (ton processeur graphique $($ecrans.Name) ne decode pas bien le H.265)"
 Dire "  - Decodage materiel : active"
 Dire "  - Debit : 'Automatique' ou 50 Mbit/s maximum en Ethernet"
-Dire "  - Si un seul ecran sert a Shadow : definition 1920x1080 (moins d'image a decoder)"
+Dire "  - Garder le mode Collage Intel (2 ecrans = 3840x1080) pour ETS2 ; 4:4:4 desactive"
 Dire "Pilote graphique : $($ecrans.Name), version $($ecrans.DriverVersion). Un pilote recent (site Intel) aide le decodage materiel."
 Dire ""
 Dire "Termine. Ferme puis rouvre Shadow. Pour tout annuler : relance ce script avec -Restaurer." Green
