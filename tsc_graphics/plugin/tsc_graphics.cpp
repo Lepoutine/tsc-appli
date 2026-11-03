@@ -49,7 +49,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.3.0"
+#define VERSION "tsc-graphics 0.3.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -148,7 +148,7 @@ typedef HRESULT (WINAPI *PFN_COMPILE)(const void *, SIZE_T, const char *, const 
 
 static PFN_PRESENT o_present; static PFN_PRESENT1 o_present1; static PFN_RESIZE o_resize; static PFN_OMSRT o_omsrt; static PFN_CLRDSV o_clrdsv;
 static PFN_CLRRTV o_clrrtv; static PFN_RSVP o_rsvp; static PFN_DRAWIDX o_drawidx; static PFN_DRAW o_draw; static PFN_DRAWIDXI o_drawidxi; static PFN_DRAWI o_drawi;
-static void **g_vt_sc, **g_vt_ctx; static int g_hooks;
+static void **g_vt_sc, **g_vt_ctx; static int g_hooks, g_arret;
 static volatile int g_nous;   /* nos propres appels passent tout droit */
 
 static bool poser(void **vt, int i, void *f, void **orig) {
@@ -206,8 +206,10 @@ static float g_effet_on = 1; static int g_vue = 0;
 static i64 g_freq, g_t_prec; static double g_somme_ms, g_pire_ms, g_cpu_ms, g_gpu_ms; static int g_n_img, g_n_gpu; static u64 g_t_rapport; static i64 g_vues_rapport;
 static u64 g_vram;
 
+static i64 g_n_omsrt, g_n_dessins;
 static void compter() {
 	if (g_nous) return;
+	g_n_dessins++;
 	if (g_trace) g_trace_dessins++;
 	if (g_dans_gouttes) g_gouttes++;
 }
@@ -236,6 +238,12 @@ static void compiler() {
 	REL(g_vs); REL(g_ps); g_vs = vs; g_ps = ps; g_shaders_ok = 1; logline("shaders compiles (tsc-graphics.hlsl)");
 }
 
+static void accrocher_contexte();
+static void module_de(Ligne &l, void *adr) {
+	HMODULE m = 0; char n[300]; n[0] = 0;
+	if (adr && GetModuleHandleExA(6, (const char *)adr, &m) && m) GetModuleFileNameA(m, n, 299);
+	l.s(n[0] ? n : "?");
+}
 static bool init_appareil(void *sc) {
 	if (g_dev) return g_etat != 0;
 	if (((HRESULT (WINAPI *)(void *, const GUIDx *, void **))VT(sc)[S_GetDevice])(sc, &IID_Dev, &g_dev) < 0 || !g_dev) { logline("GetDevice refuse"); g_dev = 0; return false; }
@@ -260,6 +268,9 @@ static bool init_appareil(void *sc) {
 		}
 	}
 	logline("appareil du jeu pris, etat de contexte TSC cree, niveau", (i64)fl);
+	/* essai 0.3 du 03/11 : aucune passe vue -> le contexte du jeu n'utilise pas la table de l'appareil jetable
+	   (autre classe, ou contexte enveloppe par une autre couche). On pose les crochets sur la table du VRAI contexte. */
+	accrocher_contexte();
 	compiler();
 	return true;
 }
@@ -315,7 +326,7 @@ static bool copies_pretes(void *hdr, void *prof) {
 
 /* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
 static void passe_vue(void *hdr, void *prof) {
-	if (!g_shaders_ok || !g_etat || g_vues_traitees >= (int)R.max_vues) return;
+	if (g_arret || !g_shaders_ok || !g_etat || g_vues_traitees >= (int)R.max_vues) return;
 	if (!copies_pretes(hdr, prof)) return;
 	void *rtv = rtv_de(hdr); if (!rtv) return;
 	float tan_v; { float a = R.fov_v * 0.5f * 3.14159265f / 180.0f; float a2 = a * a; tan_v = (a * (1 - a2 / 6 + a2 * a2 / 120)) / (1 - a2 / 2 + a2 * a2 / 24 - a2 * a2 * a2 / 720); }
@@ -382,6 +393,7 @@ static void quitter_vue() { REL(g_hdr_tex); REL(g_vue_prof); g_etape = E_RIEN; }
 /* ---------- crochets du contexte ---------- */
 static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 	if (!g_nous) {
+		g_n_omsrt++;
 		void *rt0 = n && rtv && rtv[0] ? ressource(rtv[0]) : 0;
 		void *pt = dsv ? ressource(dsv) : 0;
 		TEX2D_DESC d0; if (rt0) desc_tex(rt0, d0); else memset(&d0, 0, sizeof d0);
@@ -436,6 +448,14 @@ static Crochet g_cr[] = {
 	{C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt}, {C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv}, {C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv},
 	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
 	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi} };
+static void accrocher_contexte() {
+	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
+		for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
+		g_vt_ctx = VT(g_ctx);
+		int ok = 1; for (auto &c : g_cr) ok &= poser(g_vt_ctx, c.i, c.f, c.o);
+		Ligne l; l.s("contexte du jeu different de l'appareil jetable : crochets poses sur sa table ("); l.s(ok ? "ok" : "partiel"); l.s(") ; module "); module_de(l, g_vt_ctx[C_OMSetRT]); journal(l);
+	} else { Ligne l; l.s("contexte du jeu = table deja accrochee ; module "); module_de(l, (void *)o_omsrt); journal(l); }
+}
 static i64 g_reposes;
 static void reposer() {
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) g_reposes++; }
@@ -471,7 +491,8 @@ static void apres_image(void *sc) {
 		if (now - t_bascule >= (u64)(R.bascule_auto * 1000)) { t_bascule = now; g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE (bascule auto)" : "effet TSC : ARRET (bascule auto)"); }
 	} else t_bascule = 0;
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) compiler(); if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
-	if (!g_trace_auto_fait && g_n_img > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }
+	static i64 n_total; n_total++;
+	if (!g_trace_auto_fait && n_total > 1200) { g_trace_auto_fait = 1; g_trace = 2; g_tn = 0; logline("trace automatique d'une image (20 s apres le debut)"); }
 
 	init_appareil(sc);
 	if (!g_bw) { void *bb = 0; if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) >= 0 && bb) { TEX2D_DESC d; desc_tex(bb, d); g_bw = d.Width; g_bh = d.Height; Ligne l; l.s("image presentee : "); dire_tex(l, bb); journal(l); ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); } }
@@ -485,9 +506,9 @@ static void apres_image(void *sc) {
 		l.f(g_pire_ms); l.s(" ms, TSC CPU "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
 		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
 		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(", HDR vus "); l.i(g_n_hdr);
-		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes);
+		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
 		journal(l);
-		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0;
+		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_omsrt = g_n_dessins = 0;
 	}
 	if (g_trace) {
 		if (--g_trace == 0) { Ligne l; l.s("=== fin de la trace ==="); trace_txt(l); ecrire("tsc-graphics-trace.log", g_tbuf, g_tn); logline("trace ecrite dans tsc-graphics-trace.log"); }
@@ -533,7 +554,7 @@ extern "C" void scs_telemetry_shutdown(void) {
 	if (o_present1 && g_vt_sc[S1_Present1] == (void *)h_present1) retirer(g_vt_sc, S1_Present1, (void *)o_present1);
 	if (g_vt_sc[S_ResizeBuffers] == (void *)h_resize) retirer(g_vt_sc, S_ResizeBuffers, (void *)o_resize);
 	if (g_vt_sc[S_Present] == (void *)h_present) retirer(g_vt_sc, S_Present, (void *)o_present);
-	g_hooks = 0; logline("crochets retires");
+	g_hooks = 0; g_arret = 1; logline("crochets retires");
 }
 extern "C" BOOL WINAPI DllMain(HMODULE h, DWORD r, void *x) {
 	(void)x;
