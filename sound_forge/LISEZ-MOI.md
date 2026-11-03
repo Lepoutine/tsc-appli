@@ -17,7 +17,7 @@ Options : `-SansCache`, `-Echantillons scania.r_2016,volvo.fh_2021`, `-Sortie <d
 
 ## Studio (phase 1) : `ui/`
 
-`ui/index.html` (avec `forge.css`, `forge_audio.js`, `forge.js`) est l'atelier Sound Forge, prévu pour s'afficher dans la tablette TSC Driver comme Spartan Studio (dans un cadre, page `forge/index.html`).
+`ui/index.html` (avec `forge.css`, `forge_audio.js`, `forge_gen.js`, `forge.js`) est l'atelier Sound Forge, prévu pour s'afficher dans la tablette TSC Driver comme Spartan Studio (dans un cadre, page `forge/index.html`).
 
 - Import de sons (WAV, OGG, MP3, FLAC) par glisser-déposer, rôle et régime devinés d'après le nom du fichier (`ralenti_600.wav`, `charge_1400.wav`...).
 - Pistes avec formes d'onde, coupe au doigt ou à la souris, volume, graves, aigus, volume égalisé, boucle avec fondu.
@@ -27,3 +27,6 @@ Options : `-SansCache`, `-Echantillons scania.r_2016,volvo.fh_2021`, `-Sortie <d
 - Le projet et les sons restent sur le PC (stockage local du navigateur de la tablette), rien à ressaisir après une mise à jour.
 
 Pas encore fait : bouton « Analyser mon ETS2 » relié au service de la tablette, projet FMOD (phase 3), vrai build (phase 4), mod ETS2 (phase 5).
+
+## TSC Clapet
+Le clapet d'échappement sur touche (V seule) est intégré au simulateur, avec les rôles `clapet`, `clapet_on` et `clapet_off`. La recette et les règles sont dans `connaissances/fmod/06_tsc_clapet.md`. Le plugin en jeu et le partage multijoueur viendront après la validation du son par Mendy.
