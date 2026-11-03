@@ -63,3 +63,9 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
 - Nouveau : chaque texture de decor creee par le jeu est notee dans plugins\tsc-textures.csv (empreinte, taille, format, niveaux).
   Rien n'est remplace. Le journal dit toutes les 30 s combien de textures arrivent a la creation et combien sont remplies apres (UpdateSubresource).
 - Cle ini sonde_textures (1 par defaut, 0 = coupe). Seule la DLL change : garder l'ini retenu.
+
+0.10.1 (03/11/2026) - TSC Textures, releve des bons chemins
+- La 0.10 a montre que le jeu cree toutes ses textures vides, puis les remplit autrement (0 a la creation, 0 par UpdateSubresource).
+- 0.10.1 surveille : Map en ecriture (staging/dynamic) + empreinte a l'Unmap (staging), CopyResource / CopySubresourceRegion(1) vers les textures de decor,
+  UpdateSubresource1, autres contextes. Lignes « chemins » dans le log toutes les 30 s ; tsc-textures.csv : chemin;empreinte;... Rien n'est remplace.
+- Seule la DLL change.

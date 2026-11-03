@@ -54,7 +54,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.10"
+#define VERSION "tsc-graphics 0.10.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -784,7 +784,90 @@ static void WINAPI h_upd(void *c, void *r, UINT sub, const void *box, const void
 	if (!g_nous && r) { int dim = 0; ((void (WINAPI *)(void *, int *))VT(r)[7 /*GetType*/])(r, &dim); if (dim == 3) g_tx_upd2++; }
 	o_upd(c, r, sub, box, data, rp, dp);
 }
+/* 0.10.1 : la 0.10 a montre que le jeu cree TOUTES ses textures vides (2 531 en 2 min) et ne les remplit ni a la creation
+   ni par UpdateSubresource. On surveille donc les autres chemins : Map en ecriture (textures staging / dynamic),
+   Unmap (empreinte des donnees ecrites), CopyResource / CopySubresourceRegion(1) vers une texture de decor, UpdateSubresource1,
+   et les contextes differents du contexte immediat. Releve seulement : rien n'est remplace. */
+static volatile long g_tx_verrou; static i64 g_tx_lignes;
+static u64 empreinte(const SUBRES *sr, const TEX2D_DESC *ds, u64 &taille);
+typedef void (WINAPI *PFN_UNMAP)(void *, void *, UINT);
+typedef void (WINAPI *PFN_COPYRES)(void *, void *, void *);
+typedef void (WINAPI *PFN_COPYSUB)(void *, void *, UINT, UINT, UINT, UINT, void *, UINT, const void *);
+typedef void (WINAPI *PFN_COPYSUB1)(void *, void *, UINT, UINT, UINT, UINT, void *, UINT, const void *, UINT);
+typedef void (WINAPI *PFN_UPD1)(void *, void *, UINT, const void *, const void *, UINT, UINT, UINT);
+static PFN_UNMAP o_unmap; static PFN_COPYRES o_copyres; static PFN_COPYSUB o_copysub; static PFN_COPYSUB1 o_copysub1; static PFN_UPD1 o_upd1;
+static i64 g_mx[8];   /* Map texture 2D par type : 0 autre, 1 READ, 2 WRITE, 3 READ_WRITE, 4 WRITE_DISCARD, 5 WRITE_NO_OVERWRITE */
+static i64 g_mx_usage[4], g_mx_autre_ctx, g_cp_res, g_cp_sub, g_cp_sub1, g_cp_vers_decor, g_upd1_2d;
+static void *g_ctx_vus[8]; static int g_ctx_n;
+static void ctx_vu(void *c) { if (c == g_ctx) return; for (int i = 0; i < g_ctx_n; i++) if (g_ctx_vus[i] == c) return; if (g_ctx_n < 8) g_ctx_vus[g_ctx_n++] = c; }
+static bool est_tex2d(void *r) { if (!r) return false; int dim = 0; ((void (WINAPI *)(void *, int *))VT(r)[7 /*GetType*/])(r, &dim); return dim == 3; }
+static volatile long g_ec_verrou;
+struct Ecrit { void *r; UINT sub; SUBRES m; u64 h; };
+static Ecrit g_ec[512]; static int g_ec_n;   /* textures ecrites par le CPU : derniere empreinte connue par (ressource, sous-ressource) */
+static void ec_lock() { while (__atomic_exchange_n(&g_ec_verrou, 1, __ATOMIC_ACQUIRE)) {} }
+static void ec_unlock() { __atomic_store_n(&g_ec_verrou, 0, __ATOMIC_RELEASE); }
+static Ecrit *ec_trouver(void *r, UINT sub, bool creer) {
+	for (int i = 0; i < g_ec_n; i++) if (g_ec[i].r == r && g_ec[i].sub == sub) return &g_ec[i];
+	if (!creer) return 0; Ecrit *e = &g_ec[g_ec_n < 512 ? g_ec_n++ : (int)(GetTickCount64() & 511)]; e->r = r; e->sub = sub; e->h = 0; return e;
+}
+static void tx_ligne(Ligne &l) {
+	while (__atomic_exchange_n(&g_tx_verrou, 1, __ATOMIC_ACQUIRE)) {}
+	if (g_tx_lignes == 0) { const char *t = "# " VERSION " : chemin;empreinte;largeur;hauteur;niveaux;tableau;format;usage;bind;niveau;octets;tick_ms\r\n"; ecrire("tsc-textures.csv", t, lng(t)); }
+	if (g_tx_lignes < 40000) { g_tx_lignes++; ecrire("tsc-textures.csv", l.t, l.n); }
+	__atomic_store_n(&g_tx_verrou, 0, __ATOMIC_RELEASE);
+}
+static void tx_desc(Ligne &l, const TEX2D_DESC &d, UINT niveau) { l.i(d.Width); l.s(";"); l.i(d.Height); l.s(";"); l.i(d.MipLevels); l.s(";"); l.i(d.ArraySize); l.s(";");
+	l.i(d.Format); l.s(";"); l.i(d.Usage); l.s(";"); l.i(d.BindFlags); l.s(";"); l.i(niveau); l.s(";"); }
+static void WINAPI h_unmap(void *c, void *r, UINT sub) {
+	if (!g_nous && R.sonde_textures > 0 && est_tex2d(r)) {
+		ec_lock(); Ecrit *e = ec_trouver(r, sub, false); Ecrit copie; bool ok = false; if (e && e->m.p) { copie = *e; ok = true; e->m.p = 0; } ec_unlock();
+		if (ok) {
+			TEX2D_DESC d; desc_tex(r, d); UINT mips = d.MipLevels ? d.MipLevels : 1, niv = sub % mips;
+			TEX2D_DESC dn = d; dn.Width = d.Width >> niv ? d.Width >> niv : 1; dn.Height = d.Height >> niv ? d.Height >> niv : 1;
+			if (dn.Width >= 16 && dn.Height >= 16) {
+				u64 taille; u64 h = empreinte(&copie.m, &dn, taille);
+				ec_lock(); Ecrit *e2 = ec_trouver(r, sub, false); if (e2) e2->h = h; ec_unlock();
+				if (niv == 0) { Ligne l; l.s("ecrit;"); l.x(h); l.s(";"); tx_desc(l, d, niv); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l); }
+			}
+		}
+	}
+	o_unmap(c, r, sub);
+}
+static bool decor(void *r, TEX2D_DESC &d) { if (!est_tex2d(r)) return false; desc_tex(r, d); return (d.BindFlags & 0x8) && !(d.BindFlags & 0xA0) && d.Usage == 0; }
+static void copie_vers(void *dst, UINT dsub, void *src, UINT ssub, const char *chemin) {
+	TEX2D_DESC d; if (!decor(dst, d)) return; g_cp_vers_decor++;
+	if (R.sonde_textures <= 0) return;
+	u64 h = 0; if (src) { ec_lock(); Ecrit *e = ec_trouver(src, ssub, false); if (e) h = e->h; ec_unlock(); }
+	UINT mips = d.MipLevels ? d.MipLevels : 1, niv = dsub % mips; if (niv) return;   /* une ligne par texture : le niveau 0 */
+	TEX2D_DESC ds; if (src && est_tex2d(src)) desc_tex(src, ds); else memset(&ds, 0, sizeof ds);
+	Ligne l; l.s(chemin); l.s(";"); l.x(h); l.s(";"); tx_desc(l, d, niv); l.s("src "); l.i(ds.Width); l.s("x"); l.i(ds.Height); l.s(" u"); l.i(ds.Usage); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
+}
+static void WINAPI h_copyres(void *c, void *dst, void *src) {
+	if (!g_nous) { g_cp_res++; ctx_vu(c); copie_vers(dst, 0, src, 0, "copie_res"); }
+	o_copyres(c, dst, src);
+}
+static void WINAPI h_copysub(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) {
+	if (!g_nous) { g_cp_sub++; ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub"); }
+	o_copysub(c, dst, dsub, x, y, z, src, ssub, box);
+}
+static void WINAPI h_copysub1(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box, UINT fl) {
+	if (!g_nous) { g_cp_sub1++; ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub1"); }
+	o_copysub1(c, dst, dsub, x, y, z, src, ssub, box, fl);
+}
+static void WINAPI h_upd1(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, UINT fl) {
+	if (!g_nous && est_tex2d(r)) { g_upd1_2d++; ctx_vu(c); }
+	o_upd1(c, r, sub, box, data, rp, dp, fl);
+}
 static HRESULT WINAPI h_map(void *c, void *r, UINT sub, UINT type, UINT fl, void *m) {
+	if (!g_nous && est_tex2d(r)) {
+		g_mx[type < 6 ? type : 0]++; if (c != g_ctx) { g_mx_autre_ctx++; ctx_vu(c); }
+		TEX2D_DESC d; desc_tex(r, d); g_mx_usage[d.Usage & 3]++;
+		if (type == 2 || type == 4 || type == 5) {
+			HRESULT hr = o_map(c, r, sub, type, fl, m);
+			if (hr >= 0 && m && R.sonde_textures > 0 && d.Usage == 3 /*STAGING seulement : la memoire dynamique est lente a relire*/) { ec_lock(); Ecrit *e = ec_trouver(r, sub, true); e->m = *(SUBRES *)m; ec_unlock(); }
+			return hr;
+		}
+	}
 	if (g_nous || c != g_ctx || (type != 1 /*READ*/ && type != 3 /*READ_WRITE*/)) return o_map(c, r, sub, type, fl, m);
 	i64 a, b; QueryPerformanceCounter(&a); HRESULT hr = o_map(c, r, sub, type, fl, m); QueryPerformanceCounter(&b);
 	g_pf_map++; g_pf_map_t += b - a; return hr;
@@ -801,7 +884,9 @@ static Crochet g_cr[] = {
 	{C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt}, {C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv}, {C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv},
 	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
 	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi},
-	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata}, {C_UpdateSubresource, (void *)h_upd, (void **)&o_upd} };
+	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata}, {C_UpdateSubresource, (void *)h_upd, (void **)&o_upd},
+	{C_Unmap, (void *)h_unmap, (void **)&o_unmap}, {C_CopyResource, (void *)h_copyres, (void **)&o_copyres}, {C_CopySubresourceRegion, (void *)h_copysub, (void **)&o_copysub},
+	{115 /*CopySubresourceRegion1*/, (void *)h_copysub1, (void **)&o_copysub1}, {116 /*UpdateSubresource1*/, (void *)h_upd1, (void **)&o_upd1} };
 static void accrocher_contexte() {
 	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
 		for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
@@ -820,7 +905,7 @@ static void ajouter_creation(i64 *n, i64 t) { __atomic_fetch_add(n, 1, __ATOMIC_
    (textures de decor : pas de cible de rendu), on note une empreinte du niveau 0, la taille, le format, les niveaux.
    Sert a savoir (1) si le jeu envoie ses textures a la creation ou plus tard (UpdateSubresource, compte a part),
    (2) quelles empreintes reviennent d'une partie a l'autre (cle du cache HD). Plafond 40 000 lignes. */
-static volatile long g_tx_verrou; static i64 g_tx_lignes, g_tx_vides, g_tx_avec;
+static i64 g_tx_vides, g_tx_avec;
 static bool format_bloc(UINT f, UINT &octets) {
 	if (f >= 70 && f <= 72) { octets = 8; return true; }     /* BC1 */
 	if (f >= 73 && f <= 78) { octets = 16; return true; }    /* BC2, BC3 */
@@ -842,15 +927,10 @@ static void releve_texture(const TEX2D_DESC *ds, const void *init) {
 	if (!ds || (ds->BindFlags & 0x8 /*SHADER_RESOURCE*/) == 0 || (ds->BindFlags & 0xA0 /*RT|DS*/)) return;
 	if (!init) { __atomic_fetch_add(&g_tx_vides, 1, __ATOMIC_RELAXED); return; }
 	__atomic_fetch_add(&g_tx_avec, 1, __ATOMIC_RELAXED);
-	if (R.sonde_textures <= 0 || g_tx_lignes >= 40000 || ds->Width < 16 || ds->Height < 16) return;
+	if (R.sonde_textures <= 0 || ds->Width < 16 || ds->Height < 16) return;
 	const SUBRES *sr = (const SUBRES *)init; if (!sr->p || !sr->pitch) return;
 	u64 taille; u64 h = empreinte(sr, ds, taille);
-	Ligne l; l.x(h); l.s(";"); l.i(ds->Width); l.s(";"); l.i(ds->Height); l.s(";"); l.i(ds->MipLevels); l.s(";"); l.i(ds->ArraySize); l.s(";"); l.i(ds->Format);
-	l.s(";"); l.i(ds->Usage); l.s(";"); l.i(ds->MiscFlags); l.s(";"); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n");
-	while (__atomic_exchange_n(&g_tx_verrou, 1, __ATOMIC_ACQUIRE)) {}
-	if (g_tx_lignes == 0) { const char *t = "# " VERSION " : empreinte;largeur;hauteur;niveaux;tableau;format;usage;misc;octets_niveau0;tick_ms\r\n"; ecrire("tsc-textures.csv", t, lng(t)); }
-	g_tx_lignes++; ecrire("tsc-textures.csv", l.t, l.n);
-	__atomic_store_n(&g_tx_verrou, 0, __ATOMIC_RELEASE);
+	Ligne l; l.s("cree;"); l.x(h); l.s(";"); tx_desc(l, *ds, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
 static HRESULT WINAPI h_ctex(void *d, const TEX2D_DESC *ds, const void *init, void **out) {
 	if (g_nous) return o_ctex(d, ds, init, out);
@@ -1041,7 +1121,11 @@ static void apres_image(void *sc) {
 		if (now - t_bascule >= (u64)(R.bascule_auto * 1000)) { t_bascule = now; g_effet_on = g_effet_on > 0.5f ? 0 : 1; logline(g_effet_on > 0.5f ? "effet TSC : MARCHE (bascule auto)" : "effet TSC : ARRET (bascule auto)"); }
 	} else t_bascule = 0;
 	{ static u64 t_tx; if (!t_tx) t_tx = now; if (now - t_tx > 30000) { t_tx = now; Ligne l; l.s("TSC Textures (releve) : creees avec donnees "); l.i(g_tx_avec);
-		l.s(", creees vides "); l.i(g_tx_vides); l.s(", remplies apres (UpdateSubresource 2D) "); l.i(g_tx_upd2); l.s(", lignes tsc-textures.csv "); l.i(g_tx_lignes); journal(l); } }
+		l.s(", creees vides "); l.i(g_tx_vides); l.s(", remplies apres (UpdateSubresource 2D) "); l.i(g_tx_upd2); l.s(", lignes tsc-textures.csv "); l.i(g_tx_lignes); journal(l);
+		Ligne m; m.s("TSC Textures (chemins) : Map tex2D READ "); m.i(g_mx[1]); m.s(" WRITE "); m.i(g_mx[2]); m.s(" READ_WRITE "); m.i(g_mx[3]); m.s(" WRITE_DISCARD "); m.i(g_mx[4]);
+		m.s(" NO_OVERWRITE "); m.i(g_mx[5]); m.s(" ; usage default/immutable/dynamic/staging "); m.i(g_mx_usage[0]); m.s("/"); m.i(g_mx_usage[1]); m.s("/"); m.i(g_mx_usage[2]); m.s("/"); m.i(g_mx_usage[3]);
+		m.s(" ; CopyResource "); m.i(g_cp_res); m.s(" CopySubresourceRegion "); m.i(g_cp_sub); m.s(" CSR1 "); m.i(g_cp_sub1); m.s(" dont vers texture de decor "); m.i(g_cp_vers_decor);
+		m.s(" ; UpdateSubresource1 2D "); m.i(g_upd1_2d); m.s(" ; Map hors contexte immediat "); m.i(g_mx_autre_ctx); m.s(" ; autres contextes vus "); m.i(g_ctx_n); journal(m); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
