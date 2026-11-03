@@ -71,6 +71,9 @@
       <label class="chk"><input type="checkbox" id="eNorm"> Volume égalisé (normalisé)</label>
       <div class="ctl"><span>Licence</span><select id="eLic">
        <option value="perso">Mon enregistrement</option>
+       <option value="tsc">Création TSC (générée)</option>
+       <option value="jeu">Son du jeu (SCS), retravaillé</option>
+       <option value="mod">Son d'un mod, retravaillé (auteur à noter)</option>
        <option value="cc0">CC0 / domaine public</option>
        <option value="ccby">CC-BY (citer l'auteur)</option>
        <option value="refus">Non commercial, sans licence, extrait d'un jeu</option>
@@ -108,6 +111,16 @@
      <button class="b" type="button" id="bExportJson">Sauver le projet</button>
      <label class="b" for="ficProjet">Ouvrir un projet</label><input type="file" id="ficProjet" accept=".json,.tscforge" hidden>
     </div>
+   </div>
+   <div class="card" id="genCarte">
+    <h3>Générateur TSC</h3>
+    <p class="mut" style="margin:0 0 8px;font-size:12.5px">On mesure un son de référence (des chiffres seulement), puis on fabrique un son neuf. Aucun morceau de la référence n'entre dans ta banque.</p>
+    <div class="ctl"><span>Référence</span><select id="gRef"></select></div>
+    <div class="ctl"><span>Cylindres</span><select id="gCyl"><option value="6">6 en ligne</option><option value="8">V8</option><option value="4">4</option><option value="5">5</option><option value="10">V10</option><option value="12">V12</option></select></div>
+    <label class="chk" style="margin:6px 0"><input type="checkbox" id="gRetire" checked> Retirer le son de référence après la mesure</label>
+    <div class="simbt" style="margin-top:4px"><button class="b gold" type="button" id="bMesure">Mesurer</button><button class="b red" type="button" id="bGenere" disabled>Générer mon moteur</button></div>
+    <div class="ctl" style="margin-top:8px"><span>Couleur</span><input type="range" id="gMel" min="0" max="100" value="60"><output id="oMel">60 %</output></div>
+    <div class="mut" id="gEtat" style="font-size:12px;margin-top:6px"></div>
    </div>
    <div class="card">
     <h3>Étapes</h3>
@@ -154,6 +167,7 @@
 
 <div class="toast" id="toast" hidden role="status"></div>
 <script src="forge_audio.js"></script>
+<script src="forge_gen.js"></script>
 <script src="forge.js"></script>
 </body>
 </html>

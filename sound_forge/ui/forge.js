@@ -44,14 +44,17 @@
     if (/turbo|sifl|whistle/.test(n)) return 'turbo';
     if (/demar|start/.test(n)) return 'demarrage';
     if (/arret|stop|shut/.test(n)) return 'arret';
+    if (/brake|frein_moteur/.test(n)) return 'autre';
+    if (/unload|no_?fuel|decel|sans|coast|lift|\d{3,4}_idle/.test(n)) return 'sans';
     if (/ralenti|idle/.test(n)) return 'ralenti';
-    if (/decel|frein|sans|off|coast|lift/.test(n)) return 'sans';
     if (/charge|accel|load|on_|_on/.test(n)) return 'charge';
     return /\d{3,4}/.test(n) ? 'charge' : 'autre';
   }
   function devineRpm(nom, role) {
     const m = nom.match(/(\d{3,4})/); const v = m ? +m[1] : 0;
     if (v >= 400 && v <= 2600) return v;
+    const c = nom.match(/_(\d{2})(?:\.\w+)?$/); // ex. loaded_sc_v8_09 = 900 tr/min
+    if (c && +c[1] >= 4 && +c[1] <= 26 && /load/.test(nom.toLowerCase())) return +c[1] * 100;
     return SF.ROLES[role].rpm || 1200;
   }
   async function importe(files) {
@@ -103,7 +106,7 @@
     const L = $('lib');
     if (!P.couches.length) { L.innerHTML = '<div class="vide">Aucun son pour l\'instant.</div>'; return; }
     L.innerHTML = P.couches.map(c => '<button type="button" class="it' + (c.id === sel ? ' on' : '') + '" data-id="' + c.id + '"><i style="background:' + c.couleur + '"></i><b>' + esc(c.fichier) + '</b><small>' +
-      (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + '</small>' + (c.licence === 'refus' ? '<small class="lic">licence refusée : non exporté</small>' : c.licence === 'ccby' && !c.source ? '<small class="lic">CC-BY : auteur à indiquer</small>' : '') + '</button>').join('');
+      (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + '</small>' + (c.licence === 'refus' ? '<small class="lic">licence refusée : non exporté</small>' : (c.licence === 'ccby' || c.licence === 'mod') && !c.source ? '<small class="lic">auteur à indiquer</small>' : '') + '</button>').join('');
   }
   function rendPistes() {
     const T = $('pistes');
@@ -151,7 +154,51 @@
     let cur = false;
     $('etapes').innerHTML = E.map(e => { let k = e[1] ? 'ok' : (!cur ? (cur = true, 'cur') : ''); return '<li class="' + k + '">' + e[0] + '</li>'; }).join('');
   }
-  function rendTout() { rendLib(); rendPistes(); rendEd(); rendRoles(); majProjet(); simMaj(); }
+  function rendTout() { rendLib(); rendPistes(); rendEd(); rendRoles(); majProjet(); simMaj(); rendGen(); }
+
+  /* ---------- générateur TSC ---------- */
+  function rendGen() {
+    const refs = P.couches.filter(c => bufs[c.id] && c.licence !== 'tsc' && (c.role === 'ralenti' || c.role === 'charge' || c.role === 'sans'));
+    const v = $('gRef').value;
+    $('gRef').innerHTML = refs.length ? refs.map(c => '<option value="' + c.id + '">' + esc(SF.ROLES[c.role].court + ' ' + c.rpm + ' · ' + c.fichier) + '</option>').join('') : '<option value="">Importe un son à régime stable</option>';
+    if (refs.some(c => c.id === v)) $('gRef').value = v;
+    $('bMesure').disabled = !refs.length;
+    const E = P.empreinte;
+    $('bGenere').disabled = !E;
+    $('gEtat').textContent = E ? 'Empreinte gardée : ' + E.ordres.length + ' harmoniques mesurées à ' + E.rpm + ' tr/min, ' + E.cyl + ' cylindres (' + E.date + '). Aucun échantillon audio conservé.' : 'Pas encore d\'empreinte.';
+  }
+  function mesure() {
+    const c = P.couches.find(x => x.id === $('gRef').value); if (!c || !bufs[c.id]) return;
+    try {
+      const E = SF.empreinte(bufs[c.id], c.debut, c.fin, c.rpm, +$('gCyl').value);
+      E.reference = { role: c.role, fichier: c.fichier, licence: c.licence || 'perso' };
+      P.empreinte = E;
+      if ($('gRetire').checked) { P.couches = P.couches.filter(x => x !== c); delete bufs[c.id]; dbDel(c.id); if (sel === c.id) sel = P.couches[0] ? P.couches[0].id : null; }
+      sauve(); rendTout(); toast('Empreinte mesurée. ' + ($('gRetire').checked ? 'Le son de référence a été retiré.' : ''));
+    } catch (e) { toast(e.message); }
+  }
+  async function genere() {
+    const E = P.empreinte; if (!E) return;
+    $('bGenere').disabled = true; $('gEtat').textContent = 'Fabrication des couches…';
+    await new Promise(ok => setTimeout(ok, 30));
+    // retire les anciennes couches générées
+    P.couches.filter(c => c.licence === 'tsc').forEach(c => { delete bufs[c.id]; dbDel(c.id); });
+    P.couches = P.couches.filter(c => c.licence !== 'tsc');
+    const mel = +$('gMel').value / 100, plan = [['ralenti', 600, 0.05]];
+    SF.REGIMES_GEN.slice(1).forEach(r => { plan.push(['charge', r, 1]); plan.push(['sans', r, 0.1]); });
+    let i = 0;
+    for (const q of plan) {
+      const b = SF.genere(E, { rpm: q[1], charge: q[2], melange: mel, graine: ++i, duree: 2.7 });
+      const id = 'g' + Date.now().toString(36) + i, nom = 'tsc_' + q[0] + '_' + q[1] + '.wav';
+      bufs[id] = b;
+      P.couches.push({ id, fichier: nom, nom: nom.replace('.wav', ''), role: q[0], rpm: q[1], gain: 0, bas: 0, haut: 0, fondu: 0, boucle: true, norm: false,
+        debut: 0, fin: b.duration, duree: b.duration, sr: b.sampleRate, canaux: 1, licence: 'tsc', source: 'Générateur TSC, empreinte du ' + E.date, couleur: COUL[P.couches.length % COUL.length] });
+      try { dbPut(id, await SF.wav(b).arrayBuffer()); } catch (e) {}
+      await new Promise(ok => setTimeout(ok, 0));
+    }
+    sel = P.couches.find(c => c.licence === 'tsc').id; sauve(); if (moteur.marche) moteur.demarre(P.couches, bufs); rendTout();
+    toast(plan.length + ' couches TSC fabriquées. Démarre le moteur pour écouter.');
+  }
 
   /* ---------- camion visé ---------- */
   function camions() {
@@ -228,8 +275,8 @@
   function telecharge(blob, nom) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
   async function exporteWav() {
     const refus = P.couches.filter(c => c.licence === 'refus').length;
-    const sansAuteur = P.couches.filter(c => c.licence === 'ccby' && !c.source && c.role !== 'autre');
-    if (sansAuteur.length) { toast('Indique l\'auteur et le lien de : ' + sansAuteur.map(c => c.fichier).join(', ') + ' (licence CC-BY).'); sel = sansAuteur[0].id; rendTout(); return; }
+    const sansAuteur = P.couches.filter(c => (c.licence === 'ccby' || c.licence === 'mod') && !c.source && c.role !== 'autre');
+    if (sansAuteur.length) { toast('Indique l\'auteur et le lien de : ' + sansAuteur.map(c => c.fichier).join(', ') + ' (licence CC-BY ou son de mod).'); sel = sansAuteur[0].id; rendTout(); return; }
     const L = P.couches.filter(c => bufs[c.id] && c.role !== 'autre' && c.licence !== 'refus');
     if (refus) toast(refus + ' son(s) à licence refusée laissé(s) de côté.');
     if (!L.length) { toast('Rien à exporter.'); return; }
@@ -243,7 +290,7 @@
         telecharge(SF.wav(r), n + '.wav');
         await new Promise(ok => setTimeout(ok, 250));
       }
-      const LIC = { perso: 'enregistrement personnel', cc0: 'CC0 (domaine public)', ccby: 'CC-BY' };
+      const LIC = { jeu: 'son du jeu ETS2 (SCS Software), retravaillé', mod: 'son de mod retravaillé', tsc: 'création TSC (générateur, à partir de mesures)', perso: 'enregistrement personnel', cc0: 'CC0 (domaine public)', ccby: 'CC-BY' };
       const cr = ['Projet ' + P.nom + ' - TSC Sound Forge', 'Sons utilisés :', ''].concat(L.map(c => '- ' + c.fichier + ' : ' + (LIC[c.licence] || c.licence) + (c.source ? ' - ' + c.source : ''))).join('\r\n') + '\r\n';
       telecharge(new Blob([cr], { type: 'text/plain' }), 'CREDITS_sons.txt');
       majProjet.exporte = true; majProjet(); toast(L.length + ' couche' + (L.length > 1 ? 's exportées' : ' exportée') + ' en WAV 48 kHz 24 bits.');
@@ -356,6 +403,8 @@
     $('bExportWav').onclick = exporteWav; $('bExportJson').onclick = exporteProjet;
     $('ficProjet').addEventListener('change', e => { if (e.target.files[0]) ouvreProjet(e.target.files[0]); e.target.value = ''; });
     $('bAnalyser').onclick = lanceAnalyse;
+    $('bMesure').onclick = mesure; $('bGenere').onclick = genere;
+    $('gMel').addEventListener('input', () => { $('oMel').textContent = $('gMel').value + ' %'; });
     $('ficAna').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { chargeAna(JSON.parse(await f.text())); $('anaMsg').textContent = 'Résultat chargé : ' + f.name; } catch (x) { $('anaMsg').textContent = 'Fichier illisible.'; } });
     $('filtre').addEventListener('input', rendAna);
     $('filtEtat').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) { filtreEtat = b.dataset.f; rendAna(); } });
@@ -374,6 +423,6 @@
     for (const c of P.couches) { const ab = await dbGet(c.id); if (ab) { try { bufs[c.id] = await SF.decode(ab); } catch (e) {} } }
     rendTout();
   }
-  window.TSC_forge = { importe, projet: () => P, poids: SF.poids, chargeAna };
+  window.TSC_forge = { importe, projet: () => P, poids: SF.poids, chargeAna, mesure, genere };
   init();
 })();
