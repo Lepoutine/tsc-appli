@@ -10,7 +10,7 @@ if (-not $Sortie) { $Sortie = Join-Path $env:LOCALAPPDATA 'TruckSoCleanFrance\TS
 $cacheDir = Join-Path $Sortie 'cache'
 foreach ($d in $Sortie, $cacheDir) { if (-not (Test-Path -LiteralPath $d)) { [void](New-Item -ItemType Directory -Path $d) } }
 $debut = Get-Date
-$versionAnalyseur = '0.2'   # a changer a chaque modification de l'analyse : le cache des versions precedentes est alors relu
+$versionAnalyseur = '0.3'   # a changer a chaque modification de l'analyse : le cache des versions precedentes est alors relu
 function Note([string]$m) { Write-Host ('[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $m) }
 
 if (-not ('TscSoundForge.SfAnalyse' -as [type])) {
@@ -135,10 +135,10 @@ $env1.duree_s = [int]((Get-Date) - $debut).TotalSeconds
 $json = [TscSoundForge.SfAnalyse]::Fusionner($sources, ($env1 | ConvertTo-Json -Depth 6 -Compress))
 $fJson = Join-Path $Sortie 'base_connaissances.json'
 [IO.File]::WriteAllText($fJson, $json, (New-Object Text.UTF8Encoding($false)))
-$B = $json | ConvertFrom-Json
+$Kb = $json | ConvertFrom-Json
 
 # ---------------- 5. Echantillons de definitions son (texte, pour l'etude des structures ; jamais redistribues) ----------------
-if (-not $Echantillons.Count) { $Echantillons = @('scania.r_2016', 'scania.s_2016', 'volvo.fh_2021') | Where-Object { $id = $_; @($B.camions | Where-Object { $_.id -eq $id }).Count } }
+if (-not $Echantillons.Count) { $Echantillons = @('scania.r_2016', 'scania.s_2016', 'volvo.fh_2021') | Where-Object { $id = $_; @($Kb.camions | Where-Object { $_.id -eq $id }).Count } }
 $ech = Join-Path $Sortie 'echantillons'
 function Ecrire-Echantillon([string]$chemin, $src, [string]$t) {
   $dst = Join-Path $ech ($chemin.Trim('/') -replace '/', '\'); $dd = Split-Path -Parent $dst; if (-not (Test-Path -LiteralPath $dd)) { [void](New-Item -ItemType Directory -Path $dd -Force) }
@@ -148,7 +148,7 @@ function Ecrire-Echantillon([string]$chemin, $src, [string]$t) {
 $gagnant = @{}; foreach ($s in ($sources | Where-Object { $_.Role -ne 'inactif' } | Sort-Object Priorite)) { foreach ($f in $s.Fichiers) { $gagnant[$f[0].ToLowerInvariant()] = $s } }
 $banquesVues = @{}
 foreach ($id in $Echantillons) {
-  $c = $B.camions | Where-Object { $_.id -eq $id } | Select-Object -First 1; if (-not $c) { continue }
+  $c = $Kb.camions | Where-Object { $_.id -eq $id } | Select-Object -First 1; if (-not $c) { continue }
   $a_lire = @{}; foreach ($f in @($c.fichiers_son)) { $a_lire[$f.ToLowerInvariant()] = 1 }
   foreach ($r in @($c.references)) {
     $p = (($r.reference -split '#')[0]).Trim('/').ToLowerInvariant(); if ($p -like '*.soundref') { $a_lire[$p] = 1 }
@@ -158,10 +158,10 @@ foreach ($id in $Echantillons) {
   foreach ($p in $a_lire.Keys) { if ($gagnant.ContainsKey($p)) { $t = [TscSoundForge.SfAnalyse]::LireTexte($gagnant[$p].Chemin, $p); if ($null -ne $t) { Ecrire-Echantillon $p $gagnant[$p] $t } } }
 }
 # les .bank.guids des banques utilisees par ces camions (liste des evenements officiels du jeu)
-foreach ($b in @($banquesVues.Keys | Select-Object -First 12)) { $g = $b + '.guids'; if ($gagnant.ContainsKey($g)) { $t = [TscSoundForge.SfAnalyse]::LireTexte($gagnant[$g].Chemin, $g); if ($null -ne $t) { Ecrire-Echantillon $g $gagnant[$g] $t } } }
+foreach ($bk in @($banquesVues.Keys | Select-Object -First 40)) { $g = $bk + '.guids'; if ($gagnant.ContainsKey($g)) { $t = [TscSoundForge.SfAnalyse]::LireTexte($gagnant[$g].Chemin, $g); if ($null -ne $t) { Ecrire-Echantillon $g $gagnant[$g] $t } } }
 
 # ---------------- 6. Rapport lisible ----------------
-$R = $B.resume; $sb = New-Object Text.StringBuilder
+$Resume = $Kb.resume; $sb = New-Object Text.StringBuilder
 function L([string]$t) { [void]$sb.AppendLine($t) }
 L '# TSC Sound Forge : analyse de mon ETS2'
 L ''; L ('Analyse du ' + $env1.date + ' sur ' + $env1.machine + ' (' + $env1.duree_s + ' s, lecture seule : rien n''a ete modifie).')
@@ -170,27 +170,27 @@ L ('- ETS2 : ' + $(if ($jeu) { $jeu.version_exe + ' (game.log : ' + $verLog + ')
 L ('- FMOD du jeu : ' + $(if ($jeu -and $jeu.fmod_du_jeu.Count) { $jeu.fmod_du_jeu -join ', ' } else { 'non trouve' }))
 L ('- FMOD Studio : ' + $(if ($fmod.Count) { ($fmod | ForEach-Object { $_.nom + ' ' + $_.version }) -join ', ' } else { 'non installe (necessaire seulement pour compiler, phase 3)' }))
 L ('- ATS : ' + $(if ($ats.Count) { $ats[0].version_exe } else { 'non installe' }))
-L ('- Camions identifies : ' + $R.camions + ' ; moteurs : ' + $R.moteurs + ' ; banques FMOD visibles : ' + $R.banques + ' (dossiers d''accessoires de mods ignores : ' + $R.dossiers_accessoires_ignores + ')')
-L ('- Mods audio : ' + $R.mods_audio + ' ; conflits potentiels : ' + $R.conflits + ' ; fichiers son ou moteur du jeu remplaces par des mods : ' + $R.remplacements_du_jeu)
-L ('- Compatibilite : ' + $R.compatibles + ' compatibles, ' + $R.partiels + ' partiels, ' + $R.non_pris_en_charge + ' non pris en charge, ' + $R.non_verifies + ' non verifies')
+L ('- Camions identifies : ' + $Resume.camions + ' ; moteurs : ' + $Resume.moteurs + ' ; banques FMOD visibles : ' + $Resume.banques + ' (dossiers d''accessoires de mods ignores : ' + $Resume.dossiers_accessoires_ignores + ')')
+L ('- Mods audio : ' + $Resume.mods_audio + ' ; conflits potentiels : ' + $Resume.conflits + ' ; fichiers son ou moteur du jeu remplaces par des mods : ' + $Resume.remplacements_du_jeu)
+L ('- Compatibilite : ' + $Resume.compatibles + ' compatibles, ' + $Resume.partiels + ' partiels, ' + $Resume.non_pris_en_charge + ' non pris en charge, ' + $Resume.non_verifies + ' non verifies')
 L ('- Profils : ' + $profils.Count + ' ; mods actifs (game.log) : ' + $actifs.Count + ' ; Workshop installes : ' + $ws.Count)
 L ''; L '## Camions'
 L '| Camion | Origine | Moteurs | Etat | Raison |'; L '|---|---|---|---|---|'
-foreach ($c in $B.camions) { L ('| ' + $c.id + ' | ' + $c.origine + ' | ' + @($c.moteurs).Count + ' | ' + $c.compatibilite + ' | ' + $c.raison + ' |') }
+foreach ($c in $Kb.camions) { L ('| ' + $c.id + ' | ' + $c.origine + ' | ' + @($c.moteurs).Count + ' | ' + $c.compatibilite + ' | ' + $c.raison + ' |') }
 L ''; L '## Detail des camions de test'
-foreach ($id in $Echantillons) { $c = $B.camions | Where-Object { $_.id -eq $id } | Select-Object -First 1; if (-not $c) { continue }
+foreach ($id in $Echantillons) { $c = $Kb.camions | Where-Object { $_.id -eq $id } | Select-Object -First 1; if (-not $c) { continue }
   L ''; L ('### ' + $id + ' : ' + $c.compatibilite + ' (' + $c.origine + ')'); L $c.raison
   L ('Moteurs : ' + (@($c.moteurs | ForEach-Object { ($_ -split ' \| ')[1] }) -join ', '))
   foreach ($r in @($c.references)) { L ('- [' + $r.etat + '] ' + $r.fichier + ' -> ' + $r.reference + ' : ' + $r.raison) } }
 L ''; L '## Conflits entre mods (meme fichier son fourni par plusieurs mods actifs)'
-$cf2 = @($B.conflits | Where-Object { $_.type -eq 'plusieurs_mods' }); if (-not $cf2.Count) { L 'Aucun.' } else { foreach ($c in $cf2 | Select-Object -First 300) { L ('- ' + $c.chemin + ' : ' + ($c.sources -join ' < ') + ' ; le jeu utilise ' + $c.gagnant) } }
+$cf2 = @($Kb.conflits | Where-Object { $_.type -eq 'plusieurs_mods' }); if (-not $cf2.Count) { L 'Aucun.' } else { foreach ($c in $cf2 | Select-Object -First 300) { L ('- ' + $c.chemin + ' : ' + ($c.sources -join ' < ') + ' ; le jeu utilise ' + $c.gagnant) } }
 L ''; L '## Mods qui remplacent des fichiers son du jeu'
-$rp = @($B.conflits | Where-Object { $_.type -eq 'remplace_le_jeu' }); if (-not $rp.Count) { L 'Aucun.' } else { foreach ($c in $rp | Select-Object -First 200) { L ('- ' + $c.chemin + ' : ' + $c.gagnant) }; if ($rp.Count -gt 200) { L ('- ... et ' + ($rp.Count - 200) + ' autres (voir base_connaissances.json)') } }
+$rp = @($Kb.conflits | Where-Object { $_.type -eq 'remplace_le_jeu' }); if (-not $rp.Count) { L 'Aucun.' } else { foreach ($c in $rp | Select-Object -First 200) { L ('- ' + $c.chemin + ' : ' + $c.gagnant) }; if ($rp.Count -gt 200) { L ('- ... et ' + ($rp.Count - 200) + ' autres (voir base_connaissances.json)') } }
 L ''; L '## Sources non lisibles ou protegees'
-$np = @($B.sources | Where-Object { $_.etat -ne 'ok' -or $_.chiffres -gt 0 }); if (-not $np.Count) { L 'Aucune.' } else { foreach ($s in $np) { L ('- ' + $s.nom + ' (' + $s.role + ') : ' + $s.etat + $(if ($s.chiffres) { ', ' + $s.chiffres + ' fichier(s) chiffre(s)' } else { '' }) + ' ' + $s.message) } }
+$np = @($Kb.sources | Where-Object { $_.etat -ne 'ok' -or $_.chiffres -gt 0 }); if (-not $np.Count) { L 'Aucune.' } else { foreach ($s in $np) { L ('- ' + $s.nom + ' (' + $s.role + ') : ' + $s.etat + $(if ($s.chiffres) { ', ' + $s.chiffres + ' fichier(s) chiffre(s)' } else { '' }) + ' ' + $s.message) } }
 L ''; L '## Journal du jeu (lignes son / FMOD)'
 if (-not $lignesSon.Count) { L 'Aucune ligne son dans game.log.txt.' } else { L '```'; foreach ($l in $lignesSon) { L $l }; L '```' }
 $fMd = Join-Path $Sortie 'rapport_analyse.md'
 [IO.File]::WriteAllText($fMd, $sb.ToString(), (New-Object Text.UTF8Encoding($false)))
 Note ("Fini en $($env1.duree_s) s. Rapport : $fMd")
-Note ("Camions $($R.camions), moteurs $($R.moteurs), banques $($R.banques), mods audio $($R.mods_audio), conflits $($R.conflits)")
+Note ("Camions $($Resume.camions), moteurs $($Resume.moteurs), banques $($Resume.banques), mods audio $($Resume.mods_audio), conflits $($Resume.conflits)")
