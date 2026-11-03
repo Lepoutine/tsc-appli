@@ -10,6 +10,7 @@ if (-not $Sortie) { $Sortie = Join-Path $env:LOCALAPPDATA 'TruckSoCleanFrance\TS
 $cacheDir = Join-Path $Sortie 'cache'
 foreach ($d in $Sortie, $cacheDir) { if (-not (Test-Path -LiteralPath $d)) { [void](New-Item -ItemType Directory -Path $d) } }
 $debut = Get-Date
+$versionAnalyseur = '0.2'   # a changer a chaque modification de l'analyse : le cache des versions precedentes est alors relu
 function Note([string]$m) { Write-Host ('[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $m) }
 
 if (-not ('TscSoundForge.SfAnalyse' -as [type])) {
@@ -109,7 +110,7 @@ $sha = [Security.Cryptography.SHA1]::Create()
 $n = 0; $relues = 0
 foreach ($s in $sources) {
   $n++
-  try { $it = Get-Item -LiteralPath $s.Chemin -Force; $cle = $s.Chemin + '|' + $(if ($it.PSIsContainer) { 'dossier|' + $it.LastWriteTimeUtc.Ticks } else { '' + $it.Length + '|' + $it.LastWriteTimeUtc.Ticks }) } catch { $cle = $s.Chemin + '|?' }
+  try { $it = Get-Item -LiteralPath $s.Chemin -Force; $cle = $versionAnalyseur + '|' + $s.Chemin + '|' + $(if ($it.PSIsContainer) { 'dossier|' + $it.LastWriteTimeUtc.Ticks } else { '' + $it.Length + '|' + $it.LastWriteTimeUtc.Ticks }) } catch { $cle = $versionAnalyseur + '|' + $s.Chemin + '|?' }
   $cf = Join-Path $cacheDir (([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($s.Chemin.ToLowerInvariant()))) -replace '-', '') + '.txt')
   $ok = $false
   if (-not $SansCache -and (Test-Path -LiteralPath $cf)) { try { $ok = $s.Charger([IO.File]::ReadAllText($cf, [Text.Encoding]::UTF8), $cle) } catch { $ok = $false } }
