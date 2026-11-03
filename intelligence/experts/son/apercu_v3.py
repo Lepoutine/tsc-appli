@@ -157,3 +157,57 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ---------------------------------------------------------------------------------------------
+# Ralenti tres lent « bop bop bop » (demande de Mendy 03/11 19:44) : on ne ralentit pas la boucle
+# (le son deviendrait sourd et baveux), on recompose le ralenti coup d'allumage par coup d'allumage,
+# avec les vrais coups pris dans ses sons, espaces au regime voulu et accentues une fois par tour.
+
+def grains_allumage(x, sr, nb=24, avant=0.004, apres=0.075):
+    """Extrait les coups d'allumage les plus nets : pics d'enveloppe espaces d'au moins 22 ms."""
+    e = ms.enveloppe(x, sr, 60.0)
+    dist = int(0.022 * sr)
+    pics = []
+    i = dist
+    while i < len(e) - dist:
+        j = i + int(np.argmax(e[i:i + dist]))
+        if e[j] == e[max(j - dist, 0):j + dist].max():
+            pics.append(j)
+        i = j + dist
+    pics = sorted(pics, key=lambda p: -e[p])[:nb]
+    a, z = int(avant * sr), int(apres * sr)
+    fen = np.concatenate([np.linspace(0, 1, a), np.exp(-np.linspace(0, 5, z))])
+    return [x[p - a:p + z] * fen for p in pics if p - a >= 0 and p + z <= len(x)]
+
+
+def ralenti_lent(grains_moteur, grains_echap, rpm, duree, rng, cylindres=8):
+    """Un coup tous les 120/(rpm*cyl) s ; accent par tour (motif V8 a vilebrequin croise) ; petites irregularites."""
+    n = int(duree * SR)
+    out = np.zeros(n + SR)
+    pas = 120.0 / (rpm * cylindres)
+    motif = [1.0, 0.45, 0.7, 0.4]  # 4 coups par tour : un fort, des plus faibles -> « bop » une fois par tour
+    t, k = 0.0, 0
+    while t < duree:
+        g = grains_moteur[rng.integers(len(grains_moteur))]
+        h = grains_echap[rng.integers(len(grains_echap))]
+        amp = motif[k % 4] * rng.uniform(0.85, 1.15)
+        i = int(t * SR)
+        out[i:i + len(g)] += amp * g
+        out[i:i + len(h)] += amp * 0.9 * h  # le grave de l'echappement fait le « bop »
+        t += pas * rng.uniform(0.93, 1.07)
+        k += 1
+    return out[:n]
+
+
+def main_lent(sons, sortie, regimes=(300, 200), duree=8.0):
+    rng = np.random.default_rng(11)
+    gm = grains_allumage(charger(sons, "500_op_idle"), SR)
+    ge = grains_allumage(charger(sons, "exhaust_op"), SR)
+    noms = []
+    for rpm in regimes:
+        x = ralenti_lent(gm, ge, rpm, duree, rng)
+        nom = os.path.join(sortie, "v3_3_ralenti_lent_%d.wav" % rpm)
+        ecrire(nom, normaliser(x, -1))
+        noms.append(nom)
+    return noms
