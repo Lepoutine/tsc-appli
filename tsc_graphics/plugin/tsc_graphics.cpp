@@ -57,7 +57,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.11.1"
+#define VERSION "tsc-graphics 0.11.2"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -705,6 +705,27 @@ static void fin_mesure_gpu() {
 	g_q_n[(g_q_i) % NQ] = 0;
 }
 
+/* 0.11.2 : Mendy 03/11 17:29 « plus clair a gauche et de temps en temps la droite s'assombrit ». Avant, on prenait les 3 PREMIERES
+   cibles 8 bits de la taille d'une vue apres l'eclairage : si le jeu en dessine une autre (retro, camera, reflet) avant le tone mapping
+   de l'ecran droit, cet ecran sautait l'etage TSC certaines images = clignement. On apprend maintenant LES 3 cibles du tone mapping
+   (celles qui reviennent a chaque image) et on ne traite qu'elles, une fois chacune par image. */
+static void *g_lc_p[8]; static i64 g_lc_n[8]; static int g_lc_nb; static void *g_lt[3]; static int g_lt_ok; static unsigned g_lt_fait;   /* bit par cible traitee cette image */
+static i64 g_ldr_saut, g_ldr_img3, g_ldr_imgpas3;
+static bool ldr_accepte(void *rt) {
+	if (g_lt_ok) { for (int k = 0; k < 3; k++) if (g_lt[k] == rt) { if (g_lt_fait & (1u << k)) return false; g_lt_fait |= 1u << k; return true; } g_ldr_saut++; return false; }
+	int i = 0; for (; i < g_lc_nb; i++) if (g_lc_p[i] == rt) break;
+	if (i == g_lc_nb && g_lc_nb < 8) { g_lc_p[g_lc_nb] = rt; g_lc_n[g_lc_nb++] = 0; }
+	if (i < 8) g_lc_n[i]++;
+	return g_ldr_n < 3;   /* pendant l'apprentissage : ancien comportement */
+}
+static void ldr_fin_image() {
+	if (g_lt_ok) { if (g_lt_fait == 7) g_ldr_img3++; else g_ldr_imgpas3++; g_lt_fait = 0; return; }
+	static int images; if (++images < 120) return;
+	for (int k = 0; k < 3; k++) { int b = -1; for (int i = 0; i < g_lc_nb; i++) { bool pris = false; for (int j = 0; j < k; j++) if (g_lt[j] == g_lc_p[i]) pris = true; if (!pris && (b < 0 || g_lc_n[i] > g_lc_n[b])) b = i; } g_lt[k] = b >= 0 ? g_lc_p[b] : 0; }
+	g_lt_ok = g_lt[0] && g_lt[1] && g_lt[2];
+	Ligne l; l.s("etage apres tone mapping : cibles apprises "); l.s(g_lt_ok ? "(3)" : "(incomplet, ancien mode garde)"); for (int i = 0; i < g_lc_nb; i++) { l.s(" "); l.x((u64)g_lc_p[i]); l.s("="); l.i(g_lc_n[i]); } journal(l);
+	if (!g_lt_ok) images = 0, g_lc_nb = 0;
+}
 static void quitter_vue() { REL(g_hdr_tex); REL(g_vue_prof); g_etape = E_RIEN; }
 
 /* ---------- crochets du contexte ---------- */
@@ -725,7 +746,7 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 			REL(g_ldr_tex);
 		}
 		if (!g_ldr_tex && n == 1 && rt0 && (d0.Format == 29 || d0.Format == 28) && g_coul_w && d0.Width == g_coul_w && d0.Height == g_coul_h
-			&& g_vues_traitees > 0 && g_ldr_n < 3 && d0.SampleCount <= 1) {
+			&& g_vues_traitees > 0 && d0.SampleCount <= 1 && ldr_accepte(rt0)) {
 			g_ldr_tex = rt0; ((UINT (WINAPI *)(void *))VT(rt0)[1])(rt0); g_ldr_n++;
 		}
 		const bool grande = rt0 && d0.Width >= (UINT)R.taille_min && d0.Height >= (UINT)R.taille_min;
@@ -1345,6 +1366,7 @@ static void apres_image(void *sc) {
 		static int prol; if (!prol) { prol = 1; journal_prologues(); }
 		Ligne q; q.s("TSC Textures (en ligne) :"); for (int k = 0; k < 4; k++) { q.s(" "); q.s(g_el[k].nom); q.s(g_el[k].actif ? "=pose" : "=non"); q.s(" variantes "); q.i(g_var_n[k]);
 			for (int j = 0; j < g_var_n[k]; j++) { q.s(" "); q.x((u64)g_var[k][j]); q.s(g_var[k][j] == (void *)g_el[k].cible ? "(=accrochee)" : "(AUTRE)"); } } journal(q);
+		{ Ligne z; z.s("etage apres tone mapping : images avec les 3 ecrans "); z.i(g_ldr_img3); z.s(", images incompletes "); z.i(g_ldr_imgpas3); z.s(", autres cibles 8 bits ignorees "); z.i(g_ldr_saut); journal(z); }
 		Ligne u; u.s("TSC Textures (tri) : updates vers decor "); u.i(g_upd_decor); u.s(", dont boite partielle "); u.i(g_upd_boite_part); u.s(", niveaux >0 "); u.i(g_upd_niv);
 		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); journal(u);
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
@@ -1360,7 +1382,7 @@ static void apres_image(void *sc) {
 	if (!g_bw) { void *bb = 0; if (((HRESULT (WINAPI *)(void *, UINT, const GUIDx *, void **))VT(sc)[S_GetBuffer])(sc, 0, &IID_Tex2D, &bb) >= 0 && bb) { TEX2D_DESC d; desc_tex(bb, d); g_bw = d.Width; g_bh = d.Height; Ligne l; l.s("image presentee : "); dire_tex(l, bb); journal(l); ((UINT (WINAPI *)(void *))VT(bb)[2])(bb); } }
 	g_vues_rapport += g_vues_traitees;
 	int vues_g = g_vues_image, vues_t = g_vues_traitees;
-	g_vues_image = 0; g_vues_traitees = 0; g_ldr_n = 0;
+	g_vues_image = 0; g_vues_traitees = 0; g_ldr_n = 0; ldr_fin_image();
 	reposer();
 	prof_fin_image(t0, image_ms, vues_g, vues_t, now);   /* en dernier : son horodatage GPU est la fin de l'image */
 

@@ -94,3 +94,10 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
   la condition « sans boite » etait trop stricte, et chaque fonction a une 2e implementation (variante) ou la table alterne.
 - 0.11.1 : boite couvrant tout le niveau 0 acceptee ; 300 premiers appels notes bruts (brut_upd/brut_upd1) ; compteurs de tri ;
   la variante de chaque fonction est accrochee en ligne aussi (decodeur de prologue limite, refuse toute instruction inconnue). Seule la DLL change.
+
+0.11.2 (03/11/2026)
+- Mendy 17:29 : gauche plus claire, la droite s'assombrit de temps en temps (clignement). Cause probable : l'etage apres tone mapping
+  prenait les 3 PREMIERES cibles 8 bits de taille vue ; une autre cible (retro, camera...) pouvait prendre la place de l'ecran droit.
+  0.11.2 apprend les 3 vraies cibles du tone mapping (120 images) et ne traite qu'elles, une fois chacune par image. Journal : cibles apprises,
+  images completes / incompletes.
+- Shader : gouttes v2 (claires, bord doux, jamais de tache sombre) apres la capture de Mendy 17:27. Seulement quand le jeu fait pleuvoir.

@@ -244,33 +244,36 @@ bool vue_cabine() {
 	return n >= 2;
 }
 float3 vitre(float2 uv, float3 col) {
-	float amt = p9.x * saturate(p9.z) * max(saturate(p0.y), 0.5);   // 0.7 : seulement quand le jeu fait vraiment pleuvoir
+	// 0.11.1 (shader) : gouttes v2 apres la capture de Mendy du 03/11 17:27 (taches sombres en croissant = ratees).
+	// Une vraie goutte sur un pare-brise : petite lentille CLAIRE qui montre le haut de la scene (souvent le ciel, plus clair) a l'envers,
+	// bord a peine plus sombre, un minuscule reflet ; jamais de tache noire. Beaucoup de toutes petites, quelques moyennes.
+	float amt = p9.x * saturate(p9.z) * max(saturate(p0.y), 0.5);
 	if (amt <= 0.01) return col;
 	float d = tProf.SampleLevel(sPt, uv, 0);
 	if (cabine(d) || !vue_cabine()) return col;
 	float2 px = uv * p2.xy;
-	// film d'eau : leger flou de tout ce qui est vu a travers la vitre
-	float3 flou = tCouleur.SampleLevel(sLin, uv, min(1.5, p5.w)).rgb;
-	float3 c = lerp(col, flou, 0.3 * amt);
-	// deux couches de gouttes (cellules), qui se renouvellent lentement
-	[unroll] for (int L = 0; L < 2; L++) {
-		float s = (L == 0 ? 26.0 : 13.0) * max(p9.y, 0.2);
+	float3 flou = tCouleur.SampleLevel(sLin, uv, min(1.0, p5.w)).rgb;
+	float3 c = lerp(col, flou, 0.15 * amt);
+	[unroll] for (int L = 0; L < 3; L++) {
+		float s = (L == 0 ? 9.0 : (L == 1 ? 17.0 : 34.0)) * max(p9.y, 0.2);
 		float2 cell = floor(px / s);
 		float2 cid = cell + L * 71.0;
-		float vie = floor(p9.w / (5 + 4 * h21(cid)) + h21(cid + 3.1));
+		float vie = floor(p9.w / (6 + 6 * h21(cid)) + h21(cid + 3.1));
 		float2 rnd = h22(cid + vie * 13.7);
-		if (h21(cid + vie) > 0.35 * amt + 0.05) continue;      // densite selon la pluie (0.7 : bien moins de gouttes)
-		float2 ctr = (cell + 0.05 + 0.9 * rnd) * s;           // placement libre dans la cellule : plus de grille visible
-		float r = s * (0.08 + 0.32 * h21(cid * 1.7 + vie) * h21(cid * 2.3 + vie));   // surtout des petites, quelques grosses
-		float2 v = (px - ctr) / r; float q = dot(v, v);
+		float dens = (L == 0 ? 0.55 : (L == 1 ? 0.3 : 0.12)) * amt;
+		if (h21(cid + vie) > dens) continue;
+		float2 ctr = (cell + 0.15 + 0.7 * rnd) * s;
+		float r = s * (0.12 + 0.22 * h21(cid * 1.7 + vie));
+		float2 v = (px - ctr) / r; v.y *= 1.0 + 0.25 * h21(cid * 3.1);   // legerement ovale, pas de cercle parfait
+		float q = dot(v, v);
 		if (q < 1) {
-			// la goutte agit comme une lentille : image inversee et nette du decor, bord sombre, petit reflet
-			float2 ur = (ctr - v * r * 2.5) * p2.zw;
-			float3 g = tCouleur.SampleLevel(sLin, saturate(ur), 0.5).rgb;
-			float bord = smoothstep(0.55, 1.0, q);
-			g = lerp(g * 1.05, g * 0.45, bord);
-			g += lum(g) * 0.6 * saturate(1 - length(v - float2(-0.35, -0.35)) * 3);
-			c = lerp(c, g, saturate((1 - q) * 6) * 0.9);
+			float2 ur = (ctr * p2.zw) + float2(-v.x, -v.y - 1.2) * r * 3.0 * p2.zw;   // image inversee du haut de la scene
+			float3 g = tCouleur.SampleLevel(sLin, saturate(ur), 1.0).rgb;
+			g = lerp(g, max(g, c), 0.5) * 1.06;                                     // une goutte eclaircit, elle n'assombrit pas
+			g *= lerp(1.0, 0.88, smoothstep(0.6, 1.0, q));                          // bord a peine marque
+			g += 0.25 * lum(c) * saturate(1 - length(v - float2(-0.4, -0.45)) * 4); // petit reflet
+			float bordure = 1 - smoothstep(0.75, 1.0, q);                           // bord doux, sans escalier
+			c = lerp(c, g, bordure * (0.55 + 0.35 * amt));
 		}
 	}
 	return c;
