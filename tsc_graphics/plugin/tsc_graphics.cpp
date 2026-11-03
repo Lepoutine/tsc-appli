@@ -37,6 +37,9 @@ __declspec(dllimport) BOOL WINAPI WriteFile(HANDLE, const void *, DWORD, DWORD *
 __declspec(dllimport) DWORD WINAPI GetFileSize(HANDLE, DWORD *);
 __declspec(dllimport) BOOL WINAPI CloseHandle(HANDLE);
 __declspec(dllimport) BOOL WINAPI CreateDirectoryA(const char *, void *);
+__declspec(dllimport) void *WINAPI VirtualAlloc(void *, SIZE_T, DWORD, DWORD);
+__declspec(dllimport) BOOL WINAPI FlushInstructionCache(HANDLE, const void *, SIZE_T);
+__declspec(dllimport) HANDLE WINAPI GetCurrentProcess(void);
 __declspec(dllimport) DWORD WINAPI GetModuleFileNameA(HMODULE, char *, DWORD);
 __declspec(dllimport) u64 WINAPI GetTickCount64(void);
 __declspec(dllimport) BOOL WINAPI QueryPerformanceCounter(i64 *);
@@ -54,7 +57,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.10.3"
+#define VERSION "tsc-graphics 0.11"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -780,8 +783,9 @@ static PFN_MAP o_map; static PFN_GETDATA o_getdata;
 typedef void (WINAPI *PFN_UPD)(void *, void *, UINT, const void *, const void *, UINT, UINT);
 static PFN_UPD o_upd; static i64 g_tx_upd2;
 /* 0.10 : textures 2D remplies APRES creation (UpdateSubresource) : si ce compte est grand, le remplacement devra se faire ici aussi */
+static void releve_upd(void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, const char *chemin);
 static void WINAPI h_upd(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp) {
-	if (!g_nous && r) { int dim = 0; ((void (WINAPI *)(void *, int *))VT(r)[7 /*GetType*/])(r, &dim); if (dim == 3) g_tx_upd2++; }
+	if (!g_nous && r) { int dim = 0; ((void (WINAPI *)(void *, int *))VT(r)[7 /*GetType*/])(r, &dim); if (dim == 3) { __atomic_fetch_add(&g_tx_upd2, 1, __ATOMIC_RELAXED); releve_upd(r, sub, box, data, rp, dp, "upd"); } }
 	o_upd(c, r, sub, box, data, rp, dp);
 }
 /* 0.10.1 : la 0.10 a montre que le jeu cree TOUTES ses textures vides (2 531 en 2 min) et ne les remplit ni a la creation
@@ -844,20 +848,26 @@ static void copie_vers(void *dst, UINT dsub, void *src, UINT ssub, const char *c
 	TEX2D_DESC ds; if (src && est_tex2d(src)) desc_tex(src, ds); else memset(&ds, 0, sizeof ds);
 	Ligne l; l.s(chemin); l.s(";"); l.x(h); l.s(";"); tx_desc(l, d, niv); l.s("src "); l.i(ds.Width); l.s("x"); l.i(ds.Height); l.s(" u"); l.i(ds.Usage); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
+static void releve_upd(void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, const char *chemin) {
+	TEX2D_DESC d; if (R.sonde_textures <= 0 || !data || !rp || box || !decor(r, d)) return;
+	UINT mips = d.MipLevels ? d.MipLevels : 1, niv = sub % mips; if (niv || d.Width < 16 || d.Height < 16) return;
+	SUBRES m = {data, rp, dp}; u64 taille; u64 h = empreinte(&m, &d, taille);
+	Ligne l; l.s(chemin); l.s(";"); l.x(h); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
+}
 static void WINAPI h_copyres(void *c, void *dst, void *src) {
 	if (!g_nous) { g_cp_res++; ctx_vu(c); copie_vers(dst, 0, src, 0, "copie_res"); }
 	o_copyres(c, dst, src);
 }
 static void WINAPI h_copysub(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box) {
-	if (!g_nous) { g_cp_sub++; ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub"); }
+	if (!g_nous) { __atomic_fetch_add(&g_cp_sub, 1, __ATOMIC_RELAXED); ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub"); }
 	o_copysub(c, dst, dsub, x, y, z, src, ssub, box);
 }
 static void WINAPI h_copysub1(void *c, void *dst, UINT dsub, UINT x, UINT y, UINT z, void *src, UINT ssub, const void *box, UINT fl) {
-	if (!g_nous) { g_cp_sub1++; ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub1"); }
+	if (!g_nous) { __atomic_fetch_add(&g_cp_sub1, 1, __ATOMIC_RELAXED); ctx_vu(c); copie_vers(dst, dsub, src, ssub, "copie_sub1"); }
 	o_copysub1(c, dst, dsub, x, y, z, src, ssub, box, fl);
 }
 static void WINAPI h_upd1(void *c, void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, UINT fl) {
-	if (!g_nous && est_tex2d(r)) { g_upd1_2d++; ctx_vu(c); }
+	if (!g_nous && est_tex2d(r)) { __atomic_fetch_add(&g_upd1_2d, 1, __ATOMIC_RELAXED); ctx_vu(c); releve_upd(r, sub, box, data, rp, dp, "upd1"); }
 	o_upd1(c, r, sub, box, data, rp, dp, fl);
 }
 static HRESULT WINAPI h_map(void *c, void *r, UINT sub, UINT type, UINT fl, void *m) {
@@ -886,9 +896,57 @@ static Crochet g_cr[] = {
 	{C_OMSetRT, (void *)h_omsrt, (void **)&o_omsrt}, {C_ClearDSV, (void *)h_clrdsv, (void **)&o_clrdsv}, {C_ClearRTV, (void *)h_clrrtv, (void **)&o_clrrtv},
 	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
 	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi},
-	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata}, {C_UpdateSubresource, (void *)h_upd, (void **)&o_upd},
-	{C_Unmap, (void *)h_unmap, (void **)&o_unmap}, {C_CopyResource, (void *)h_copyres, (void **)&o_copyres}, {C_CopySubresourceRegion, (void *)h_copysub, (void **)&o_copysub},
-	{115 /*CopySubresourceRegion1*/, (void *)h_copysub1, (void **)&o_copysub1}, {116 /*UpdateSubresource1*/, (void *)h_upd1, (void **)&o_upd1}, {58 /*ExecuteCommandList*/, (void *)h_exec, (void **)&o_exec} };
+	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata},
+	{C_Unmap, (void *)h_unmap, (void **)&o_unmap}, {C_CopyResource, (void *)h_copyres, (void **)&o_copyres}, {58 /*ExecuteCommandList*/, (void *)h_exec, (void **)&o_exec} };
+/* 0.11 : crochets EN LIGNE. La 0.10.3 a montre que le moteur (ou d3d11) remet ~150 fois/s les entrees 12 13 20 21 46 47 48 50 53 115 116
+   de la table : entre deux reposes, les appels passent par l'original et la sonde ne les voit pas. Pour UpdateSubresource(1) et
+   CopySubresourceRegion(1), on detourne donc le DEBUT DU CODE de d3d11.dll (saut absolu de 14 octets vers notre fonction ;
+   les instructions deplacees vont dans un trampoline qui continue la fonction). On ne touche au code QUE si ses premiers octets
+   sont exactement ceux releves sur ce PC (Windows 03/11/2026) : sinon rien n'est pose et le journal le dit. Retire a l'arret. */
+struct EnLigne { int i; void *f; void **o; const char *nom; int n; unsigned char attendu[24]; unsigned char sauve[24]; unsigned char *cible; int actif; };
+static EnLigne g_el[] = {
+	{C_UpdateSubresource, (void *)h_upd, (void **)&o_upd, "UpdateSubresource", 20, {0x40,0x53,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x81,0xec,0xb8,0x00,0x00,0x00}, {0}, 0, 0},
+	{C_CopySubresourceRegion, (void *)h_copysub, (void **)&o_copysub, "CopySubresourceRegion", 15, {0x48,0x8b,0xc4,0x48,0x89,0x58,0x08,0x48,0x89,0x68,0x10,0x48,0x89,0x70,0x18}, {0}, 0, 0},
+	{115, (void *)h_copysub1, (void **)&o_copysub1, "CopySubresourceRegion1", 20, {0x48,0x89,0x5c,0x24,0x08,0x57,0x48,0x83,0xec,0x60,0x4c,0x8b,0xd2,0x48,0x8d,0x99,0x28,0xff,0xff,0xff}, {0}, 0, 0},
+	{116, (void *)h_upd1, (void **)&o_upd1, "UpdateSubresource1", 18, {0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8d,0x6c,0x24,0xf9}, {0}, 0, 0} };
+static void ecrire_saut(unsigned char *a, const void *vers) { a[0] = 0xff; a[1] = 0x25; a[2] = a[3] = a[4] = a[5] = 0; u64 v = (u64)vers; for (int k = 0; k < 8; k++) a[6 + k] = (unsigned char)(v >> (8 * k)); }
+static void poser_en_ligne(void **vt) {
+	static unsigned char *mem; if (!mem) mem = (unsigned char *)VirtualAlloc(0, 4096, 0x3000, 0x40 /*PAGE_EXECUTE_READWRITE*/);
+	if (!mem) { logline("crochets en ligne : memoire refusee"); return; }
+	int k = 0;
+	for (auto &e : g_el) {
+		unsigned char *c = (unsigned char *)vt[e.i]; e.cible = c; int pareil = 1;
+		for (int j = 0; j < e.n; j++) if (c[j] != e.attendu[j]) pareil = 0;
+		Ligne l; l.s("crochet en ligne "); l.s(e.nom); l.s(" "); l.x((u64)c);
+		if (!pareil) { l.s(" : octets differents de ceux attendus, NON pose (table gardee : "); l.s(poser(vt, e.i, e.f, e.o) ? "ok)" : "echec)"); journal(l); continue; }
+		unsigned char *t = mem + 64 * k++; for (int j = 0; j < e.n; j++) t[j] = c[j]; ecrire_saut(t + e.n, c + e.n);
+		FlushInstructionCache(GetCurrentProcess(), t, 64);
+		*e.o = (void *)t; for (int j = 0; j < e.n; j++) e.sauve[j] = c[j];
+		DWORD old; if (!VirtualProtect(c, e.n, 0x40, &old)) { l.s(" : protection refusee"); journal(l); continue; }
+		unsigned char s14[14]; ecrire_saut(s14, e.f);
+		c[0] = 0xeb; c[1] = 0xfe;   /* le temps d'ecrire : un fil qui arrive ici attend sur place */
+		for (int j = 2; j < 14; j++) c[j] = s14[j]; for (int j = 14; j < e.n; j++) c[j] = 0x90;
+		__atomic_store_n((unsigned short *)c, (unsigned short)(s14[0] | (s14[1] << 8)), __ATOMIC_SEQ_CST);
+		VirtualProtect(c, e.n, old, &old); FlushInstructionCache(GetCurrentProcess(), c, e.n);
+		e.actif = 1; l.s(" : pose ("); l.i(e.n); l.s(" octets deplaces)"); journal(l);
+	}
+}
+static void retirer_en_ligne() {
+	for (auto &e : g_el) if (e.actif) {
+		DWORD old; if (!VirtualProtect(e.cible, e.n, 0x40, &old)) continue;
+		e.cible[0] = 0xeb; e.cible[1] = 0xfe; for (int j = 2; j < e.n; j++) e.cible[j] = e.sauve[j];
+		__atomic_store_n((unsigned short *)e.cible, (unsigned short)(e.sauve[0] | (e.sauve[1] << 8)), __ATOMIC_SEQ_CST);
+		VirtualProtect(e.cible, e.n, old, &old); FlushInstructionCache(GetCurrentProcess(), e.cible, e.n); e.actif = 0;
+	}
+}
+/* diagnostic : la table pointe-t-elle parfois vers une AUTRE fonction (variante) pour ces entrees ? */
+static void *g_var[4][4]; static int g_var_n[4];
+static void noter_variantes() {
+	if (!g_vt_ctx) return;
+	for (int k = 0; k < 4; k++) { void *f = g_vt_ctx[g_el[k].i]; if (f == g_el[k].f) continue; int vu = 0;
+		for (int j = 0; j < g_var_n[k]; j++) if (g_var[k][j] == f) vu = 1;
+		if (!vu && g_var_n[k] < 4) g_var[k][g_var_n[k]++] = f; }
+}
 static void accrocher_contexte() {
 	if (g_ctx && VT(g_ctx) != g_vt_ctx) {
 		for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
@@ -1030,6 +1088,7 @@ static void accrocher_dev3() {
 }
 static Crochet g_cr_dev[] = { {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps}, {27 /*CreateDeferredContext*/, (void *)h_cdef, (void **)&o_cdef} };
 static void reposer() {
+	noter_variantes();
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) { g_reposes++; if (c.i < 140) g_repose_i[c.i]++; } }
 	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] != c.f) { if (poser(g_vt_dev, c.i, c.f, c.o)) g_reposes++; }
 }
@@ -1217,6 +1276,8 @@ static void apres_image(void *sc) {
 		v.s(" ; contextes differes crees "); v.i(g_cdef_n); v.s(" (autre table "); v.i(g_cdef_autre_table); v.s(") appels "); v.i(g_d_appels); v.s(" Update2D "); v.i(g_d_upd2); v.s(" MapW "); v.i(g_d_map_w); v.s(" Copy decor "); v.i(g_d_copy_decor);
 		v.s(" ; ExecuteCommandList "); v.i(g_exec_n); v.s(" ; CreateTexture2D1 "); v.i(g_ctex1_n); v.s(" (avec donnees "); v.i(g_ctex1_data); v.s(") ; WriteToSubresource "); v.i(g_w2s_n); journal(v);
 		static int prol; if (!prol) { prol = 1; journal_prologues(); }
+		Ligne q; q.s("TSC Textures (en ligne) :"); for (int k = 0; k < 4; k++) { q.s(" "); q.s(g_el[k].nom); q.s(g_el[k].actif ? "=pose" : "=non"); q.s(" variantes "); q.i(g_var_n[k]);
+			for (int j = 0; j < g_var_n[k]; j++) { q.s(" "); q.x((u64)g_var[k][j]); q.s(g_var[k][j] == (void *)g_el[k].cible ? "(=accrochee)" : "(AUTRE)"); } } journal(q);
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
@@ -1289,6 +1350,7 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 	ok &= poser(g_vt_sc, S_ResizeBuffers, (void *)h_resize, (void **)&o_resize);
 	poser(g_vt_sc, S1_Present1, (void *)h_present1, (void **)&o_present1);
 	for (auto &c : g_cr) ok &= poser(g_vt_ctx, c.i, c.f, c.o);
+	poser_en_ligne(g_vt_ctx);
 	g_hooks = 1;
 	logline(ok ? "crochets poses (Present, ResizeBuffers, cibles, effacements, viewports, dessins, Map, GetData)" : "certains crochets n'ont pas pu etre poses");
 	REL(ctx); REL(dev); REL(sc); DestroyWindow(fen);
@@ -1298,6 +1360,8 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 extern "C" void scs_telemetry_shutdown(void) {
 	if (!g_hooks) return;
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] == c.f) retirer(g_vt_ctx, c.i, *c.o);
+	retirer_en_ligne();
+	for (auto &e : g_el) if (!e.actif && g_vt_ctx[e.i] == e.f) retirer(g_vt_ctx, e.i, *e.o);
 	if (g_vt_dev) for (auto &c : g_cr_dev) if (g_vt_dev[c.i] == c.f) retirer(g_vt_dev, c.i, *c.o);
 	for (i64 j = g_p_img - NR + 1; j <= g_p_img; j++) if (j > 0) { ProfLigne &r = g_pl[j % NR]; if (r.pleine && r.img == j) prof_emettre(r); }
 	prof_vider();

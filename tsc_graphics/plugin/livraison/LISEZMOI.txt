@@ -80,3 +80,11 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
 - 0.10.2 : 2 860 textures de decor (DEFAULT, BC, avec niveaux) creees vides ; 0 remplissage vu, pas de contexte differe.
 - 0.10.3 ecrit une fois les 32 premiers octets de Map/Unmap/Copy*/UpdateSubresource(1) (prologues, pour un crochet en ligne exact)
   et, toutes les 30 s, quelles entrees de table sont remises par quelqu'un d'autre. Seule la DLL change.
+
+0.11 (03/11/2026) - crochets en ligne
+- 0.10.3 : les entrees 12 13 20 21 46 47 48 50 53 115 116 de la table du contexte sont remises ~150 fois/s par quelqu'un d'autre ;
+  entre deux reposes, les appels nous echappent.
+- 0.11 detourne le DEBUT DU CODE de UpdateSubresource, CopySubresourceRegion, CopySubresourceRegion1 et UpdateSubresource1 dans d3d11.dll
+  (saut de 14 octets + trampoline), seulement si les octets sont exactement ceux releves sur le Shadow ; sinon rien. Retire a l'arret.
+- Empreinte des textures de decor remplies par UpdateSubresource(1) -> tsc-textures.csv (chemin upd / upd1 / copie_*).
+- Journal 30 s : ligne « (en ligne) » = crochets poses + variantes vues dans la table. Seule la DLL change. Rien n'est remplace.

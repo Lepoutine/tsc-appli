@@ -14,3 +14,6 @@ QueryPerformanceCounter
 QueryPerformanceFrequency
 GetModuleHandleExA
 CreateDirectoryA
+VirtualAlloc
+FlushInstructionCache
+GetCurrentProcess
