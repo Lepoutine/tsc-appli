@@ -78,7 +78,7 @@ select{cursor:pointer}
 .wv{position:relative;height:120px;border-radius:10px;border:1px solid var(--line);background:#0b0708;overflow:hidden;touch-action:none}
 .wv canvas{position:absolute;inset:0;width:100%;height:100%}
 .wv .hint{position:absolute;right:8px;bottom:6px;font-size:11px;color:var(--mut)}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px 16px}
 .ctl{display:grid;grid-template-columns:96px minmax(0,1fr) 62px;gap:8px;align-items:center;font-size:12.5px}
 .ctl output{text-align:right;color:var(--gold);font:500 12px var(--mono)}
 .ctl select{grid-column:2/4;padding:6px 8px}
