@@ -330,3 +330,55 @@ def main_v6(sons, sortie, regimes=(150, 120), duree=10.0):
         ecrire(nom, normaliser(ralenti_grave(gm, ge, rpm, duree, rng), -1))
         noms.append(nom)
     return noms
+
+
+# --- v7 (03/11 20:17, Mendy : « les sons sont saturés ») ---
+# Aucun ecretage numerique mesure (sources et v5/v6 : 0 plateau). La saturation entendue vient de :
+# coups d'allumage coupes avec une attaque lineaire de 4 ms (clic), coups pris avec leur voisin (rapes),
+# niveau a -1 dBFS avec beaucoup de sub (un petit haut-parleur sature sous 50 Hz).
+def grains_propres(x, sr, nb=12, avant=0.008, apres=0.11):
+    """Coups d'allumage les plus propres : fenetre en cosinus (pas de clic), on garde ceux qui ont le moins d'aigus."""
+    e = ms.enveloppe(x, sr, 60.0)
+    dist = int(0.022 * sr)
+    pics, i = [], dist
+    while i < len(e) - dist:
+        j = i + int(np.argmax(e[i:i + dist]))
+        if e[j] == e[max(j - dist, 0):j + dist].max():
+            pics.append(j)
+        i = j + dist
+    a, z = int(avant * sr), int(apres * sr)
+    fen = np.concatenate([0.5 - 0.5 * np.cos(np.linspace(0, np.pi, a)), 0.5 + 0.5 * np.cos(np.linspace(0, np.pi, z))])
+    gs = []
+    for p in pics:
+        if p - a < 0 or p + z > len(x):
+            continue
+        g = x[p - a:p + z] * fen
+        G = np.abs(np.fft.rfft(g)) ** 2
+        f = np.fft.rfftfreq(len(g), 1.0 / sr)
+        gs.append((G[f > 1000].sum() / (G.sum() + 1e-12), g / (np.abs(g).max() + 1e-9)))
+    gs.sort(key=lambda t: t[0])
+    return [g for _, g in gs[:nb]]
+
+
+def adoucir(x, sr=SR):
+    """Coupe sous 35 Hz (le sub qui fait saturer les petits haut-parleurs), coupe douce au-dessus de 400 Hz."""
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1.0 / sr)
+    g = np.ones_like(f)
+    g[f < 35] = (f[f < 35] / 35) ** 4
+    h = f > 400
+    g[h] = 1.0 / (1 + (f[h] / 400) ** 4) ** 0.5 * (1 + 1) ** 0.5
+    return np.fft.irfft(X * np.minimum(g, 1.0), len(x))
+
+
+def main_v7(sons, sortie, regimes=(150, 120), duree=10.0):
+    rng = np.random.default_rng(31)
+    gm = grains_propres(charger(sons, "500_op_idle"), SR)
+    ge = grains_propres(charger(sons, "exhaust_op"), SR)
+    noms = []
+    for rpm in regimes:
+        x = adoucir(ralenti_grave(gm, ge, rpm, duree, rng, facteur=0.65))
+        nom = os.path.join(sortie, "v7_ralenti_grave_propre_%d.wav" % rpm)
+        ecrire(nom, normaliser(x, -6.0))  # 5 dB de marge de plus que v6
+        noms.append(nom)
+    return noms
