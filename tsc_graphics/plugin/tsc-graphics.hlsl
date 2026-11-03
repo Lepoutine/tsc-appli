@@ -1,9 +1,10 @@
-// TSC Neural Graphics 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
 Texture2D tCouleur : register(t0);
 Texture2D<float> tProf : register(t1);
+Texture2D<float> tLm : register(t3);   // 0.9.1 : luminance moyenne de l'image, mesuree une fois (vue 1) et partagee par les 3 vues
 Texture2D tGb2 : register(t2);   // 0.7 : cible 2 du G-buffer (albedo RGB, alpha = masque du feuillage) ; absente = vegetation coupee
 SamplerState sLin : register(s0);
 SamplerState sPt : register(s1);
@@ -23,7 +24,7 @@ cbuffer P : register(b0) {
 	float4 p12; // 0.8 : exposition, gamma du monde (eclaircit les tons sombres), hautes lumieres, saturation globale
 	float4 p13; // 0.9 apres tone mapping : exposition, contraste, epaule (debut de la compression des blancs), saturation
 	float4 p14; // 0.9 : saturation des hautes lumieres (negatif = moins), temperature, teinte (vert/magenta), point noir
-	float4 p15; // 0.9 : verts (desature les verts jaunes trop vifs du jeu)
+	float4 p15; // 0.9 : verts (desature les verts jaunes trop vifs du jeu) ; 0.9.1 : y = reference partagee presente
 };
 struct VSO { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VSO vs_principal(uint id : SV_VertexID) {
@@ -161,12 +162,20 @@ float4 route(VSO i) {
 // 0,07 en jeu), un lointain voile et delave (perspective aerienne), des lumieres qui bavent (diffusion de l'optique),
 // des ombres dans les creux et un grain de capteur. Tout est fait ici en HDR, avant l'exposition et le tone mapping du jeu.
 float lum(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
+// 0.9.1 : en 0.8 chaque vue calculait sa propre moyenne -> l'ecran de droite (contre-jour, plus sombre) etait eclairci et
+// sature bien plus que le centre, d'ou des coupures aux montants. Toutes les vues utilisent maintenant la meme reference.
+float lm_propre() {
+	float s = 0;
+	[unroll] for (int y = 0; y < 4; y++) [unroll] for (int x = 0; x < 4; x++) s += lum(tCouleur.SampleLevel(sLin, float2(0.125 + x * 0.25, 0.125 + y * 0.25), max(p5.w - 1, 0)).rgb);
+	return max(s / 16, 1e-4);
+}
+float lm_vue() { return p15.y > 0.5 ? max(tLm.Load(int3(0, 0, 0)), 1e-4) : lm_propre(); }
+float4 ps_lm(VSO i) : SV_Target { return lm_propre(); }
 float3 camera(float2 uv, float3 col) {
 	float k = p6.x; if (k <= 0) return col;
 	float d = tProf.SampleLevel(sPt, uv, 0);
 	bool monde = !(ciel(d) || cabine(d));
-	float3 moy = tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb;   // moyenne de la vue (dernier mip)
-	float lm = max(lum(moy), 1e-4);
+	float lm = lm_vue();
 	// ambiance automatique : nuit d'apres la luminance moyenne de la vue (seuils nuit_lum / jour_lum a caler en jeu), pluie d'apres l'humidite
 	float nuit = p8.y > 0.5 ? saturate((log2(max(p8.w, 1e-5)) - log2(lm)) / max(log2(max(p8.w, 1e-5)) - log2(max(p8.z, 1e-6)), 0.1)) : 0;
 	float pl = saturate(p0.y);
@@ -204,7 +213,7 @@ float3 camera(float2 uv, float3 col) {
 		}
 		// perspective aerienne : le lointain se voile vers la couleur moyenne du ciel et se delave
 		float b = 1 - exp(-max(z - 20, 0) * k_br * 0.002);
-		float3 voile = moy * float3(0.95, 0.98, 1.05) * 1.3;
+		float3 voile = lm * float3(0.95, 0.98, 1.05) * 1.3;
 		float l = lum(c);
 		c = lerp(c, lerp(c, float3(l, l, l), saturate(k_des)), saturate(b * 2));
 		c = lerp(c, voile, saturate(b * 0.85));
@@ -274,8 +283,7 @@ float3 monde_photo(float2 uv, float3 c, float lm, float nuit) {
 	if (ciel(d) || cabine(d)) return c;
 	float z = lineaire(d);
 	if (p10.x > 0) {
-		float3 moy = tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb;
-		float3 A = lum(moy) * float3(1.0, 1.02, 1.06) * 1.25;          // couleur de la brume : grise legerement bleutee
+		float3 A = lm * float3(1.0, 1.02, 1.06) * 1.25;          // couleur de la brume : grise legerement bleutee
 		float a = saturate(p10.x) * 0.55 * (1 - exp(-max(z - 8, 0) / 450)) * (1 - 0.6 * nuit);
 		float3 j = (c - A * a) / max(1 - a, 0.3);
 		c = max(j, c * 0.3);
@@ -344,7 +352,7 @@ float nuit_de(float lm) {
 float4 ps_principal(VSO i) : SV_Target {
 	float4 r = route(i);
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
-	float lm = max(lum(tCouleur.SampleLevel(sLin, float2(0.5, 0.5), p5.w).rgb), 1e-4);
+	float lm = lm_vue();
 	float nt = nuit_de(lm);
 	float3 v = monde_photo(i.uv, r.rgb, lm, nt);
 	v = vitre(i.uv, v);

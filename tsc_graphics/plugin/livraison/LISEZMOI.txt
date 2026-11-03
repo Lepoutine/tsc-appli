@@ -1,4 +1,4 @@
-TSC Neural Graphics 0.9 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
+TSC Neural Graphics 0.9.1 (profileur TSC v1 + route mouillee v1, vues principales seulement) - prototype, a tester en jeu dans la copie isolee TSCF_Lab seulement
 
 Nouveau en 0.3, cale sur les videos reelles de nuit et de pluie (1 310 reflets mesures) :
   - reflets des lumieres en colonnes verticales floues (hauteur/largeur 2,5 a 3, jusqu'a ~5), plus longues au loin ;
@@ -47,3 +47,5 @@ ensuite dans l'ini seul, jeu ouvert, sans nouvelle DLL.
 le tone mapping du jeu, sur chaque vue 8 bits avant sa composition et avant l'interface (trace du 03/11). Cles ldr, ldr_expo,
 ldr_contraste, ldr_epaule, ldr_sat, ldr_sat_hautes, ldr_temperature, ldr_teinte, ldr_noirs, ldr_verts, toutes a chaud.
 Valeurs de depart d'apres mesures_reel_v2 (jour). Si ps_ldr ne compile pas, seul cet etage est coupe (ligne dans le log).
+0.9.1 : coupures aux montants corrigees. En 0.8 chaque ecran calculait sa propre lumiere moyenne : l'ecran de droite (contre-jour)
+etait eclairci et sature bien plus que le centre. Maintenant une seule reference, mesuree sur la 1re vue de l'image, sert aux 3.

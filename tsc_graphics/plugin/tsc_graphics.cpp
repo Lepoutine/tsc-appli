@@ -53,7 +53,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.9.0"
+#define VERSION "tsc-graphics 0.9.1"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -232,6 +232,7 @@ static float g_val_effacement = -1;
 
 /* ---------- nos ressources ---------- */
 static void *g_dev, *g_ctx, *g_dev1, *g_ctx1, *g_etat, *g_vs, *g_ps, *g_cb, *g_samp_lin, *g_samp_pt;
+static void *g_ps_lm, *g_lm, *g_lm_srv, *g_lm_rtv;   /* 0.9.1 : reference de lumiere partagee par les 3 vues */
 static void *g_ps_ldr, *g_ldr, *g_ldr_srv, *g_ldr_tex; static UINT g_ldr_w, g_ldr_h, g_ldr_fmt; static int g_ldr_n; static i64 g_n_ldr;   /* 0.9 */
 static void *g_coul, *g_coul_srv; static UINT g_coul_w, g_coul_h, g_coul_fmt, g_coul_mips = 1;
 static void *g_prof, *g_prof_srv; static UINT g_prof_w, g_prof_h, g_prof_fmt;
@@ -305,6 +306,17 @@ static void compiler() {
 	REL(bv); REL(bp);
 	if (c1 < 0 || c2 < 0) { REL(vs); REL(ps); logline("creation des shaders refusee"); g_shaders_ok = 0; return; }
 	REL(g_vs); REL(g_ps); g_vs = vs; g_ps = ps; g_shaders_ok = 1; logline("shaders compiles (tsc-graphics.hlsl)");
+	/* 0.9.1 : reference de lumiere commune ; sans elle chaque vue garde sa propre moyenne (comme en 0.8) */
+	{
+		void *bm = 0, *pm = 0;
+		if (g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "ps_lm", "ps_5_0", fl, 0, &bm, &err) < 0) { REL(err); REL(g_ps_lm); logline("ps_lm non compile : reference par vue"); }
+		else {
+			REL(err); g_nous++;
+			HRESULT c4 = ((HRESULT (WINAPI *)(void *, const void *, SIZE_T, void *, void **))VT(g_dev)[D_CreatePS])(g_dev, ((PTR)VT(bm)[3])(bm), ((TAILLE)VT(bm)[4])(bm), 0, &pm);
+			g_nous--; REL(bm);
+			REL(g_ps_lm); if (c4 >= 0) g_ps_lm = pm; else REL(pm);
+		}
+	}
 	/* 0.9 : etage apres tone mapping ; s'il ne compile pas, seul cet etage est coupe */
 	void *bl = 0, *pl = 0;
 	if (g_compile(src, (SIZE_T)n, "tsc-graphics.hlsl", 0, 0, "ps_ldr", "ps_5_0", fl, 0, &bl, &err) < 0) {
@@ -402,6 +414,14 @@ static bool copies_pretes(void *hdr, void *prof) {
 		g_vram = (u64)h.Width * h.Height * 8 * (g_coul_mips > 1 ? 4 : 3) / 3 + (u64)d.Width * d.Height * 8;
 		Ligne l; l.s("copies creees : HDR "); dire_tex(l, g_coul); l.s(" ; profondeur "); dire_tex(l, g_prof); l.s(" ; memoire video ajoutee ~"); l.i((i64)(g_vram >> 20)); l.s(" Mo"); journal(l);
 	}
+	if (!g_lm) {
+		TEX2D_DESC n = {1, 1, 1, 1, 41 /*R32_FLOAT*/, 1, 0, 0, 8 | 32, 0, 0};
+		if (dev_tex(&n, &g_lm) >= 0) {
+			((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_lm, 0, &g_lm_srv);
+			((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateRTV])(g_dev, g_lm, 0, &g_lm_rtv);
+			logline("reference de lumiere commune creee (1x1)");
+		} else g_lm = 0;
+	}
 	/* 0.7 : copie de l'albedo + masque du feuillage ; sans elle, la couche vegetation est simplement coupee (t2 vide) */
 	g_gb2_valide = false;
 	if (g_gb2_tex) {
@@ -425,7 +445,7 @@ static bool copies_pretes(void *hdr, void *prof) {
 
 /* ---------- 0.4.3 : etat du jeu sauve puis remis a l'identique autour de la passe TSC ---------- */
 struct EtatJeu {
-	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[3], *smp[2], *cb;
+	void *rtv[8], *dsv, *vs, *ps, *gs, *hs, *ds, *il, *bl, *dss, *rs, *srv[4], *smp[2], *cb;
 	float bf[4]; UINT masque, sref, topo, nvp, nsc; VIEWPORT vp[16]; long sc[16][4];
 };
 typedef void (WINAPI *GetSh)(void *, void **, void **, UINT *);
@@ -446,7 +466,7 @@ static void sauver(EtatJeu &e) {
 	((void (WINAPI *)(void *, void **))VT(c)[C_RSGetState])(c, &e.rs);
 	e.nvp = 16; ((void (WINAPI *)(void *, UINT *, VIEWPORT *))VT(c)[C_RSGetViewports])(c, &e.nvp, e.vp);
 	e.nsc = 16; ((void (WINAPI *)(void *, UINT *, void *))VT(c)[C_RSGetScissor])(c, &e.nsc, e.sc);
-	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 3, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSRV])(c, 0, 4, e.srv);
 	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetSamplers])(c, 0, 2, e.smp);
 	((void (WINAPI *)(void *, UINT, UINT, void **))VT(c)[C_PSGetCB])(c, 0, 1, &e.cb);
 }
@@ -467,12 +487,12 @@ static void remettre(EtatJeu &e) {
 	/* cibles d'abord, puis ressources (sinon le pilote delie une SRV encore liee en cible) */
 	UINT nrt = 0; for (UINT k = 0; k < 8; k++) if (e.rtv[k]) nrt = k + 1;
 	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(c)[C_OMSetRT])(c, nrt, e.rtv, e.dsv);
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 3, e.srv);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSRV])(c, 0, 4, e.srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetSamplers])(c, 0, 2, e.smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(c)[C_PSSetCB])(c, 0, 1, &e.cb);
 	for (int k = 0; k < 8; k++) REL(e.rtv[k]);
 	REL(e.dsv); REL(e.vs); REL(e.ps); REL(e.gs); REL(e.hs); REL(e.ds); REL(e.il); REL(e.bl); REL(e.dss); REL(e.rs);
-	REL(e.srv[0]); REL(e.srv[1]); REL(e.srv[2]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
+	REL(e.srv[0]); REL(e.srv[1]); REL(e.srv[2]); REL(e.srv[3]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
 }
 /* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
 static void passe_vue(void *hdr, void *prof) {
@@ -525,20 +545,34 @@ static void passe_vue(void *hdr, void *prof) {
 	} else ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
 	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
 	if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
+	const bool lm_ok = g_ps_lm && g_lm_srv && g_lm_rtv;
+	cbv[61] = lm_ok ? 1.0f : 0.0f;
 	struct { void *p; UINT rp, dp; } map = {0, 0, 0};
 	if (((HRESULT (WINAPI *)(void *, void *, UINT, UINT, UINT, void *))VT(g_ctx)[C_Map])(g_ctx, g_cb, 0, 4, 0, &map) >= 0 && map.p) { memcpy(map.p, cbv, sizeof cbv); ((void (WINAPI *)(void *, void *, UINT))VT(g_ctx)[C_Unmap])(g_ctx, g_cb, 0); }
+	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
+	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
+	void *smp[2] = {g_samp_lin, g_samp_pt};
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
+	/* 0.9.1 : premiere vue de l'image -> mesure de la luminance moyenne dans la reference commune (1x1) */
+	if (lm_ok && g_vues_traitees == 0) {
+		VIEWPORT v1 = {0, 0, 1, 1, 0, 1};
+		((void (WINAPI *)(void *, UINT, const VIEWPORT *))VT(g_ctx)[C_RSSetViewports])(g_ctx, 1, &v1);
+		((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &g_lm_rtv, 0);
+		((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps_lm, 0, 0);
+		void *s1[1] = {g_coul_srv};
+		((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 1, s1);
+		((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
+		void *nrt0 = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt0, 0);
+	}
 	VIEWPORT vp = {0, 0, (float)g_coul_w, (float)g_coul_h, 0, 1};
 	((void (WINAPI *)(void *, UINT, const VIEWPORT *))VT(g_ctx)[C_RSSetViewports])(g_ctx, 1, &vp);
 	((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &rtv, 0);
-	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
-	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps, 0, 0);
-	void *srv[3] = {g_coul_srv, g_prof_srv, gb2_ok ? g_gb2_srv : 0}; void *smp[2] = {g_samp_lin, g_samp_pt};
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, srv);
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
-	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
+	void *srv[4] = {g_coul_srv, g_prof_srv, gb2_ok ? g_gb2_srv : 0, lm_ok ? g_lm_srv : 0};
+	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 4, srv);
 	((void (WINAPI *)(void *, UINT, UINT))VT(g_ctx)[C_Draw])(g_ctx, 3, 0);
-	void *nul[3] = {0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 3, nul);
+	void *nul[4] = {0, 0, 0, 0}; ((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 4, nul);
 	void *nrt = 0; ((void (WINAPI *)(void *, UINT, void *const *, void *))VT(g_ctx)[C_OMSetRT])(g_ctx, 1, &nrt, 0);
 	if (qv < QV && g_q_dis[qi]) { ((void (WINAPI *)(void *, void *))VT(g_ctx)[C_End])(g_ctx, g_q_b[qi][qv]); g_q_n[qi] = qv + 1; }
 	remettre(sv);
