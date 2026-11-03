@@ -111,3 +111,11 @@ epaule sur la luminance (les hautes lumieres gardent leur couleur).
 - 0.12 : cle ini vider_textures = N Mo : au premier remplissage complet du niveau 0 d'une texture de decor (UpdateSubresource1),
   ecrit l'image d'origine en .dds (en-tete DX10, format du jeu, niveau 0) dans plugins\tsc_textures_brut\<empreinte>.dds,
   une seule fois par empreinte. Tableaux/cubemaps ignores. Usage prive : sert a fabriquer les versions HD. Seule la DLL change (la cle s'ajoute a l'ini).
+
+0.13 (03/11/2026) - TSC Textures HD : remplacement a la volee
+- Au demarrage : liste de plugins\tsc_textures_hd\<empreinte>.dds. Au remplissage du niveau 0 d'une texture de decor dont l'empreinte a une version HD :
+  creation de la texture HD (tous niveaux) + vue ; quand le jeu attache ses textures (PSSetShaderResources), sa vue est remplacee par la vue HD.
+  Fichiers du jeu intacts ; textures_hd = 0 rend les textures d'origine instantanement.
+- Format HD : celui du jeu ou equivalent non compresse (BC sRGB -> RGBA8 sRGB 29, BC -> 28, BC4 -> R8 61, BC5 -> R8G8 49), memes proportions, >= taille du jeu.
+- outils/hd_dds.py fabrique le .dds (mips en lineaire pour le sRGB).
+- Garde aussi l'extraction 0.12 (vider_textures).

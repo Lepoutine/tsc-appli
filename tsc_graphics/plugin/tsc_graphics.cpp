@@ -40,6 +40,9 @@ __declspec(dllimport) BOOL WINAPI CreateDirectoryA(const char *, void *);
 __declspec(dllimport) void *WINAPI VirtualAlloc(void *, SIZE_T, DWORD, DWORD);
 __declspec(dllimport) BOOL WINAPI FlushInstructionCache(HANDLE, const void *, SIZE_T);
 __declspec(dllimport) HANDLE WINAPI GetCurrentProcess(void);
+__declspec(dllimport) HANDLE WINAPI FindFirstFileA(const char *, void *);
+__declspec(dllimport) BOOL WINAPI FindNextFileA(HANDLE, void *);
+__declspec(dllimport) BOOL WINAPI FindClose(HANDLE);
 __declspec(dllimport) DWORD WINAPI GetModuleFileNameA(HMODULE, char *, DWORD);
 __declspec(dllimport) u64 WINAPI GetTickCount64(void);
 __declspec(dllimport) BOOL WINAPI QueryPerformanceCounter(i64 *);
@@ -57,7 +60,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.12"
+#define VERSION "tsc-graphics 0.13"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -109,6 +112,7 @@ struct Reglages {
 	/* 0.9.3 : TSC Neural, donnees d'entrainement : changer ce nombre (N) = N images enregistrees, une toutes les 2 s, image du jeu
 	   SANS effet TSC (HDR, profondeur, albedo+feuillage, vue 8 bits du jeu) dans plugins\\tsc_neural */
 	float enregistre = 0;
+	float textures_hd = 1;   /* 0.13 : remplacement a la volee par plugins\\tsc_textures_hd\\<empreinte>.dds (1 = marche, 0 = textures du jeu) */
 	float vider_textures = 0;   /* 0.12 : TSC Textures, extraction du niveau 0 des textures de decor en .dds (Mo maximum ; 0 = coupe) -> plugins\\tsc_textures_brut */
 	float sonde_textures = 1;   /* 0.10 : TSC Textures, releve des textures chargees par le jeu (empreinte + format) -> tsc-textures.csv */
 	float trace = 0;   /* changer ce nombre (1, 2, 3...) dans l'ini = trace d'une image, sans touche */
@@ -137,7 +141,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures} };
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd} };
 	const char *p = b;
 	while (*p) {
 		while (*p == '\r' || *p == '\n' || *p == ' ') p++;
@@ -824,6 +828,29 @@ static void WINAPI h_upd_b(void *c, void *r, UINT sub, const void *box, const vo
 static volatile long g_tx_verrou; static i64 g_tx_lignes;
 static u64 empreinte(const SUBRES *sr, const TEX2D_DESC *ds, u64 &taille);
 typedef void (WINAPI *PFN_EXEC)(void *, void *, BOOL); static PFN_EXEC o_exec; static i64 g_exec_n;
+typedef void (WINAPI *PFN_PSSRV)(void *, UINT, UINT, void *const *); static PFN_PSSRV o_pssrv; static i64 g_hd_rempl;
+/* table texture du jeu -> vue HD, et vue du jeu -> texture du jeu (adressage ouvert, verrou court) */
+enum { NT = 1 << 16 };
+static void *g_t_cle[NT], *g_t_val[NT]; static void *g_v_cle[NT], *g_v_val[NT]; static volatile long g_tab_verrou;
+static void tab_lock() { while (__atomic_exchange_n(&g_tab_verrou, 1, __ATOMIC_ACQUIRE)) {} }
+static void tab_unlock() { __atomic_store_n(&g_tab_verrou, 0, __ATOMIC_RELEASE); }
+static unsigned hp(void *p) { u64 v = (u64)p; v ^= v >> 17; v *= 0x9E3779B97F4A7C15ULL; return (unsigned)(v >> 40) & (NT - 1); }
+static void tab_mettre(void **cle, void **val, void *k, void *v) {
+	unsigned i = hp(k); for (int n = 0; n < 512; n++, i = (i + 1) & (NT - 1)) if (!cle[i] || cle[i] == k) { cle[i] = k; val[i] = v; return; }
+}
+static void *tab_lire(void **cle, void **val, void *k) {
+	unsigned i = hp(k); for (int n = 0; n < 512; n++, i = (i + 1) & (NT - 1)) { if (cle[i] == k) return val[i]; if (!cle[i]) return 0; } return 0;
+}
+static volatile long g_hd_actif;   /* 1 des qu'au moins une texture HD est posee : sinon PSSetShaderResources passe tout droit */
+static void WINAPI h_pssrv(void *c, UINT debut, UINT n, void *const *v) {
+	if (g_nous || !__atomic_load_n(&g_hd_actif, __ATOMIC_ACQUIRE) || R.textures_hd <= 0 || !v || n == 0 || n > 128) { o_pssrv(c, debut, n, v); return; }
+	void *loc[128]; bool chg = false;
+	tab_lock();
+	for (UINT k = 0; k < n; k++) { loc[k] = v[k]; if (!v[k]) continue; void *res = tab_lire(g_v_cle, g_v_val, v[k]); if (!res) continue; void *hd = tab_lire(g_t_cle, g_t_val, res); if (hd) { loc[k] = hd; chg = true; } }
+	tab_unlock();
+	if (chg) g_hd_rempl++;
+	o_pssrv(c, debut, n, chg ? loc : v);
+}
 static void WINAPI h_exec(void *c, void *liste, BOOL rest) { if (!g_nous) g_exec_n++; o_exec(c, liste, rest); }
 typedef void (WINAPI *PFN_UNMAP)(void *, void *, UINT);
 typedef void (WINAPI *PFN_COPYRES)(void *, void *, void *);
@@ -911,6 +938,56 @@ static void vider_dds(u64 h, const TEX2D_DESC &d, const void *data, UINT rp) {
 	const unsigned char *q = (const unsigned char *)data; for (UINT y = 0; y < lignes; y++) WriteFile(f, q + (u64)y * rp, serre, &w, 0);
 	CloseHandle(f); __atomic_fetch_add(&g_vide_n, 1, __ATOMIC_RELAXED);
 }
+/* ---------- 0.13 : TSC Textures HD, remplacement a la volee (rien dans les fichiers du jeu) ----------
+   1) au demarrage : liste des .dds de plugins\tsc_textures_hd (nom = empreinte 16 hex) ;
+   2) au remplissage du niveau 0 d'une texture de decor (UpdateSubresource1) : si son empreinte a une version HD, on cree la texture HD
+      (avec tous ses niveaux) et sa vue, et on note : texture du jeu -> vue HD ;
+   3) quand le jeu attache ses textures au pixel shader (PSSetShaderResources), on remplace la vue du jeu par la vue HD.
+   Le jeu garde ses objets : couper (textures_hd = 0) rend instantanement les textures d'origine. Format HD accepte : le meme que
+   le jeu, ou son equivalent non compresse (BC1/2/3 -> RGBA8, BC4 -> R8, BC5 -> R8G8, meme espace sRGB). */
+static u64 g_hd_liste[4096]; static int g_hd_n; static i64 g_hd_crees, g_hd_refus;
+static bool hd_existe(u64 h) { for (int i = 0; i < g_hd_n; i++) if (g_hd_liste[i] == h) return true; return false; }
+static u64 hex16(const char *n) { u64 v = 0; for (int k = 0; k < 16; k++) { char c = n[k]; int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; if (d < 0) return 0; v = v << 4 | (u64)d; } return v; }
+static void hd_lister() {
+	char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_textures_hd\\*.dds"); unsigned char fd[600];
+	HANDLE f = FindFirstFileA(p, fd); g_hd_n = 0;
+	if (f != INVALID) { do { const char *n = (const char *)fd + 44; u64 h = hex16(n); if (h && g_hd_n < 4096) g_hd_liste[g_hd_n++] = h; } while (FindNextFileA(f, fd)); FindClose(f); }
+	Ligne l; l.s("TSC Textures HD : "); l.i(g_hd_n); l.s(" textures HD disponibles"); journal(l);
+}
+static bool hd_format_ok(UINT jeu, UINT hd) {
+	if (jeu == hd) return true;
+	switch (jeu) { case 72: case 75: case 78: return hd == 29 || hd == 91; case 71: case 74: case 77: return hd == 28 || hd == 87; case 80: return hd == 61; case 83: return hd == 49; default: return false; }
+}
+static void hd_charger(void *tex_jeu, const TEX2D_DESC &dj, u64 h) {
+	char p[400] = {0}; cat(p, g_dir); cat(p, "tsc_textures_hd\\"); char nom[24]; static const char hx[] = "0123456789abcdef";
+	for (int k = 0; k < 16; k++) nom[k] = hx[(h >> (60 - 4 * k)) & 15]; nom[16] = 0; cat(p, nom); cat(p, ".dds");
+	HANDLE f = CreateFileA(p, 0x80000000, 1, 0, 3, 0x80, 0); if (f == INVALID) { g_hd_refus++; return; }
+	DWORD hi = 0, taille = GetFileSize(f, &hi); if (hi || taille < 148 || taille > 512u * 1048576u) { CloseHandle(f); g_hd_refus++; return; }
+	unsigned char *b = (unsigned char *)VirtualAlloc(0, taille, 0x3000, 0x04); if (!b) { CloseHandle(f); g_hd_refus++; return; }
+	DWORD lu = 0; ReadFile(f, b, taille, &lu, 0); CloseHandle(f);
+	const UINT *e = (const UINT *)b; Ligne l; l.s("TSC Textures HD "); l.s(nom); l.s(" : ");
+	if (lu != taille || e[0] != 0x20534444 || e[21] != 0x30315844) { l.s("dds invalide (en-tete DX10 attendu)"); journal(l); g_hd_refus++; return; }
+	UINT H = e[3], W = e[4], mips = e[7] ? e[7] : 1, fmt = e[32];
+	if (!hd_format_ok(dj.Format, fmt) || W < dj.Width || (u64)W * dj.Height != (u64)H * dj.Width) { l.s("refusee (format "); l.i(fmt); l.s(" "); l.i(W); l.s("x"); l.i(H); l.s(" contre jeu "); l.i(dj.Format); l.s(" "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l); g_hd_refus++; return; }
+	SUBRES sr[16]; u64 o = 148; UINT ob; bool bloc = format_bloc(fmt, ob); UINT bp = bloc ? 0 : octets_pixel(fmt); if (mips > 16) mips = 16;
+	for (UINT m = 0; m < mips; m++) {
+		UINT w = W >> m ? W >> m : 1, hh = H >> m ? H >> m : 1;
+		UINT pitch = bloc ? ((w + 3) / 4) * ob : w * bp, lignes = bloc ? (hh + 3) / 4 : hh;
+		if (!pitch || o + (u64)pitch * lignes > taille) { mips = m; break; }
+		sr[m].p = b + o; sr[m].pitch = pitch; sr[m].slice = pitch * lignes; o += (u64)pitch * lignes;
+	}
+	if (!mips) { l.s("aucun niveau lisible"); journal(l); g_hd_refus++; return; }
+	TEX2D_DESC d; memset(&d, 0, sizeof d); d.Width = W; d.Height = H; d.MipLevels = mips; d.ArraySize = 1; d.Format = fmt; d.SampleCount = 1; d.Usage = 1 /*IMMUTABLE*/; d.BindFlags = 0x8;
+	void *t = 0, *v = 0;
+	g_nous++; HRESULT hr = ((HRESULT (WINAPI *)(void *, const TEX2D_DESC *, const void *, void **))VT(g_dev)[D_CreateTexture2D])(g_dev, &d, sr, &t);
+	if (hr >= 0 && t) ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, t, 0, &v);
+	g_nous--;
+	if (!v) { REL(t); l.s("creation refusee "); l.x((u64)(hr & 0xffffffff)); journal(l); g_hd_refus++; return; }
+	REL(t);   /* la vue garde la texture */
+	tab_lock(); tab_mettre(g_t_cle, g_t_val, tex_jeu, v); tab_unlock();
+	__atomic_store_n(&g_hd_actif, 1, __ATOMIC_RELEASE); g_hd_crees++;
+	l.s("posee "); l.i(W); l.s("x"); l.i(H); l.s(" "); l.i(mips); l.s(" niveaux, format "); l.i(fmt); l.s(" (jeu "); l.i(dj.Width); l.s("x"); l.i(dj.Height); l.s(")"); journal(l);
+}
 static i64 g_brut, g_upd_decor, g_upd_boite_part, g_upd_niv;
 static void releve_upd(void *r, UINT sub, const void *box, const void *data, UINT rp, UINT dp, const char *chemin) {
 	if (R.sonde_textures <= 0 || !data || !rp) return;
@@ -928,6 +1005,7 @@ static void releve_upd(void *r, UINT sub, const void *box, const void *data, UIN
 	if (d.Width < 16 || d.Height < 16) return;
 	SUBRES m = {data, rp, dp}; u64 taille; u64 hh = empreinte(&m, &d, taille);
 	vider_dds(hh, d, data, rp);
+	if (g_hd_n && g_dev && hd_existe(hh)) { tab_lock(); void *deja = tab_lire(g_t_cle, g_t_val, r); tab_unlock(); if (!deja) hd_charger(r, d, hh); }
 	Ligne l; l.s(chemin); l.s(";"); l.x(hh); l.s(";"); tx_desc(l, d, 0); l.i((i64)taille); l.s(";"); l.i((i64)GetTickCount64()); l.s("\r\n"); tx_ligne(l);
 }
 static void WINAPI h_copyres(void *c, void *dst, void *src) {
@@ -980,7 +1058,7 @@ static Crochet g_cr[] = {
 	{C_RSSetViewports, (void *)h_rsvp, (void **)&o_rsvp}, {C_DrawIndexed, (void *)h_drawidx, (void **)&o_drawidx}, {C_Draw, (void *)h_draw, (void **)&o_draw},
 	{C_DrawIndexedInstanced, (void *)h_drawidxi, (void **)&o_drawidxi}, {C_DrawInstanced, (void *)h_drawi, (void **)&o_drawi},
 	{C_Map, (void *)h_map, (void **)&o_map}, {C_GetData, (void *)h_getdata, (void **)&o_getdata},
-	{C_Unmap, (void *)h_unmap, (void **)&o_unmap}, {C_CopyResource, (void *)h_copyres, (void **)&o_copyres}, {58 /*ExecuteCommandList*/, (void *)h_exec, (void **)&o_exec} };
+	{C_Unmap, (void *)h_unmap, (void **)&o_unmap}, {C_PSSetSRV, (void *)h_pssrv, (void **)&o_pssrv}, {C_CopyResource, (void *)h_copyres, (void **)&o_copyres}, {58 /*ExecuteCommandList*/, (void *)h_exec, (void **)&o_exec} };
 /* 0.11 : crochets EN LIGNE. La 0.10.3 a montre que le moteur (ou d3d11) remet ~150 fois/s les entrees 12 13 20 21 46 47 48 50 53 115 116
    de la table : entre deux reposes, les appels passent par l'original et la sonde ne les voit pas. Pour UpdateSubresource(1) et
    CopySubresourceRegion(1), on detourne donc le DEBUT DU CODE de d3d11.dll (saut absolu de 14 octets vers notre fonction ;
@@ -1139,6 +1217,7 @@ static void releve_texture(const TEX2D_DESC *ds, const void *init) {
 static HRESULT WINAPI h_ctex(void *d, const TEX2D_DESC *ds, const void *init, void **out) {
 	if (g_nous) return o_ctex(d, ds, init, out);
 	i64 a, b; QueryPerformanceCounter(&a); releve_texture(ds, init); HRESULT hr = o_ctex(d, ds, init, out); QueryPerformanceCounter(&b);
+	if (hr >= 0 && out && *out && g_hd_actif) { tab_lock(); if (tab_lire(g_t_cle, g_t_val, *out)) tab_mettre(g_t_cle, g_t_val, *out, 0); tab_unlock(); }   /* adresse reutilisee : oublier l'ancienne HD */
 	ajouter_creation(&g_cree_tex, b - a); return hr;
 }
 static HRESULT WINAPI h_cps(void *d, const void *code, SIZE_T n, void *lien, void **out) {
@@ -1211,7 +1290,13 @@ static void accrocher_dev3() {
 	Ligne l; l.s("TSC Textures : ID3D11Device3 CreateTexture2D1/WriteToSubresource accroches "); l.s(ok ? "ok" : "non"); l.s(vt == g_vt_dev ? " (meme table)" : " (autre table)"); journal(l);
 	REL(d3);
 }
-static Crochet g_cr_dev[] = { {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps}, {27 /*CreateDeferredContext*/, (void *)h_cdef, (void **)&o_cdef} };
+typedef HRESULT (WINAPI *PFN_CSRV)(void *, void *, const void *, void **); static PFN_CSRV o_csrv;
+static HRESULT WINAPI h_csrv(void *d, void *res, const void *desc, void **out) {
+	HRESULT hr = o_csrv(d, res, desc, out);
+	if (hr >= 0 && out && *out) { tab_lock(); tab_mettre(g_v_cle, g_v_val, *out, g_nous ? 0 : res); tab_unlock(); }   /* nos vues : jamais remplacees (adresse reutilisee) */
+	return hr;
+}
+static Crochet g_cr_dev[] = { {D_CreateSRV, (void *)h_csrv, (void **)&o_csrv}, {D_CreateTexture2D, (void *)h_ctex, (void **)&o_ctex}, {D_CreatePS, (void *)h_cps, (void **)&o_cps}, {27 /*CreateDeferredContext*/, (void *)h_cdef, (void **)&o_cdef} };
 static void reposer() {
 	noter_variantes();
 	for (auto &c : g_cr) if (g_vt_ctx[c.i] != c.f) { if (poser(g_vt_ctx, c.i, c.f, c.o)) { g_reposes++; if (c.i < 140) g_repose_i[c.i]++; } }
@@ -1406,6 +1491,7 @@ static void apres_image(void *sc) {
 		{ Ligne z; z.s("etage apres tone mapping : images avec les 3 ecrans "); z.i(g_ldr_img3); z.s(", images incompletes "); z.i(g_ldr_imgpas3); z.s(", autres cibles 8 bits ignorees "); z.i(g_ldr_saut); journal(z); }
 		Ligne u; u.s("TSC Textures (tri) : updates vers decor "); u.i(g_upd_decor); u.s(", dont boite partielle "); u.i(g_upd_boite_part); u.s(", niveaux >0 "); u.i(g_upd_niv);
 		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); u.s(" ; extraites "); u.i(g_vide_n); u.s(" ("); u.i(g_vide_octets >> 20); u.s(" Mo, formats refuses "); u.i(g_vide_refus); u.s(")"); journal(u);
+		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees "); x.i(g_hd_crees); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
 	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
 	static i64 n_total; n_total++;
@@ -1479,6 +1565,7 @@ extern "C" int scs_telemetry_init(unsigned version, const void *params) {
 	poser(g_vt_sc, S1_Present1, (void *)h_present1, (void **)&o_present1);
 	for (auto &c : g_cr) ok &= poser(g_vt_ctx, c.i, c.f, c.o);
 	poser_en_ligne(g_vt_ctx);
+	hd_lister();
 	g_hooks = 1;
 	logline(ok ? "crochets poses (Present, ResizeBuffers, cibles, effacements, viewports, dessins, Map, GetData)" : "certains crochets n'ont pas pu etre poses");
 	REL(ctx); REL(dev); REL(sc); DestroyWindow(fen);

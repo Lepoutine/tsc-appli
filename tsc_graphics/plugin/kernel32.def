@@ -17,3 +17,6 @@ CreateDirectoryA
 VirtualAlloc
 FlushInstructionCache
 GetCurrentProcess
+FindFirstFileA
+FindNextFileA
+FindClose
