@@ -39,3 +39,10 @@ stable a 1, 2 et 3 ecrans ; tests `tsc_graphics/tests` verts (parite Python/HLSL
 ## Objectif en cours
 Ecart restant (rendu 0.17 -> reel, juge sans detail, images jamais vues) reduit d'au moins 60 % (Mendy 04/11 16:57).
 Baseline juge v3 : en cours de mesure.
+
+## Savoir externe utilise (provenance, licence)
+| Source | Licence | Usage TSC |
+|---|---|---|
+| DINOv2 ViT-S/14 (Meta, LVD-142M), via timm | Apache 2.0 (commercial OK) | juge d'entrainement v0.8 seulement, gele ; jamais dans le jeu ni dans la mesure |
+| Kumari et al., CVPR 2022, vision-aided GAN | article public | methode du juge v0.8 |
+| Richter et al. 2021 (Intel), Enhancing Photorealism Enhancement | article public | justifie le guide G-buffer 0.18 + juge sur caracteristiques pre-entrainees |

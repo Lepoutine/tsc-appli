@@ -107,6 +107,20 @@ def test_hlsl_depot_compile_avec_guide():
             assert r.returncode == 0, r.stdout[-800:]
 
 
+def test_juge_vision_gele_et_gradient():
+    try:
+        import timm  # noqa
+    except ImportError:
+        return
+    import juge_vision as jv
+    J = jv.JugeVision()
+    x = torch.rand(2, 3, 96, 96, requires_grad=True)
+    jv.perte_generateur(J, x).backward()
+    assert x.grad.abs().sum() > 0                                  # le reseau TSC recoit bien un signal du juge
+    assert all(q.grad is None for q in J.dino.parameters())        # DINOv2 n'est jamais modifie
+    J.train(); assert not J.dino.training
+
+
 if __name__ == "__main__":
     for n, fn in list(globals().items()):
         if n.startswith("test_"):

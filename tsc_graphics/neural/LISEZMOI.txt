@@ -31,3 +31,12 @@ G-buffer (sRGB), la distance (log2(1+m)/10), les masques ciel et cabine de SON e
 enregistre = N, enr_effet = 1, enr_jeu8_seul = 2 (jeu8 + profondeur + albedo, sans hdr), puis neural_lire.py (fichiers
 iNNNNNN_<ecran>_jeu8.png / _prof.npy / _albedo.npy). --depart d'un reseau non guide possible (canaux du G-buffer a 0 au depart).
 10 % des morceaux sont appris sans G-buffer (vue sans copie). En jeu : vue = 4 montre le guide recu par chaque ecran.
+
+v0.8 (04/11) : JUGE VISION (--juge_vision <model.safetensors>). Le juge d'entrainement s'appuie sur DINOv2 ViT-S/14 (Meta, poids
+Apache 2.0, appris sur 142 millions d'images reelles), gele : seules 4 petites tetes TSC apprennent au-dessus de ses couches 2/5/8/11.
+Le petit juge PatchGAN ne connaissait que nos quelques centaines d'images ; le juge vision apporte le savoir du reel deja acquis.
+DINOv2 ne sert qu'a l'entrainement (jamais dans le jeu) et jamais a la mesure (le juge de mesure reste independant).
+Poids : https://huggingface.co/timm/vit_small_patch14_dinov2.lvd142m (fichier model.safetensors, ~88 Mo) ; venv : pip install timm safetensors.
+--poids_vision 1 (defaut), --patch 1 (0 = juge vision seul). Methode publiee : Kumari et al. CVPR 2022 (vision-aided GAN),
+Richter et al. 2021 (Intel, Enhancing Photorealism Enhancement : G-buffer + caracteristiques pre-entrainees).
+Tests : python tsc_graphics/tests/test_neural.py (parite Python/HLSL, guide, detail, compilation, juge vision).

@@ -140,6 +140,9 @@ def main():
     a.add_argument("--detail", type=float, default=6.0, help="v0.6 : poids qui garde l'energie du detail fin du jeu (run3/run4 lissaient ~43 %%)")
     a.add_argument("--detail_min", type=float, default=0.75, help="v0.6 : detail fin garde mini (sortie/jeu, images de test) pour devenir champion")
     a.add_argument("--guide", type=int, default=0, help="v0.7 : 1 = TSC Neural guide par le G-buffer (fichiers _prof.npy/_albedo.npy, plugin 0.18)")
+    a.add_argument("--juge_vision", default="", help="v0.8 : model.safetensors de timm/vit_small_patch14_dinov2.lvd142m (juge appuye sur DINOv2, Apache 2.0)")
+    a.add_argument("--poids_vision", type=float, default=1.0, help="v0.8 : poids du juge vision dans la perte du reseau")
+    a.add_argument("--patch", type=float, default=1.0, help="v0.8 : poids du petit juge PatchGAN (0 = juge vision seul)")
     a.add_argument("--variations", type=float, default=1.0, help="v0.5 : force des variations d'entree (exposition, gamma, teinte chaude/froide) ; 0 = aucune")
     o = a.parse_args()
     os.makedirs(o.sortie, exist_ok=True)
@@ -171,6 +174,12 @@ def main():
             w2 = torch.zeros_like(G.c1.weight); w2[:, : w.shape[1]] = w; sd["c1.weight"] = w2
         G.load_state_dict(sd)
     oG = torch.optim.Adam(G.parameters(), o.lr, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), o.lr * o.lr_juge, betas=(0.5, 0.99))
+    JV = None
+    if o.juge_vision:
+        import juge_vision
+        JV = juge_vision.JugeVision(o.juge_vision).to(appareil)
+        oJ = torch.optim.Adam([q for q in JV.parameters() if q.requires_grad], 2e-4 * o.lr_juge, betas=(0.5, 0.99))
+        print("juge vision DINOv2 actif (gele, 142 M images reelles ; seules les tetes TSC apprennent)")
     # v0.2.1 : moyenne glissante des poids (EMA) : c'est ELLE qui est jugee et exportee (run1 oscillait apres 6 000)
     Gm = copy.deepcopy(G).eval()
     for q in Gm.parameters(): q.requires_grad_(False)
@@ -201,8 +210,13 @@ def main():
         # discriminateur : reel = 1, jeu transforme = 0 (moindres carres)
         lD = ((D(r) - 1) ** 2).mean() + (D(y.detach()) ** 2).mean()
         oD.zero_grad(set_to_none=True); lD.backward(); oD.step()
+        if JV is not None:
+            lJ = juge_vision.perte_juge(JV, r, y.detach())
+            oJ.zero_grad(set_to_none=True); lJ.backward(); oJ.step()
         # generateur : tromper le juge, garder les contours et la scene du jeu
-        la = ((D(y) - 1) ** 2).mean()
+        la = o.patch * ((D(y) - 1) ** 2).mean()
+        if JV is not None:
+            la = la + o.poids_vision * juge_vision.perte_generateur(JV, y)
         ly, lx = lum(y), lum(x)
         ls = F.l1_loss(ly - flou(ly, 2), lx - flou(lx, 2) * 1.0) * 0.5 + F.l1_loss(flou(ly, 2) - flou(ly, 8), flou(lx, 2) - flou(lx, 8))
         li = F.l1_loss(flou(lum(y), 8), flou(lum(x), 8))
