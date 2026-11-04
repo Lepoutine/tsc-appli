@@ -37,6 +37,7 @@ Apache 2.0, appris sur 142 millions d'images reelles), gele : seules 4 petites t
 Le petit juge PatchGAN ne connaissait que nos quelques centaines d'images ; le juge vision apporte le savoir du reel deja acquis.
 DINOv2 ne sert qu'a l'entrainement (jamais dans le jeu) et jamais a la mesure (le juge de mesure reste independant).
 Poids : https://huggingface.co/timm/vit_small_patch14_dinov2.lvd142m (fichier model.safetensors, ~88 Mo) ; venv : pip install timm safetensors.
---poids_vision 1 (defaut), --patch 1 (0 = juge vision seul). Methode publiee : Kumari et al. CVPR 2022 (vision-aided GAN),
+--poids_vision 1 (defaut), --patch 1 (0 = juge vision seul).
+--cache 48 : reseau 2x plus large (PC haut de gamme), --depart d un reseau 24 sans changer sa sortie au depart ; cout GPU a mesurer en jeu. Methode publiee : Kumari et al. CVPR 2022 (vision-aided GAN),
 Richter et al. 2021 (Intel, Enhancing Photorealism Enhancement : G-buffer + caracteristiques pre-entrainees).
 Tests : python tsc_graphics/tests/test_neural.py (parite Python/HLSL, guide, detail, compilation, juge vision).

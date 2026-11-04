@@ -140,6 +140,7 @@ def main():
     a.add_argument("--detail", type=float, default=6.0, help="v0.6 : poids qui garde l'energie du detail fin du jeu (run3/run4 lissaient ~43 %%)")
     a.add_argument("--detail_min", type=float, default=0.75, help="v0.6 : detail fin garde mini (sortie/jeu, images de test) pour devenir champion")
     a.add_argument("--guide", type=int, default=0, help="v0.7 : 1 = TSC Neural guide par le G-buffer (fichiers _prof.npy/_albedo.npy, plugin 0.18)")
+    a.add_argument("--cache", type=int, default=24, help="v0.8 : neurones caches par couche (24 = ~1 ms ; 48 = PC haut de gamme, a mesurer en jeu)")
     a.add_argument("--juge_vision", default="", help="v0.8 : model.safetensors de timm/vit_small_patch14_dinov2.lvd142m (juge appuye sur DINOv2, Apache 2.0)")
     a.add_argument("--poids_vision", type=float, default=1.0, help="v0.8 : poids du juge vision dans la perte du reseau")
     a.add_argument("--patch", type=float, default=1.0, help="v0.8 : poids du petit juge PatchGAN (0 = juge vision seul)")
@@ -166,12 +167,13 @@ def main():
     tr = [charger(p, o.hauteur) for p in test_r]
     ref = torch.stack([stats(x[None].to(appareil)) for x in tr]).mean(0)
 
-    G, D = TSCNeural(guide=bool(o.guide)).to(appareil), Discriminateur().to(appareil)
+    G, D = TSCNeural(cache=o.cache, guide=bool(o.guide)).to(appareil), Discriminateur().to(appareil)
     if o.depart:
         sd = torch.load(o.depart, map_location=appareil, weights_only=True)["modele"]
         w = sd["c1.weight"]
         if w.shape[1] < G.c1.weight.shape[1]:   # v0.7 : depart d'un reseau non guide -> canaux du G-buffer a 0 au depart
-            w2 = torch.zeros_like(G.c1.weight); w2[:, : w.shape[1]] = w; sd["c1.weight"] = w2
+            w2 = torch.zeros(w.shape[0], *G.c1.weight.shape[1:], dtype=w.dtype); w2[:, : w.shape[1]] = w; sd["c1.weight"] = w2
+        sd = elargir(sd, G)
         G.load_state_dict(sd)
     oG = torch.optim.Adam(G.parameters(), o.lr, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), o.lr * o.lr_juge, betas=(0.5, 0.99))
     JV = None
@@ -263,6 +265,29 @@ def main():
                 dernier_champion = it
                 print("   -> nouveau champion, HLSL ecrit dans", o.sortie)
     print("fini. meilleur ecart", meilleur, "(jeu brut", base, ")")
+
+
+def elargir(sd, G):
+    """v0.8 : depart d'un reseau plus petit (ex. 24 -> 48 neurones) SANS changer sa sortie : les nouveaux neurones recoivent des
+    poids d'entree aleatoires mais des poids de sortie nuls ; ils n'agissent qu'une fois appris."""
+    cible = G.state_dict()
+    for k, v in list(sd.items()):
+        t = cible[k]
+        if v.shape == t.shape:
+            continue
+        n = t.clone()
+        if k.endswith("weight"):
+            nn_init = torch.randn_like(n) * 0.05
+            n.copy_(nn_init)
+            if k.startswith("c2") or k.startswith("c3"):
+                n[:, v.shape[1]:] = 0          # sorties des nouveaux neurones de la couche precedente = 0
+            n[: v.shape[0], : v.shape[1]] = v
+            if k.startswith("c3"):
+                n[:, v.shape[1]:] = 0
+        else:
+            n.zero_(); n[: v.shape[0]] = v
+        sd[k] = n
+    return sd
 
 
 def varier(x, gen, k):

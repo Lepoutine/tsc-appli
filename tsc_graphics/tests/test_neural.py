@@ -121,6 +121,20 @@ def test_juge_vision_gele_et_gradient():
     J.train(); assert not J.dino.training
 
 
+def test_elargir_garde_la_sortie():
+    import entrainer as E
+    a = reseau(False)
+    for cache, guide in [(48, True), (48, False)]:
+        sd = dict(a.state_dict()); b = TSCNeural(cache=cache, guide=guide); w = sd["c1.weight"]
+        if w.shape[1] < b.c1.weight.shape[1]:
+            w2 = torch.zeros(w.shape[0], *b.c1.weight.shape[1:]); w2[:, : w.shape[1]] = w; sd["c1.weight"] = w2
+        b.load_state_dict(E.elargir(sd, b)); b.eval()
+        e = torch.rand(1, 3, 24, 24); g = torch.rand(1, 6, 24, 24)
+        with torch.no_grad():
+            assert (a(e) - b(torch.cat([e, g], 1) if guide else e)).abs().max() < 1e-6
+        assert "float h1[48]" in exporter.code_hlsl(b)
+
+
 if __name__ == "__main__":
     for n, fn in list(globals().items()):
         if n.startswith("test_"):

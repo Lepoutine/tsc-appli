@@ -55,6 +55,6 @@ def ecrire(m, hlsl_entree, hlsl_sortie, note=""):
 
 if __name__ == "__main__":
     sd = torch.load(sys.argv[1], map_location="cpu", weights_only=True)["modele"]
-    m = TSCNeural(guide=sd["c1.weight"].shape[1] > N_ENTREES); m.load_state_dict(sd)
+    m = TSCNeural(cache=sd["c1.weight"].shape[0], guide=sd["c1.weight"].shape[1] > N_ENTREES); m.load_state_dict(sd)
     ecrire(m, sys.argv[2], sys.argv[3])
     print("HLSL ecrit :", sys.argv[3])
