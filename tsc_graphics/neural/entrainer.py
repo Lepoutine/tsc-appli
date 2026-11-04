@@ -73,7 +73,10 @@ class Banque:
             g = self.grp[gen.randrange(len(self.grp))]
             x = self.im[g[gen.randrange(len(g))]]
             k = gen.uniform(0.8, 1.25); t = min(int(self.t * k), x.shape[1], x.shape[2])
-            i = gen.randrange(x.shape[1] - t + 1); j = gen.randrange(x.shape[2] - t + 1)
+            for _ in range(10):   # v0.7 : images guidees -> morceaux pris hors cabine (canal 9 = masque cabine) : le reel n'a pas de cabine
+                i = gen.randrange(x.shape[1] - t + 1); j = gen.randrange(x.shape[2] - t + 1)
+                if x.shape[0] < 9 or float(x[8, i:i + t, j:j + t].mean()) < 0.1:
+                    break
             m = x[:, i:i + t, j:j + t]
             if t != self.t:
                 m = F.interpolate(m[None], size=(self.t, self.t), mode="bilinear", align_corners=False)[0]
