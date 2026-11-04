@@ -4,7 +4,7 @@
 # Images reelles : images extraites des videos de Mendy (jpg/png). Donnees privees : jamais publiees.
 # Regles : 10 % des images de chaque cote sont mises de cote (jamais vues a l'entrainement) pour juger ; un modele n'est
 # exporte que s'il bat le champion precedent sur ces images ; chaque version est gardee (retour arriere possible).
-import argparse, copy, glob, json, os, random, time
+import argparse, copy, glob, json, os, random, sys, time
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -200,6 +200,10 @@ def main():
     a.add_argument("--patch", type=float, default=1.0, help="v0.8 : poids du petit juge PatchGAN (0 = juge vision seul)")
     a.add_argument("--variations", type=float, default=1.0, help="v0.5 : force des variations d'entree (exposition, gamma, teinte chaude/froide) ; 0 = aucune")
     o = a.parse_args()
+    try:
+        sys.stdout.reconfigure(line_buffering=True)   # v0.8.3 : console redirigee vers un fichier ecrite en direct
+    except Exception:
+        pass
     os.makedirs(o.sortie, exist_ok=True)
     appareil = "cuda" if torch.cuda.is_available() else "cpu"
     print("appareil :", appareil, torch.cuda.get_device_name(0) if appareil == "cuda" else "")
