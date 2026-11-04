@@ -114,6 +114,7 @@ def main():
     a.add_argument("--lr", type=float, default=1e-4); a.add_argument("--ema", type=float, default=0.999)
     a.add_argument("--depart", default="", help="modele.pt a reprendre (apprentissage continu)")
     a.add_argument("--graine", type=int, default=1)
+    a.add_argument("--variations", type=float, default=1.0, help="v0.5 : force des variations d'entree (exposition, gamma, teinte chaude/froide) ; 0 = aucune")
     o = a.parse_args()
     os.makedirs(o.sortie, exist_ok=True)
     appareil = "cuda" if torch.cuda.is_available() else "cpu"
@@ -156,6 +157,8 @@ def main():
         if it - dernier_champion > o.arret and dernier_champion > 0:
             print(f"arret : pas de progres depuis {o.arret} iterations (champion a {dernier_champion})"); break
         x = BJ.lot(o.lot, gen).to(appareil); r = BR.lot(o.lot, gen).to(appareil)
+        if o.variations > 0:
+            x = varier(x, gen, o.variations)
         y = G(x)
         # discriminateur : reel = 1, jeu transforme = 0 (moindres carres)
         lD = ((D(r) - 1) ** 2).mean() + (D(y.detach()) ** 2).mean()
@@ -204,9 +207,35 @@ def main():
     print("fini. meilleur ecart", meilleur, "(jeu brut", base, ")")
 
 
+def varier(x, gen, k):
+    """v0.5 : en jeu (04/11), run3 a teinte la scene en orange-rouge des que l'entree changeait (profil de lumiere TSC, soleil bas) :
+    il n'avait vu qu'un eclairage. Chaque morceau du jeu est donc varie comme le ferait une autre heure ou un autre reglage
+    (exposition, gamma, lumiere plus chaude ou plus froide) ; les pertes comparent a l'entree VARIEE, donc le reseau apprend a
+    ne pas ajouter de dominante quelle que soit l'entree."""
+    out = []
+    for m in x:
+        g = 2 ** gen.uniform(-0.35 * k, 0.35 * k); ga = 2 ** gen.uniform(-0.2 * k, 0.2 * k)
+        ch = gen.uniform(-0.05, 0.05) * k                                   # + chaud (soleil bas), - froid (couvert)
+        t = torch.tensor([1 + ch, 1 + ch * 0.2, 1 - ch], device=m.device).view(3, 1, 1)
+        out.append((m.clamp_min(0) ** ga * g * t).clamp(0, 1))
+    return torch.stack(out)
+
+
+VARIANTES = [(1.0, 1.0, 0.0), (1.25, 1.0, 0.04), (0.8, 1.0, -0.04), (1.0, 0.85, 0.05)]   # neutre, plus clair et chaud, plus sombre et froid, soleil bas
+
+
 @torch.no_grad()
 def dominante(G, jeu, appareil):
-    """Derive moyenne de teinte (r-l, g-l, b-l) sur les pixels gris du jeu : 0 = pas de dominante ajoutee."""
+    """Derive de teinte (r-l, g-l, b-l) sur les pixels gris du jeu, PIRE des 4 variantes d'entree (v0.5) : 0 = pas de dominante ajoutee."""
+    pire = 0.0
+    for g, ga, ch in VARIANTES:
+        t = torch.tensor([1 + ch, 1 + ch * 0.2, 1 - ch]).view(3, 1, 1)
+        pire = max(pire, _dominante(G, [(x.clamp_min(0) ** ga * g * t).clamp(0, 1) for x in jeu], appareil))
+    return pire
+
+
+@torch.no_grad()
+def _dominante(G, jeu, appareil):
     s = torch.zeros(3); n = 0
     for x in jeu:
         x = x[None].to(appareil); y = G(x)

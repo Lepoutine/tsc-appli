@@ -13,3 +13,8 @@ Entrainement : adversarial (juge PatchGAN appris sur le reel) + garde des contou
    et tsc-graphics.hlsl avec les poids ; ce HLSL se pose a chaud dans plugins, puis libre4 = 1 dans l'ini (0 = coupe).
 5. Validation obligatoire en jeu : juge v2, garde-fou des tons, cabine, frametime median/p95, puis test a l'aveugle de Mendy.
 Cout estime : 12 lectures + ~1 000 multiplications par pixel, a mesurer (budget Mendy : 8-12 ms libres, GPU a 50 %).
+
+v0.5 (04/11) : en jeu, run3 (juge 1,20 hors jeu) a teinte la scene en orange-rouge des que l'entree changeait (profil de lumiere TSC,
+soleil bas) : il n'avait appris qu'un seul eclairage. --variations 1 (par defaut) varie chaque morceau du jeu (exposition, gamma,
+teinte chaude/froide) et la derive des gris d'un champion est la PIRE de 4 variantes d'entree. Toujours re-capturer les images du jeu
+avec la lumiere TSC et le profil actifs (actif = 1), a plusieurs heures, avant un nouvel entrainement.
