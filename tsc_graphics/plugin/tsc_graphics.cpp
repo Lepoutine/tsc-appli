@@ -63,7 +63,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.16.4"
+#define VERSION "tsc-graphics 0.16.5"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -264,6 +264,7 @@ static void trace_dessins() { if (g_trace && g_trace_dessins) { Ligne l; l.s("  
 enum { E_RIEN, E_GBUF, E_HDR };
 static int g_etape;                       /* ou en est la vue en cours */
 static void *g_hdr_tex, *g_vue_prof;      /* cible HDR et profondeur de la vue en cours (references gardees) */
+static void *g_gb_prof; static int g_prof_pret, g_instant_dem; static i64 g_n_instant;   /* 0.16.5 : copie de la profondeur a la fin du G-buffer */
 static int g_vues_image, g_vues_traitees; static i64 g_n_petites;  /* G-buffer de petites vues ignorees (sondes) */ /* vues vues / traitees sur l'image en cours */
 static int g_dans_gouttes; static i64 g_gouttes, g_gouttes_rapport;
 static float g_mouille = 0, g_amb_pluie = 0; static int g_pluie;
@@ -638,8 +639,11 @@ static void passe_vue(void *hdr, void *prof) {
 		((void (WINAPI *)(void *, void *, UINT, UINT, UINT, UINT, void *, UINT, const void *))VT(g_ctx)[C_CopySubresourceRegion])(g_ctx, g_coul, 0, 0, 0, 0, hdr, 0, 0);
 		((void (WINAPI *)(void *, void *))VT(g_ctx)[C_GenerateMips])(g_ctx, g_coul_srv);
 	} else ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_coul, hdr);
-	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
-	if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
+	if (!g_prof_pret) {   /* 0.16.5 : copie deja faite a la fin du G-buffer (instantane_vue) ; sinon comme avant */
+		((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, prof);
+		if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
+	}
+	g_prof_pret = 0;
 	if (g_enr_image) {   /* image d'enregistrement : le jeu tel quel, sans effet TSC */
 		vider_tex(g_coul, "hdr", g_vues_traitees); vider_tex(g_prof, "prof", g_vues_traitees);
 		if (gb2_ok) vider_tex(g_gb2, "albedo", g_vues_traitees);
@@ -782,11 +786,28 @@ static void quitter_vue() { REL(g_hdr_tex); REL(g_vue_prof); g_etape = E_RIEN; }
    (demarcation au joint centre/droite, ombres libre5 sans effet, enregistrements vides ; releve PC du 04/11). La vue est donc
    finie des que le jeu efface sa profondeur, son G-buffer ou sa cible HDR. */
 static i64 g_n_fin_eff;
+/* 0.16.5 : les entrees ClearDSV/ClearRTV de la table sont remises par le moteur (~150/s, releve 0.10.3) : le crochet de la 0.16.4
+   ne voyait aucun effacement (compteur 0, z=-1). On ne depend donc plus des effacements : la profondeur et l'albedo de chaque vue
+   sont COPIES des que la vue passe du G-buffer a l'eclairage HDR (geometrie finie, rien n'a encore pu les effacer). La passe TSC
+   utilise ensuite ces copies. Profondeur prise sur celle du G-buffer (meme taille), a defaut celle de l'etape HDR. */
 static void finir_avant_effacement(void *res) {
 	if (!res || g_etape != E_HDR || !g_hdr_tex) return;
 	if (res != g_vue_prof && res != g_gb2_tex && res != g_hdr_tex) return;
 	if (g_vue_prof && R.actif > 0.5f && g_effet_on > 0.5f && g_etat) passe_vue(g_hdr_tex, g_vue_prof);
 	quitter_vue(); g_n_fin_eff++;
+}
+static void instantane_vue(void *ctx) {
+	g_prof_pret = 0;
+	if (g_arret || !g_shaders_ok || !g_etat || R.actif <= 0.5f || g_effet_on <= 0.5f || !g_hdr_tex || !g_vue_prof) return;
+	void *src = g_vue_prof;
+	if (g_gb_prof && g_gb_prof != g_vue_prof) { TEX2D_DESC a, b; desc_tex(g_gb_prof, a); desc_tex(g_vue_prof, b); if (a.Width == b.Width && a.Height == b.Height && a.Format == b.Format) src = g_gb_prof; }
+	if (!copies_pretes(g_hdr_tex, src)) return;
+	g_nous++;
+	o_omsrt(ctx, 0, 0, 0);   /* plus rien de lie en sortie le temps de la copie ; le jeu relie ses cibles juste apres */
+	((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_prof, src);
+	if (g_gb2_valide) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
+	g_nous--;
+	g_prof_pret = 1; g_n_instant++;
 }
 
 /* ---------- crochets du contexte ---------- */
@@ -814,7 +835,8 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 		if (n >= 4 && rt0 && d0.Format == 10 && pt) {
 			quitter_vue();
 			if (grande) {
-				g_etape = E_GBUF; g_vues_image++;
+				g_etape = E_GBUF; g_vues_image++; g_prof_pret = 0;
+				REL(g_gb_prof); g_gb_prof = pt; ((UINT (WINAPI *)(void *))VT(pt)[1])(pt);
 				/* 0.7 : garder la cible 2 (albedo + masque du feuillage) de cette vue pour la couche vegetation */
 				REL(g_gb2_tex); g_gb2_tex = rtv[2] ? ressource(rtv[2]) : 0;
 			} else g_n_petites++;
@@ -826,6 +848,7 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 				g_etape = E_HDR; g_n_hdr++;
 				g_hdr_tex = rt0; ((UINT (WINAPI *)(void *))VT(rt0)[1])(rt0);
 				g_vue_prof = pt; ((UINT (WINAPI *)(void *))VT(pt)[1])(pt);
+				g_instant_dem = 1;
 			}
 		}
 		g_dans_gouttes = (rt0 && d0.Format == 31 /*R8G8B8A8_SNORM*/ && pt) ? 1 : 0;
@@ -836,6 +859,7 @@ static void WINAPI h_omsrt(void *ctx, UINT n, void *const *rtv, void *dsv) {
 			l.s("\r\n      profondeur "); dire_tex(l, pt); l.s(g_etape == E_GBUF ? "   [TSC : G-buffer]" : g_etape == E_HDR ? "   [TSC : HDR]" : ""); trace_txt(l);
 		}
 		REL(rt0); REL(pt);
+		if (g_instant_dem) { g_instant_dem = 0; instantane_vue(ctx); }
 	}
 	o_omsrt(ctx, n, rtv, dsv);
 }
@@ -1599,7 +1623,7 @@ static void apres_image(void *sc) {
 		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); u.s(" ; extraites "); u.i(g_vide_n); u.s(" ("); u.i(g_vide_octets >> 20); u.s(" Mo, formats refuses "); u.i(g_vide_refus); u.s(")"); journal(u);
 		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees (uniques) "); x.i(g_hd_crees); x.s(", reutilisees "); x.i(g_hd_reutil); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(", memoire HD "); x.i(g_hd_octets >> 20); x.s(" Mo / budget "); x.i((i64)R.hd_budget_mo); x.s(", hors budget "); x.i(g_hd_budget_refus); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
-	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_relister_vu < 0) g_relister_vu = R.textures_relister; else if (R.textures_relister != g_relister_vu) { g_relister_vu = R.textures_relister; hd_lister(); } if (g_dev) { compiler(); charger_lut(); } if ((int)R.vue > 0 && (int)R.vue < 4) g_vue = (int)R.vue; }
+	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_relister_vu < 0) g_relister_vu = R.textures_relister; else if (R.textures_relister != g_relister_vu) { g_relister_vu = R.textures_relister; hd_lister(); } if (g_dev) { compiler(); charger_lut(); } { static float vue_prec = -1; if (R.vue != vue_prec) { vue_prec = R.vue; int v = (int)R.vue; g_vue = v > 0 && v < 4 ? v : 0; } } }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
 	{ static float prec = -1; if (prec < 0) prec = R.enregistre; else if (R.enregistre != prec) { prec = R.enregistre; if (R.enregistre > 0) { g_enr_reste = (int)R.enregistre; g_enr_t = 0; Ligne l; l.s("TSC Neural : enregistrement de "); l.i(g_enr_reste); l.s(" images (une toutes les 2 s, sans effet)"); journal(l); } } }
@@ -1620,7 +1644,7 @@ static void apres_image(void *sc) {
 		Ligne l; l.s("mesure : "); l.f(1000.0 * g_n_img / (g_somme_ms > 0 ? g_somme_ms : 1), 1); l.s(" img/s, image moy "); l.f(g_somme_ms / g_n_img); l.s(" ms, pire ");
 		l.f(g_pire_ms); l.s(" ms, TSC CPU (profileur compris) "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
 		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
-		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; ambiance pluie "); l.f(g_amb_pluie); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" ; vues finies avant effacement "); l.i(g_n_fin_eff); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
+		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; ambiance pluie "); l.f(g_amb_pluie); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" ; vues finies avant effacement "); l.i(g_n_fin_eff); l.s(" ; profondeurs copiees fin G-buffer "); l.i(g_n_instant); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
 		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
 		prof_rapport(l, g_n_img);
 		journal(l);
@@ -1629,7 +1653,7 @@ static void apres_image(void *sc) {
 			if (c > R.budget_ms && g_qualite > 0.4f) { g_qualite *= 0.85f; if (g_qualite < 0.4f) g_qualite = 0.4f; Ligne b; b.s("budget : TSC GPU "); b.f(c, 2); b.s(" ms > "); b.f(R.budget_ms, 2); b.s(" ms -> qualite "); b.f(g_qualite, 2); journal(b); }
 			else if (c < R.budget_ms * 0.6 && g_qualite < 1) { g_qualite *= 1.05f; if (g_qualite > 1) g_qualite = 1; }
 		}
-		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_fin_eff = 0; g_n_petites = 0; g_n_omsrt = g_n_dessins = 0;
+		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_fin_eff = 0; g_n_instant = 0; g_n_petites = 0; g_n_omsrt = g_n_dessins = 0;
 	}
 	if (g_trace) {
 		if (--g_trace == 0) { Ligne l; l.s("=== fin de la trace ==="); trace_txt(l); ecrire("tsc-graphics-trace.log", g_tbuf, g_tn); logline("trace ecrite dans tsc-graphics-trace.log"); }
