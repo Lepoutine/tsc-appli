@@ -172,16 +172,22 @@ float4 route(VSO i) {
 float lum(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 // 0.9.1 : en 0.8 chaque vue calculait sa propre moyenne -> l'ecran de droite (contre-jour, plus sombre) etait eclairci et
 // sature bien plus que le centre, d'ou des coupures aux montants. Toutes les vues utilisent maintenant la meme reference.
-float lm_propre() {
-	float s = 0;
-	[unroll] for (int y = 0; y < 4; y++) [unroll] for (int x = 0; x < 4; x++) s += lum(tCouleur.SampleLevel(sLin, float2(0.125 + x * 0.25, 0.125 + y * 0.25), max(p5.w - 1, 0)).rgb);
-	return max(s / 16, 1e-4);
-}
 // 0.15.2 : reference de lumiere toujours finie (une valeur infinie ou NaN dans la vue du jeu passe par les mips et contaminait la brume au sol)
 // test sur les bits (exposant plein = infini ou NaN) : le compilateur optimise ne peut pas le supprimer, contrairement a isnan
 bool fini3(float3 c) { return all((asuint(c) & 0x7f800000u) != 0x7f800000u); }
 bool fini1(float x) { return (asuint(x) & 0x7f800000u) != 0x7f800000u; }
-float lm_vue() { float l = p15.y > 0.5 ? tLm.Load(int3(0, 0, 0)) : lm_propre(); return fini1(l) ? clamp(l, 1e-4, 1e4) : 1.0; }
+float lm_propre() {
+	float s = 0;
+	// 0.16.3 : chaque echantillon est borne et un echantillon non fini est ignore : au passage menu -> jeu, les niveaux reduits de la
+	// copie HDR peuvent contenir des valeurs enormes (finies) ; la reference devenait geante, la brume au sol peignait le bas des
+	// ecrans lateraux en gris uni et la sortie trop claire etait gardee par le bloom / l'exposition du jeu (trame cabine 46 %).
+	[unroll] for (int y = 0; y < 4; y++) [unroll] for (int x = 0; x < 4; x++) {
+		float e = lum(tCouleur.SampleLevel(sLin, float2(0.125 + x * 0.25, 0.125 + y * 0.25), max(p5.w - 1, 0)).rgb);
+		s += fini1(e) ? clamp(e, 0, 16) : 0;
+	}
+	return max(s / 16, 1e-4);
+}
+float lm_vue() { float l = p15.y > 0.5 ? tLm.Load(int3(0, 0, 0)) : lm_propre(); return fini1(l) ? clamp(l, 1e-4, 16) : 0.25; }   // 0.16.3 : 16 au lieu de 1e4
 float4 ps_lm(VSO i) : SV_Target { return lm_propre(); }
 // ---------- 0.15 : occlusion par horizons (facon HBAO/GTAO, ecrite pour TSC) ----------
 // Pour 3 directions tournees par pixel, on cherche de chaque cote le point le plus « haut » au-dessus du plan de la surface
@@ -460,7 +466,9 @@ float3 meteo(float2 uv, float3 c, float lm, float nuit) {
 		float f = min(1 - exp(-dens * integ), 0.85) * saturate((z - 3) / 20);
 		float3 coul = lm * float3(0.93, 0.97, 1.02) * lerp(1.25, 0.6, nuit);
 		float3 diff = tCouleur.SampleLevel(sLin, uv, min(5, p5.w)).rgb;        // la nuit, la brume prend la lumiere des phares et lampadaires
-		coul += max(diff - lm, 0) * 0.5 * nuit;
+		if (!fini3(diff)) diff = lm;
+		coul += min(max(diff - lm, 0), lm * 8) * 0.5 * nuit;
+		coul = min(coul, max(lm * 4, lum(c) * 2));                           // 0.16.3 : la brume ne peut pas etre plus claire que la scene
 		if (f > 0 && fini3(coul)) c = lerp(c, coul, f);   // 0.15.2 : jamais 0 x infini (trame noir/blanc vue sur la cabine)
 	}
 	// 3) rideau de pluie : 3 couches (4, 11, 30 m), visibles seulement devant le decor plus lointain, eclairees par la lumiere locale
@@ -551,7 +559,7 @@ float4 ps_principal(VSO i) : SV_Target {
 	f = lerp(v, f, saturate(p6.x)); if (!fini3(f)) f = v;
 	w = optique(i.uv, f); if (fini3(w)) f = w;
 	// garde-fou : notre passe ne fait jamais apparaitre une lumiere enorme la ou le jeu n'en a pas (boucle avec l'exposition du jeu)
-	f = min(max(f, 0), max(src * 8, lm * 64));
+	f = min(max(f, 0), max(src * 8, lm * 16));   // 0.16.3 : lm borne a 16, plafond lm x 16 au lieu de x 64
 	return float4(min(f, 65504), r.a);
 }
 
