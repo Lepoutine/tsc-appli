@@ -114,6 +114,8 @@ def main():
     a.add_argument("--lr", type=float, default=1e-4); a.add_argument("--ema", type=float, default=0.999)
     a.add_argument("--depart", default="", help="modele.pt a reprendre (apprentissage continu)")
     a.add_argument("--graine", type=int, default=1)
+    a.add_argument("--detail", type=float, default=6.0, help="v0.6 : poids qui garde l'energie du detail fin du jeu (run3/run4 lissaient ~43 %%)")
+    a.add_argument("--detail_min", type=float, default=0.75, help="v0.6 : detail fin garde mini (sortie/jeu, images de test) pour devenir champion")
     a.add_argument("--variations", type=float, default=1.0, help="v0.5 : force des variations d'entree (exposition, gamma, teinte chaude/froide) ; 0 = aucune")
     o = a.parse_args()
     os.makedirs(o.sortie, exist_ok=True)
@@ -180,21 +182,27 @@ def main():
         # et le 1er centile ne descend pas sous 60 % de celui du jeu
         nb = ((0.12 - lx) / 0.12).clamp(0, 1)
         lb = (nb * (y - x).abs()).sum() / nb.sum().clamp_min(1) / 3 + F.relu(0.6 * lx.flatten(1).quantile(0.01, 1) - ly.flatten(1).quantile(0.01, 1)).mean() * 10
-        lG = la + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln + o.hautes * lh + o.noirs * lb
+        # v0.6 : energie du detail fin (passe-haut r=1 et bande r=1..4) gardee >= 90 % de celle du jeu, image par image
+        hy, hx = (ly - flou(ly, 1)).abs().mean((1, 2, 3)), (lx - flou(lx, 1)).abs().mean((1, 2, 3)).clamp_min(1e-4)
+        my, mx2 = (flou(ly, 1) - flou(ly, 4)).abs().mean((1, 2, 3)), (flou(lx, 1) - flou(lx, 4)).abs().mean((1, 2, 3)).clamp_min(1e-4)
+        ld = F.relu(0.9 - hy / hx).mean() + F.relu(0.9 - my / mx2).mean()
+        lG = la + o.detail * ld + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln + o.hautes * lh + o.noirs * lb
         oG.zero_grad(set_to_none=True); lG.backward(); oG.step()
         with torch.no_grad():
             for pm, pg in zip(Gm.parameters(), G.parameters()): pm.lerp_(pg, 1 - o.ema)
         if it % 200 == 0:
-            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} hautes {lh.item():.4f} noirs {lb.item():.4f} {time.time() - t0:.0f} s"
+            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} detail {ld.item():.4f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} hautes {lh.item():.4f} noirs {lb.item():.4f} {time.time() - t0:.0f} s"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
         if it % 2000 == 0 or it == o.iterations:
-            e = ecart(Gm, tj, ref, appareil); dom = dominante(Gm, tj, appareil)
+            e = ecart(Gm, tj, ref, appareil); dom = dominante(Gm, tj, appareil); det = detail_garde(Gm, tj, appareil)
             nom = os.path.join(o.sortie, f"modele_{it:06d}.pt")
             torch.save({"modele": Gm.state_dict(), "ecart": e, "iteration": it}, nom)
-            ligne = f"== {it} : ecart au reel {e:.4f} = {pct(e):.0f} % restant (objectif <= 10 %) ; derive des gris {dom:.4f} (max {o.dominante_max}) ; jeu brut {base:.4f}, meilleur {meilleur:.4f}"
+            ligne = f"== {it} : ecart au reel {e:.4f} = {pct(e):.0f} % restant (objectif <= 10 %) ; derive des gris {dom:.4f} (max {o.dominante_max}) ; detail garde {det:.2f} (min {o.detail_min}) ; jeu brut {base:.4f}, meilleur {meilleur:.4f}"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
             if dom > o.dominante_max:
                 print("   -> refuse : dominante de couleur sur les gris du jeu")
+            elif det < o.detail_min:
+                print("   -> refuse : detail fin lisse (arbres peints, panneaux flous)")
             elif e < meilleur:
                 meilleur = e
                 torch.save({"modele": Gm.state_dict(), "ecart": e, "iteration": it}, os.path.join(o.sortie, "champion.pt"))
@@ -219,6 +227,16 @@ def varier(x, gen, k):
         t = torch.tensor([1 + ch, 1 + ch * 0.2, 1 - ch], device=m.device).view(3, 1, 1)
         out.append((m.clamp_min(0) ** ga * g * t).clamp(0, 1))
     return torch.stack(out)
+
+
+@torch.no_grad()
+def detail_garde(G, jeu, appareil):
+    """v0.6 : mediane sur les images de test du rapport d'energie passe-haut (r=1) sortie / jeu ; 1 = detail intact."""
+    r = []
+    for x in jeu:
+        x = x[None].to(appareil); y = G(x); ly, lx = lum(y), lum(x)
+        r.append(float((ly - flou(ly, 1)).abs().mean() / (lx - flou(lx, 1)).abs().mean().clamp_min(1e-4)))
+    return float(np.median(r)) if r else 1.0
 
 
 VARIANTES = [(1.0, 1.0, 0.0), (1.25, 1.0, 0.04), (0.8, 1.0, -0.04), (1.0, 0.85, 0.05)]   # neutre, plus clair et chaud, plus sombre et froid, soleil bas

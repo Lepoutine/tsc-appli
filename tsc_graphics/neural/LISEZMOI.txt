@@ -18,3 +18,7 @@ v0.5 (04/11) : en jeu, run3 (juge 1,20 hors jeu) a teinte la scene en orange-rou
 soleil bas) : il n'avait appris qu'un seul eclairage. --variations 1 (par defaut) varie chaque morceau du jeu (exposition, gamma,
 teinte chaude/froide) et la derive des gris d'un champion est la PIRE de 4 variantes d'entree. Toujours re-capturer les images du jeu
 avec la lumiere TSC et le profil actifs (actif = 1), a plusieurs heures, avant un nouvel entrainement.
+
+v0.6 (04/11) : run3 et run4 lissaient le detail fin (~43 %, arbres "peints", panneaux flous) alors que le juge v2 les trouvait
+meilleurs. Ajout : perte --detail (6) qui garde >= 90 % de l'energie passe-haut (r=1) et de la bande r=1..4 du jeu, image par
+image ; et garde-fou de champion --detail_min (0,75) : un modele qui lisse ne peut plus devenir champion.
