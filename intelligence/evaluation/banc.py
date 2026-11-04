@@ -232,7 +232,10 @@ def son_juge_reel(rng):
         L = int(rng.uniform(4.0, 6.0) * sr)
         d = int(rng.integers(0, max(1, len(x) - L)))
         E = Jp.empreinte(mod, x[d:d + L], sr)[0]
-        m = I.entrainer([t for t in sons if t["cle"] != s["cle"]])  # appris sans ce son
+        # appris sans ce son ni AUCUN son du même camion (les segments sont tirés des vidéos complètes : sinon
+        # le juge reconnaîtrait l'enregistrement au lieu de juger le réalisme)
+        tete = s["cle"].split("/")[-1].split("_")[1] if s["reel"] else None
+        m = I.entrainer([t for t in sons if t["cle"] != s["cle"] and not (tete and tete in t["cle"])])
         sc = I.realisme(m, E)
         res.append((s["cle"], s["reel"], sc))
     ok = all((sc > 0) == bool(y) for _, y, sc in res)

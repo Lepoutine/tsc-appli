@@ -138,6 +138,25 @@ def lire_wav(chemin):
     return x.reshape(-1, nc).mean(axis=1), sr
 
 
+def lire_audio(chemin):
+    """WAV en NumPy pur ; OGG, OGA, FLAC, MP3 par soundfile (libsndfile) s'il est installé."""
+    if chemin.lower().endswith(".wav"):
+        try:
+            return lire_wav(chemin)
+        except (ValueError, wave.Error):
+            pass
+    try:
+        import soundfile as sf
+        x, sr = sf.read(chemin, dtype="float32", always_2d=True)
+        return x.mean(axis=1), sr
+    except Exception:  # Opus et formats que libsndfile ne lit pas : décodage par ffmpeg (paquet imageio-ffmpeg)
+        import subprocess
+        import imageio_ffmpeg
+        b = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-i", chemin, "-ac", "1", "-ar", "48000", "-f", "f32le", "-"],
+                           capture_output=True, check=True).stdout
+        return np.frombuffer(b, "<f4").copy(), 48000
+
+
 def reechantillonne(x, sr, cible=SR):
     """Rééchantillonnage par FFT (coupure nette à la nouvelle fréquence de Nyquist)."""
     if sr == cible:
@@ -220,15 +239,20 @@ def charger(chemin, verifier_md5=True):
     return Cnn14(lire_pth(chemin))
 
 
-def empreinte(modele, x, sr, fenetre_s=4.0, pas_s=2.0):
-    """Empreintes sur des fenêtres glissantes (même durée pour tous : comparer à contenu semblable)."""
-    x = reechantillonne(x, sr)
-    L, P = int(fenetre_s * SR), int(pas_s * SR)
+def empreinte(modele, x, sr, fenetre_s=4.0, pas_s=2.0, max_fenetres=None):
+    """Empreintes sur des fenêtres glissantes (même durée pour tous : comparer à contenu semblable).
+    max_fenetres : pour un long enregistrement, fenêtres réparties régulièrement sur toute sa durée.
+    Chaque fenêtre est rééchantillonnée seule (un enregistrement de 25 min n'est jamais transformé d'un bloc)."""
+    x = np.asarray(x, np.float32)
+    L, P = int(round(fenetre_s * sr)), int(round(pas_s * sr))
     if len(x) < L:
         x = np.pad(x, (0, L - len(x)))
+    debuts = list(range(0, len(x) - L + 1, P))
+    if max_fenetres and len(debuts) > max_fenetres:
+        debuts = [debuts[int(i)] for i in np.linspace(0, len(debuts) - 1, max_fenetres)]
     E, Pr = [], []
-    for d in range(0, len(x) - L + 1, P):
-        e, p = modele(x[d:d + L])
+    for d in debuts:
+        e, p = modele(reechantillonne(x[d:d + L], sr))
         E.append(e)
         Pr.append(p)
     return np.array(E), np.array(Pr)
