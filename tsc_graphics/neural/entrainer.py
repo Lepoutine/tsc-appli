@@ -53,19 +53,63 @@ class Banque:
     """Images gardees en memoire (RAM), tirage de morceaux aleatoires a echelle variable.
     groupes > 0 : les images sont rangees en groupes de scenes (couleur moyenne + luminosite, k-moyennes) et chaque groupe
     est tire aussi souvent que les autres (v0.2 : 1er essai teinte vert-jaune car les videos sont surtout de la foret)."""
-    def __init__(self, chemins, hauteur, t, groupes=0, guide=False):
-        self.im = [charger(p, hauteur) for p in chemins] if not guide else [m for m in (charger_jeu(p, True) for p in chemins) if m is not None]
-        self.t = t
+    def __init__(self, chemins, hauteur, t, groupes=0, guide=False, max_ram=0):
+        # v0.8.2 : images gardees en 8 bits (4x moins de RAM ; guidees en 16 bits) et, si max_ram > 0, seulement max_ram images
+        # en memoire a la fois, renouvelees par petites parts (renouveler) : 10 000 images Panoramax ne tiennent pas en RAM.
+        self.chemins, self.hauteur, self.guide, self.t = list(chemins), hauteur, guide, t
+        self.max_ram = max_ram if 0 < max_ram < len(self.chemins) else 0
+        self.reserve = random.Random(7)
+        depart = self.reserve.sample(self.chemins, self.max_ram) if self.max_ram else self.chemins
+        self.im, self.de = [], []
+        for p in depart:
+            x = self._lire(p)
+            if x is not None:
+                self.im.append(x); self.de.append(p)
+        self.c = None
         self.grp = [list(range(len(self.im)))]
         if groupes > 1 and len(self.im) >= groupes * 3:
-            f = torch.stack([torch.cat([x.mean((1, 2)), x.std((1, 2))]) for x in self.im])
+            f = torch.stack([self._signature(x) for x in self.im])
             c = f[torch.randperm(len(f), generator=torch.Generator().manual_seed(0))[:groupes]].clone()
             for _ in range(30):
                 a = torch.cdist(f, c).argmin(1)
                 c = torch.stack([f[a == k].mean(0) if (a == k).any() else c[k] for k in range(groupes)])
-            self.grp = [torch.nonzero(a == k).flatten().tolist() for k in range(groupes)]
-            self.grp = [g for g in self.grp if g]
+            self.c = c
+            self._regrouper()
             print("groupes de scenes reelles :", [len(g) for g in self.grp])
+
+    def _lire(self, p):
+        if self.guide:
+            x = charger_jeu(p, True)
+            return None if x is None else x.half()
+        return (charger(p, self.hauteur) * 255 + 0.5).to(torch.uint8)
+
+    @staticmethod
+    def _f(x):
+        return x.float() / 255 if x.dtype == torch.uint8 else x.float()
+
+    def _signature(self, x):
+        x = self._f(x)[:3]
+        return torch.cat([x.mean((1, 2)), x.std((1, 2))])
+
+    def _regrouper(self):
+        if self.c is None:
+            return
+        a = torch.cdist(torch.stack([self._signature(x) for x in self.im]), self.c).argmin(1)
+        self.grp = [g for g in (torch.nonzero(a == k).flatten().tolist() for k in range(len(self.c))) if g]
+
+    def renouveler(self, part=0.05):
+        """Remplace une part des images en memoire par d'autres images du dossier (seulement si max_ram)."""
+        if not self.max_ram:
+            return
+        hors = list(set(self.chemins) - set(self.de))
+        for _ in range(max(1, int(len(self.im) * part))):
+            if not hors:
+                break
+            p = hors.pop(self.reserve.randrange(len(hors)))
+            x = self._lire(p)
+            if x is not None:
+                k = self.reserve.randrange(len(self.im)); self.im[k] = x; self.de[k] = p
+        self._regrouper()
 
     def lot(self, n, gen):
         out = []
@@ -77,7 +121,7 @@ class Banque:
                 i = gen.randrange(x.shape[1] - t + 1); j = gen.randrange(x.shape[2] - t + 1)
                 if x.shape[0] < 9 or float(x[8, i:i + t, j:j + t].mean()) < 0.1:
                     break
-            m = x[:, i:i + t, j:j + t]
+            m = self._f(x[:, i:i + t, j:j + t])
             if t != self.t:
                 m = F.interpolate(m[None], size=(self.t, self.t), mode="bilinear", align_corners=False)[0]
             if gen.random() < 0.5:
@@ -140,6 +184,7 @@ def main():
     a.add_argument("--detail", type=float, default=6.0, help="v0.6 : poids qui garde l'energie du detail fin du jeu (run3/run4 lissaient ~43 %%)")
     a.add_argument("--detail_min", type=float, default=0.75, help="v0.6 : detail fin garde mini (sortie/jeu, images de test) pour devenir champion")
     a.add_argument("--guide", type=int, default=0, help="v0.7 : 1 = TSC Neural guide par le G-buffer (fichiers _prof.npy/_albedo.npy, plugin 0.18)")
+    a.add_argument("--reel_ram", type=int, default=0, help="v0.8.2 : nb maxi d'images reelles en memoire (0 = toutes), renouvelees 5 %% toutes les 500 iterations")
     a.add_argument("--cache", type=int, default=24, help="v0.8 : neurones caches par couche (24 = ~1 ms ; 48 = PC haut de gamme, a mesurer en jeu)")
     a.add_argument("--juge_vision", default="", help="v0.8 : model.safetensors de timm/vit_small_patch14_dinov2.lvd142m (juge appuye sur DINOv2, Apache 2.0)")
     a.add_argument("--poids_vision", type=float, default=1.0, help="v0.8 : poids du juge vision dans la perte du reseau")
@@ -161,7 +206,7 @@ def main():
     print(f"images jeu {len(train_j)} (+{nj} test), reel {len(train_r)} (+{nr} test)")
     if o.guide:
         test_j = [p for p in test_j if charger_jeu(p, True) is not None]
-    BJ, BR = Banque(train_j, 0, o.taille, guide=bool(o.guide)), Banque(train_r, o.hauteur, o.taille, groupes=o.groupes)
+    BJ, BR = Banque(train_j, 0, o.taille, guide=bool(o.guide)), Banque(train_r, o.hauteur, o.taille, groupes=o.groupes, max_ram=o.reel_ram)
     tj = [charger_jeu(p, bool(o.guide)) for p in test_j]
     print(f"images jeu gardees : {len(BJ.im)} entrainement, {len(tj)} test" + (" (guidees G-buffer)" if o.guide else ""))
     tr = [charger(p, o.hauteur) for p in test_r]
@@ -200,6 +245,8 @@ def main():
     for it in range(1, o.iterations + 1):
         if it - dernier_champion > o.arret and dernier_champion > 0:
             print(f"arret : pas de progres depuis {o.arret} iterations (champion a {dernier_champion})"); break
+        if o.reel_ram and it % 500 == 0:
+            BR.renouveler()
         xg = BJ.lot(o.lot, gen).to(appareil); r = BR.lot(o.lot, gen).to(appareil)
         x = xg[:, :3]
         if o.variations > 0:
