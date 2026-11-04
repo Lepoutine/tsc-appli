@@ -62,6 +62,77 @@ def wavs(racine, sous):
     return sorted(f for f in os.listdir(d) if f.lower().endswith((".wav", ".flac"))) if os.path.isdir(d) else []
 
 
+CABINE = re.compile(r"blinker|wiper|window|stick|horn|light|warning|richting|alarm|reverse|keys|lift_switch|sw_down|"
+                    r"trailer_cables|low_air_warn|r.ckfahr", re.I)
+
+
+def mes_sons(racine):
+    """Chemins des sons de Mes_sons : INDEX.txt (liste complete faite sur le PC) sinon le disque."""
+    idx = os.path.join(racine, "Mes_sons", "INDEX.txt")
+    vus = []
+    if os.path.isfile(idx):
+        for l in open(idx, encoding="utf-8-sig"):
+            c = [x.strip() for x in l.split("|")]
+            if len(c) >= 2 and not c[0].startswith("#") and re.search(r"\.(wav|ogg|mp3|flac|m4a)$", c[1], re.I):
+                vus.append("Mes_sons/%s/%s" % (c[0], c[1]))
+    base = os.path.join(racine, "Mes_sons")
+    if os.path.isdir(base):
+        for d in sorted(os.listdir(base)):
+            for f in wavs(racine, "Mes_sons/" + d):
+                if "Mes_sons/%s/%s" % (d, f) not in vus:
+                    vus.append("Mes_sons/%s/%s" % (d, f))
+    return vus
+
+
+def classer(dossier, f):
+    """(role, regime, note) d'un son de Mes_sons. Un seul moteur joue dans le simulateur : le V8 de Mendy
+    (boucles reparees). Les couches des autres moteurs sont en Reference, avec leur regime : on les essaie
+    en changeant leur role."""
+    b = f.rsplit(".", 1)[0]
+    m = re.search(r"(\d{3,4})", b)
+    rpm = int(m.group(1)) if m and 400 <= int(m.group(1)) <= 2600 else 0
+    bl = b.lower()
+    if dossier == "boucles_reparees":
+        if b.startswith("c_") and rpm > 500:
+            return "charge", rpm, "couche moteur (ton mod V8 v2, boucle reparee)"
+        if b.startswith("t_"):
+            return "turbo", 0, "turbo (ton mod V8 v2)"
+        if b.startswith("f_"):
+            return "frein_moteur", 0, "frein moteur en boucle (ton mod V8 v2)"
+        return "autre", rpm, "boucle reparee (echappement par regime ou variante) : role a choisir"
+    if dossier == "Apercus_v2":
+        return "autre", 0, "ancien apercu"
+    if dossier == "Telechargements":
+        return "reference", 0, "son telecharge, a decouper si utile"
+    if dossier in ("Klaxons", "Alertes_et_commodos") or CABINE.search(bl):
+        if "parking_brake" in bl:
+            return "frein_parc", 0, "frein de parc (" + dossier + ")"
+        return "autre", 0, "son de cabine ou klaxon (hors moteur)"
+    if dossier == "Scania_V8_open_pipe_v2" and b in V8_EFFETS:
+        return V8_EFFETS[b], 0, "ton mod V8 v2"
+    if dossier == "Scania_NG_effets" and b in NG:
+        return NG[b], 0, "effet Scania NG"
+    if dossier == "MAN_TGX_2020" and b in MAN:
+        return MAN[b], 0, "effet MAN TGX 2020"
+    quoi = {"Scania_V8_open_pipe_v2": "ton mod V8 v2", "Scania_R770_clapet": "mod Scania R770 clapet",
+            "MAN_TGX_2020": "MAN TGX 2020", "Scania_NG_effets": "Scania NG"}.get(dossier, dossier)
+    if "claquant" in bl:
+        return "claquement", 0, "claquement (" + quoi + ")"
+    if re.search(r"(^|_)gear|air_gear|clunk", bl):
+        return "boite_air", 0, "passage de rapport (" + quoi + ")"
+    if "parking_brake" in bl or bl.startswith(("hb_", "int_hb")):
+        return "frein_parc", 0, "frein de parc (" + quoi + ")"
+    if "retarder" in bl or "exhaust brake" in bl or "eb shift" in bl or bl.endswith("eb"):
+        return "frein_moteur", 0, "frein moteur / ralentisseur (" + quoi + ")"
+    if "valve" in bl:
+        return "clapet_on", 0, "ouverture du clapet (" + quoi + ")"
+    if "souffle" in bl or "bov" in bl:
+        return "autre", rpm, "souffle de turbo (" + quoi + ")"
+    if dossier == "Scania_V8_open_pipe_v2":
+        return "autre", rpm, "version brute du mod V8 v2 (la boucle reparee est dans boucles_reparees)"
+    return "reference", rpm, "couche ou son moteur (" + quoi + ")" + (" a %d tr/min" % rpm if rpm else "") + " : change son role pour l'essayer"
+
+
 def construire(racine):
     S = []
     seg = "expert_son/segments_reels"
@@ -74,36 +145,10 @@ def construire(racine):
         S.append(entree("expert_son/apercu_v8/" + f, "reference", 0, note + " · candidat ralenti"))
     for f in wavs(racine, "expert_son/videos_completes"):
         S.append(entree("expert_son/videos_completes/" + f, "reference", 0, "son complet de la vidéo : choisis un passage puis « Extraire le passage »"))
-    br = "Mes_sons/boucles_reparees"
-    for f in wavs(racine, br):
-        b = f[:-4]
-        m = re.search(r"(\d{3,4})", b)
-        rpm = int(m.group(1)) if m else 0
-        if b.startswith("c_") and rpm and rpm > 500:
-            S.append(entree(br + "/" + f, "charge", rpm, "couche moteur (ton mod V8 v2, boucle réparée)", boucle=True))
-        elif b.startswith("t_"):
-            S.append(entree(br + "/" + f, "turbo", 0, "turbo (ton mod V8 v2)", boucle=True))
-        elif b.startswith("f_"):
-            S.append(entree(br + "/" + f, "frein_moteur", 0, "frein moteur en boucle (ton mod V8 v2)", boucle=True))
-        else:
-            S.append(entree(br + "/" + f, "autre", rpm, "boucle réparée (échappement par régime ou variante) : rôle à choisir"))
-    v8 = "Mes_sons/Scania_V8_open_pipe_v2"
-    for f in wavs(racine, v8):
-        b = f[:-4]
-        if b in V8_EFFETS:
-            S.append(entree(v8 + "/" + f, V8_EFFETS[b], 0, "ton mod V8 v2"))
-        elif b.startswith("claquant"):
-            S.append(entree(v8 + "/" + f, "claquement", 0, "claquement (ton mod V8 v2)"))
-        elif b.startswith("gear"):
-            S.append(entree(v8 + "/" + f, "boite_air", 0, "passage de rapport (ton mod V8 v2)"))
-        else:
-            m = re.search(r"(\d{3,4})", b)
-            S.append(entree(v8 + "/" + f, "autre", int(m.group(1)) if m else 0, "version brute du mod V8 v2 (la boucle réparée est dans boucles_reparees)"))
-    for sous, table, quoi in (("Mes_sons/Scania_NG_effets", NG, "Scania NG"), ("Mes_sons/MAN_TGX_2020", MAN, "MAN TGX 2020")):
-        for f in wavs(racine, sous):
-            b = f[:-4]
-            r = table.get(b) or ("boite_air" if b.startswith(("gear", "air_gear")) else "autre")
-            S.append(entree(sous + "/" + f, r, 0, "effet " + quoi))
+    for chem in mes_sons(racine):
+        dossier, f = chem.split("/")[1], chem.split("/")[-1]
+        r, rpm, note = classer(dossier, f)
+        S.append(entree(chem, r, rpm, note, boucle=True if r in ("charge", "turbo") else None))
     return {"format": "tsc_forge_pack", "version": 1, "nom": "Tous mes sons TSC", "dossier": "TSC_Sound_Forge",
             "avertissement": "rôles proposés d'après les noms et les mesures : c'est l'écoute de Mendy qui tranche",
             "sons": S}
