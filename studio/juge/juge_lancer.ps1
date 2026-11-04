@@ -6,9 +6,14 @@
 param(
   [string]$Python = "$env:USERPROFILE\Documents\TSC Driver\Outils admin\tsc_graphics\venv_neural\Scripts\python.exe",
   [string]$Poids = "$env:USERPROFILE\Documents\TSC Driver\Outils admin\tsc_graphics\poids_externes\dinov2_vit_small_patch14_lvd142m\model.safetensors",
-  [int]$Port = 47830, [int]$Photos = 400, [string]$Navigateur = 'msedge.exe'
+  [int]$Port = 47830, [int]$Photos = 400, [string]$Navigateur = 'msedge.exe',
+  [string]$ApresUtc = ''   # ex. 23:45 : attend cette heure UTC avant de commencer (PC encore occupe par un autre entrainement)
 )
 $ErrorActionPreference = 'Stop'
+if ($ApresUtc) {
+  $debut = [DateTime]::UtcNow.Date.Add([TimeSpan]::Parse($ApresUtc)); if ($debut -lt [DateTime]::UtcNow.AddHours(-6)) { $debut = $debut.AddDays(1) }
+  while ([DateTime]::UtcNow -lt $debut) { Write-Host ("attente jusqu'a " + $debut.ToString('HH:mm') + ' UTC'); Start-Sleep -Seconds 300 }
+}
 $juge = Split-Path -Parent $MyInvocation.MyCommand.Path
 $atelier = Split-Path -Parent $juge
 $captures = Join-Path $juge 'captures_atelier'; New-Item -ItemType Directory -Force $captures | Out-Null
