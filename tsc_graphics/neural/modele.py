@@ -3,7 +3,7 @@
 # a reconnaitre le reel ; il ne sert qu'a l'entrainement et ne va jamais dans le jeu.
 import torch
 import torch.nn as nn
-from caracteristiques import N_ENTREES, caracteristiques
+from caracteristiques import N_ENTREES, caracteristiques, flou3
 
 CACHE = 24
 DELTA_MAX = 0.35   # le reseau corrige au plus de 0,35 en sRGB par canal : il retouche, il ne repeint pas
@@ -17,11 +17,16 @@ class TSCNeural(nn.Module):
         self.c3 = nn.Conv2d(cache, 3, 1)
         nn.init.zeros_(self.c3.weight); nn.init.zeros_(self.c3.bias)   # depart = image du jeu inchangee
 
+    detail_garde = True   # v0.6 / plugin 0.17 : le reseau voit l'image adoucie 3x3, le detail fin du jeu passe tel quel
+
     def forward(self, e):
-        f = caracteristiques(e)
+        eb = flou3(e) if self.detail_garde else None
+        f = caracteristiques(e, eb)
         h = torch.relu(self.c1(f))
         h = torch.relu(self.c2(h))
         d = torch.tanh(self.c3(h)) * DELTA_MAX
+        if eb is not None:   # = ps_ldr 0.17 : saturate(enc(saturate(eb + d)) + (e - eb))
+            return ((eb + d).clamp(0, 1) + (e - eb)).clamp(0, 1)
         return (e + d).clamp(0, 1)
 
 

@@ -18,9 +18,14 @@ def decale(x, dx, dy):
     return xp[..., p + dy:p + dy + h, p + dx:p + dx + w]
 
 
-def caracteristiques(e):
-    """e : (N,3,H,W) sRGB 0-1 -> (N,N_ENTREES,H,W)."""
-    f = [e]
+def flou3(e):
+    """v0.6 : moyenne 3x3 (bord replique), comme la boucle 3x3 de ps_ldr 0.17."""
+    return F.avg_pool2d(F.pad(e, (1, 1, 1, 1), mode="replicate"), 3, 1)
+
+
+def caracteristiques(e, centre=None):
+    """e : (N,3,H,W) sRGB 0-1 -> (N,N_ENTREES,H,W). centre : couleur vue au pixel (v0.6 : image adoucie 3x3), sinon e."""
+    f = [e if centre is None else centre]
     for r in RAYONS:
         m = (decale(e, r, r) + decale(e, -r, r) + decale(e, r, -r) + decale(e, -r, -r)) * 0.25
         f.append(m)

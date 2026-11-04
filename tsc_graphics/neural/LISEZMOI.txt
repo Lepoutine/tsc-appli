@@ -22,3 +22,6 @@ avec la lumiere TSC et le profil actifs (actif = 1), a plusieurs heures, avant u
 v0.6 (04/11) : run3 et run4 lissaient le detail fin (~43 %, arbres "peints", panneaux flous) alors que le juge v2 les trouvait
 meilleurs. Ajout : perte --detail (6) qui garde >= 90 % de l'energie passe-haut (r=1) et de la bande r=1..4 du jeu, image par
 image ; et garde-fou de champion --detail_min (0,75) : un modele qui lisse ne peut plus devenir champion.
+v0.6 (suite) : le generateur voit l'image adoucie 3x3 au pixel (voisins a 2, 6, 16 px inchanges) et le detail fin du jeu est
+rajoute tel quel, exactement comme ps_ldr du plugin 0.17 (libre10 = 0). Un reseau run3/run4 (v0.5) reste utilisable en 0.17 :
+il est alors applique sur l'image adoucie (mode B, juge 2,77 au lieu de 2,34 mais detail garde 0,81). libre10 = 1 = ancien mode.

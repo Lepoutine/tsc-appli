@@ -662,7 +662,21 @@ float4 ps_ldr(VSO i) : SV_Target {
 		c = lerp(c, saturate(o), saturate(p15.z));
 	}
 	// 0.16 : TSC Neural remplace l'etalonnage ci-dessus (il a appris tout le passage jeu -> reel) ; libre4 = force
-	if (p21.w > 0) { float3 nn = neural_ldr(i.uv, max(t.rgb, 0)); if (fini3(nn)) c = lerp(max(t.rgb, 0), nn, saturate(p21.w)); }
+	// 0.17 : run3/run4 lissaient le detail fin (~57 % garde, arbres "peints"). Le reseau voit maintenant l'image adoucie 3x3 et
+	// le detail fin du jeu (image - image adoucie, en sRGB) est rajoute tel quel : il ne change que la lumiere et la couleur.
+	// libre10 = 1 : ancien mode (reseau sur l'image brute), pour comparer a chaud.
+	if (p21.w > 0) {
+		float3 c0 = max(t.rgb, 0), nn;
+		if (p23.y > 0.5) nn = neural_ldr(i.uv, c0);
+		else {
+			float3 e0 = srgb_enc3(c0), eb = 0;
+			[unroll] for (int dy = -1; dy <= 1; dy++) [unroll] for (int dx = -1; dx <= 1; dx++) eb += nl_tap(i.uv, dx, dy);
+			eb /= 9;
+			float3 nb = neural_ldr(i.uv, srgb_dec3(eb));
+			nn = srgb_dec3(saturate(srgb_enc3(nb) + (e0 - eb)));
+		}
+		if (fini3(nn)) c = lerp(c0, nn, saturate(p21.w));
+	}
 	// 0.9.3 : tramage d'1/255 avant le retour en 8 bits : supprime les marches de couleur dans les degrades (plafond, ciel)
 	{
 		float n = frac(sin(dot(i.pos.xy, float2(12.9898, 78.233))) * 43758.5453) + frac(sin(dot(i.pos.xy + 17.1, float2(39.346, 11.135))) * 24634.6345) - 1;
