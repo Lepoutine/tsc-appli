@@ -145,3 +145,11 @@ select{cursor:pointer}
 .pad b{display:block;font-size:12.5px}.pad small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #pistes{max-height:52vh;overflow:auto}
 #filtreRole{width:auto;padding:0 8px;background:var(--p2)}
+
+/* tri à l'oreille + IA Forge */
+.tri{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 10px}
+.tri .b.on{background:var(--gold);color:#111;border-color:var(--gold)}
+#bJette.on{background:var(--bad);color:#fff;border-color:var(--bad)}
+.tri #iaProp{font-size:12px;flex-basis:100%}
+.it.v-jeter{opacity:.55}
+.iaj{font-size:11.5px;max-height:140px;overflow:auto}

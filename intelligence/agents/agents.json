@@ -66,7 +66,13 @@
     "sources du socle tscf_probe 0.2 a 0.9h (introuvables sur le Shadow)"
    ],
    "demande_avant": "examiner le pipeline (audit) avant de promettre un effet",
-   "fil": "TSC Performance Lab et TSC Graphics"
+   "fil": "TSC Performance Lab et TSC Graphics",
+   "apprentissage": {
+    "regles": "Outils admin\\tsc_graphics\\tsc_ia\\regles_tsc_ia.json (PC)",
+    "boucle": "TSC-IA textures (numpy) sur le PC",
+    "donnees": "images reelles, 1 sur 10 = juge",
+    "etat": "adoptee 03/11 : +2,618 dB sur 47 images jamais vues (fil Graphics)"
+   }
   },
   {
    "id": "textures",
@@ -120,7 +126,13 @@
     "regle UV ecrite et verifiee automatiquement"
    ],
    "demande_avant": "lire les UV et le .mat du modele du jeu avant de peindre",
-   "fil": "TSC Performance Lab et TSC Graphics"
+   "fil": "TSC Performance Lab et TSC Graphics",
+   "apprentissage": {
+    "regles": "Outils admin\\tsc_graphics\\tsc_ia\\regles_tsc_ia.json (PC)",
+    "boucle": "TSC-IA textures (numpy) sur le PC",
+    "donnees": "images reelles, 1 sur 10 = juge",
+    "etat": "adoptee 03/11 : +2,618 dB sur 47 images jamais vues (fil Graphics)"
+   }
   },
   {
    "id": "performance",
@@ -163,16 +175,22 @@
      "nom": "ecran Optimisation (tablette)",
      "lieu": "code",
      "chemin": "Tete_Pilote_TSC/ui/opti.js"
+    },
+    {
+     "nom": "comparateur avant/apres PresentMon (verdict prouve ou non)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/performance/frametime.py"
     }
    ],
    "connaissances": [
     "perf_shadow_constats",
-    "presentmon"
+    "presentmon",
+    "vram_budget_dxgi"
    ],
    "manque": [
     "mesure frametime fiable derriere ReShade (PresentMon ne voit pas la vraie chaine)",
-    "fiche VRAM / budget textures HD",
-    "comparaison avant/apres automatique"
+    "mesure du budget VRAM reel sur le Shadow (QueryVideoMemoryInfo depuis le module DX11)",
+    "comparateur avant/apres a essayer sur de vraies captures PresentMon du Shadow (teste seulement sur captures simulees)"
    ],
    "demande_avant": "mesurer (diagnostic + journal) avant de proposer une optimisation",
    "fil": "TSC Performance Lab et TSC Graphics"
@@ -390,7 +408,13 @@
     "dossier projet complet sur le Bureau + rapport de tests"
    ],
    "demande_avant": "lancer l'analyseur ETS2 et lire le releve du jeu avant de demander ou sont banques et camions ; jamais de GUID ni de .bank inventes",
-   "fil": "Créer TSC Sound Forge pour ETS2"
+   "fil": "Créer TSC Sound Forge pour ETS2",
+   "apprentissage": {
+    "regles": "intelligence/apprentissage/regles.json",
+    "boucle": "sound_forge/ui/forge_ia.js",
+    "donnees": "choix de Mendy dans Forge (role, je garde / je jette), traits mesures du son",
+    "etat": "teste dans Chromium le 04/11 sur 60 choix simules ; pas encore de vrais choix de Mendy"
+   }
   },
   {
    "id": "conduite",
@@ -438,16 +462,23 @@
      "nom": "carte des routes",
      "lieu": "code",
      "chemin": "Tete_Pilote_TSC/carte/roads.json"
+    },
+    {
+     "nom": "controleur 561/2006 (pauses, conduite journaliere, repos 24 h)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/conduite/regles_561.py"
     }
    ],
    "connaissances": [
     "sdk_telemetrie_scs",
-    "reglement_561_2006"
+    "reglement_561_2006",
+    "limites_api_telemetrie",
+    "tachygraphe_165_2014"
    ],
    "manque": [
     "tests rejoues automatiquement sur traces.json a chaque version",
-    "fiche limites de l'API telemetrie (ce qui n'est pas expose)",
-    "analyse des memoires recues des joueurs"
+    "analyse des memoires recues des joueurs",
+    "comparer tacho.js au controleur 561/2006 sur les memes traces (code du pilote sur le PC) ; semaine et repos hebdomadaire pas encore controles"
    ],
    "demande_avant": "lire pilote_decisions.log et les memoires recues avant de changer un reglage",
    "fil": "Reprise App, Site HUB et MOD"
@@ -610,7 +641,13 @@
     "export SCS -> mod par le moteur de TSC Mod Engineering (pas de second moteur)"
    ],
    "demande_avant": "ouvrir le modele du jeu (pmg, .mat, UV) dans une copie de travail avant de modifier",
-   "fil": "Créer l'atelier Spartan Studio et l'admin des accès"
+   "fil": "Créer l'atelier Spartan Studio et l'admin des accès",
+   "apprentissage": {
+    "regles": "intelligence/apprentissage/regles.json",
+    "boucle": "intelligence/apprentissage/boucle.py",
+    "donnees": "choix de Mendy dans Spartan Studio (a definir avec le fil de l'atelier)",
+    "etat": "regles et boucle pretes et testees ; pas encore branchees dans Spartan Studio"
+   }
   }
  ],
  "centrale": {

@@ -161,7 +161,7 @@
   function rendLib() {
     const L = $('lib');
     if (!P.couches.length) { L.innerHTML = '<div class="vide">Aucun son pour l\'instant.</div>'; return; }
-    L.innerHTML = P.couches.map(c => '<button type="button" class="it' + (c.id === sel ? ' on' : '') + '" data-id="' + c.id + '"><i style="background:' + c.couleur + '"></i><b>' + esc(c.fichier) + '</b><small>' +
+    L.innerHTML = P.couches.map(c => '<button type="button" class="it' + (c.id === sel ? ' on' : '') + (c.verdict ? ' v-' + c.verdict : '') + '" data-id="' + c.id + '"><i style="background:' + c.couleur + '"></i><b>' + (c.verdict === 'garder' ? '✓ ' : c.verdict === 'jeter' ? '✗ ' : '') + esc(c.fichier) + '</b><small>' +
       (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + ' · ' + esc(SF.ROLES[c.role].court) + '</small>' + (function () { const q = qualite(c); return q && q.alertes.length ? '<small class="lic">⚠ ' + esc(q.alertes[0]) + '</small>' : ''; })() + (c.licence === 'refus' ? '<small class="lic">licence refusée : non exporté</small>' : (c.licence === 'ccby' || c.licence === 'mod') && !c.source ? '<small class="lic">auteur à indiquer</small>' : '') + '</button>').join('');
   }
   function rendPistes() {
@@ -183,7 +183,66 @@
     $('eFondu').value = c.fondu; $('eBoucle').checked = !!c.boucle; $('eNorm').checked = !!c.norm; $('eLic').value = c.licence || 'perso'; $('eSrc').value = c.source || '';
     $('eRpm').disabled = !(c.role === 'charge' || c.role === 'sans' || c.role === 'ralenti');
     $('eFondu').disabled = !c.boucle;
-    sorties(); onde($('wvc'), c, { edit: true }); rendQualite(c);
+    sorties(); onde($('wvc'), c, { edit: true }); rendQualite(c); rendTri(c);
+  }
+  /* ---------- tri à l'oreille + IA Forge ---------- */
+  function traits(c) {
+    if (!bufs[c.id]) return null;
+    const k = c.debut.toFixed(3) + ':' + c.fin.toFixed(3);
+    if (!c.traits || c.traitsCle !== k) { c.traits = SF.traits(bufs[c.id], c.debut, c.fin).map(v => Math.round(v * 1000) / 1000); c.traitsCle = k; }
+    return c.traits;
+  }
+  function rendTri(c) {
+    $('bGarde').classList.toggle('on', c.verdict === 'garder'); $('bJette').classList.toggle('on', c.verdict === 'jeter');
+    const t = traits(c), p = t && SF.IA.propose(t);
+    const reste = P.couches.filter(x => !x.verdict).length;
+    $('iaProp').innerHTML = (p ? 'IA Forge v' + p.version + ' : ' + (p.role ? esc((SF.ROLES[p.role.valeur] || {}).court || p.role.valeur) + ' (' + SF.pct(p.role.confiance) + ')' : '—') +
+      (p.verdict ? ', tu le ' + (p.verdict.valeur === 'garder' ? 'garderais' : 'jetterais') + ' (' + SF.pct(p.verdict.confiance) + ')' : '') : 'IA Forge : pas encore de version, trie quelques sons') +
+      ' · <b>' + reste + '</b> son' + (reste > 1 ? 's' : '') + ' à trier';
+  }
+  let nouveaux = 0;
+  function verdict(v) {
+    const c = couche(); if (!c) return;
+    c.verdict = c.verdict === v ? undefined : v; c.roleConfirme = true; traits(c);
+    sauve(); rendLib(); rendTri(c);
+    if (c.verdict && ++nouveaux >= 5) { nouveaux = 0; apprendre(true); }
+    if (c.verdict) suivant();
+  }
+  function suivant() {
+    const i = P.couches.findIndex(x => x.id === sel);
+    const L = P.couches.slice(i + 1).concat(P.couches.slice(0, i + 1));
+    const c = L.find(x => !x.verdict && bufs[x.id]);
+    if (!c) { toast('Tous les sons sont triés.'); return; }
+    sel = c.id; rendLib(); rendPistes(); rendEd();
+    const el = document.querySelector('#lib [data-id="' + c.id + '"]'); if (el) el.scrollIntoView({ block: 'nearest' });
+    joue();
+  }
+  function exemples() {
+    return P.couches.filter(c => (c.verdict || c.roleConfirme) && bufs[c.id]).map(c => ({ cle: c.paquet || c.nom, t: traits(c), role: c.roleConfirme ? c.role : null, verdict: c.verdict || null }));
+  }
+  function apprendre(auto) {
+    const r = SF.IA.apprend(exemples());
+    sauve(); rendIA(); const c = couche(); if (c) rendTri(c);
+    if (!auto || r.adoptee) toast(r.raison);
+  }
+  function rendIA() {
+    const e = SF.IA.etat(), v = e.version, tries = P.couches.filter(c => c.verdict).length;
+    $('iaEtat').innerHTML = '<span>Version</span><b>' + (v ? v.n + ' (' + esc(v.date) + ')' : 'aucune') + '</b>' +
+      '<span>Tes choix</span><b>' + tries + ' trié' + (tries > 1 ? 's' : '') + '</b>' +
+      '<span>Rôle juste</span><b>' + (v ? SF.pct(v.score_role) : '—') + '</b><span>Garder / jeter juste</span><b>' + (v ? SF.pct(v.score_verdict) : '—') + '</b>' +
+      '<span>Juge</span><b>' + (v ? v.juges + ' choix jamais appris' : '1 choix sur 10, mis de côté') + '</b>';
+    $('iaJournal').innerHTML = e.journal.slice().reverse().map(j => '<li class="' + (j.ok ? 'ok' : '') + '">' + esc(j.date.slice(5)) + ' · ' + esc(j.raison) + '</li>').join('') || '<li>Pas encore d\'apprentissage.</li>';
+    $('bIaRetour').disabled = e.versions < 2;
+  }
+  async function exporteIA() {
+    const o = SF.IA.exporte();
+    o.choix = P.couches.filter(c => c.verdict || c.roleConfirme).map(c => ({ fichier: c.paquet || c.fichier, nom: c.nom, debut: c.debut, fin: c.fin, role: c.role, verdict: c.verdict || null, juge: SF.IA.estJuge(c.paquet || c.nom), traits: c.traits || null }));
+    o.genere = new Date().toISOString();
+    const blob = new Blob([JSON.stringify(o, null, 1)], { type: 'application/json' });
+    if (window.showSaveFilePicker) {
+      try { const h = await window.showSaveFilePicker({ suggestedName: 'ia_forge_choix.json', types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] }); const w = await h.createWritable(); await w.write(blob); await w.close(); toast('Choix enregistrés.'); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    telecharge(blob, 'ia_forge_choix.json');
   }
   const qCache = {};
   function qualite(c) {
@@ -245,7 +304,7 @@
     let cur = false;
     $('etapes').innerHTML = E.map(e => { let k = e[1] ? 'ok' : (!cur ? (cur = true, 'cur') : ''); return '<li class="' + k + '">' + e[0] + '</li>'; }).join('');
   }
-  function rendTout() { rendLib(); rendPistes(); rendEd(); rendRoles(); rendPads(); majProjet(); simMaj(); rendGen(); }
+  function rendTout() { rendLib(); rendPistes(); rendEd(); rendRoles(); rendPads(); majProjet(); simMaj(); rendGen(); rendIA(); }
 
   /* ---------- générateur TSC ---------- */
   function rendGen() {
@@ -485,6 +544,14 @@
     $('ficDossier').addEventListener('change', e => { importe(e.target.files); e.target.value = ''; });
     $('bExtrait').onclick = extrait;
     $('filtreRole').addEventListener('change', rendPistes);
+    $('bGarde').onclick = () => verdict('garder'); $('bJette').onclick = () => verdict('jeter'); $('bSuivant').onclick = suivant;
+    $('bIaApprend').onclick = () => apprendre(false); $('bIaRetour').onclick = () => { if (SF.IA.retour()) { rendIA(); const c = couche(); if (c) rendTri(c); toast('Version précédente remise.'); } };
+    $('bIaExport').onclick = exporteIA;
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || /^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'g') { e.preventDefault(); verdict('garder'); } else if (k === 'j') { e.preventDefault(); verdict('jeter'); } else if (k === 's') { e.preventDefault(); suivant(); }
+    });
     $('pads').addEventListener('click', e => { const b = e.target.closest('[data-pad]'); if (b) joueEffet(b.dataset.pad); });
     document.addEventListener('keydown', e => { if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.altKey && !(e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) { const c = effets()[+e.key - 1]; if (c) { e.preventDefault(); joueEffet(c.id); } } });
     drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fic').click(); } });
@@ -504,7 +571,7 @@
     ['eRpm', 'eGain', 'eBas', 'eHaut', 'eFondu', 'eBoucle', 'eNorm'].forEach(id => $(id).addEventListener('change', () => { sauve(); rendPistes(); rendRoles(); if (id === 'eBoucle') rendEd(); }));
     $('eLic').addEventListener('change', () => { const c = couche(); if (!c) return; c.licence = $('eLic').value; sauve(); rendLib(); });
     $('eSrc').addEventListener('change', () => { const c = couche(); if (!c) return; c.source = $('eSrc').value.trim(); sauve(); rendLib(); });
-    $('eRole').addEventListener('change', () => { const c = couche(); if (!c) return; c.role = $('eRole').value; c.boucle = SF.ROLES[c.role].boucle; if (SF.ROLES[c.role].rpm && (c.role === 'ralenti')) c.rpm = 600; if (moteur.marche) moteur.demarre(P.couches, bufs); sauve(); rendTout(); });
+    $('eRole').addEventListener('change', () => { const c = couche(); if (!c) return; c.role = $('eRole').value; c.roleConfirme = true; c.boucle = SF.ROLES[c.role].boucle; if (SF.ROLES[c.role].rpm && (c.role === 'ralenti')) c.rpm = 600; if (moteur.marche) moteur.demarre(P.couches, bufs); sauve(); rendTout(); });
     $('rpm').addEventListener('input', () => { arreteAccel(); simMaj(); }); $('load').addEventListener('input', () => { arreteAccel(); simMaj(); });
     $('bMoteur').onclick = moteurOnOff; $('bAccel').onclick = accel; $('bClapet').onclick = clapet;
     document.addEventListener('keydown', e => { if (e.key.toLowerCase() === TOUCHE_CLAPET && !e.shiftKey && !e.ctrlKey && !e.altKey && !(e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && /^(text|search|number)$/.test(e.target.type))) && !e.repeat) { e.preventDefault(); clapet(); } });

@@ -1,0 +1,478 @@
+[
+ {
+  "agent": "graphics",
+  "nom": "IA Pro Photoréalisme",
+  "etat": "non mesuré d'ici",
+  "niveau_declare": 3,
+  "fiches": 1,
+  "fiches_par_statut": {
+   "verifie_partiel": 1
+  },
+  "fiches_vieilles": [],
+  "outils": 8,
+  "outils_depot": 0,
+  "memoire": 4,
+  "apprentissage": true,
+  "epreuves": [],
+  "epreuves_pc": [
+   "écart jeu/réel d'une version du plugin sur le jeu de captures fixe"
+  ],
+  "certification": null,
+  "examen_entree": null,
+  "manque": [
+   "fiches DX11/HLSL officielles sourcees",
+   "jeu de captures de reference fixe pour comparer chaque version",
+   "sources du socle tscf_probe 0.2 a 0.9h (introuvables sur le Shadow)"
+  ]
+ },
+ {
+  "agent": "textures",
+  "nom": "TSC Textures Expert",
+  "etat": "non mesuré d'ici",
+  "niveau_declare": 3,
+  "fiches": 1,
+  "fiches_par_statut": {
+   "verifie_partiel": 1
+  },
+  "fiches_vieilles": [],
+  "outils": 7,
+  "outils_depot": 0,
+  "memoire": 4,
+  "apprentissage": true,
+  "epreuves": [],
+  "epreuves_pc": [
+   "TSC-IA textures : gain en dB sur images réelles jamais vues"
+  ],
+  "certification": null,
+  "examen_entree": null,
+  "manque": [
+   "fiches materiaux (route, beton, metal, peinture) sourcees",
+   "jeu de test fixe de textures avant/apres",
+   "regle UV ecrite et verifiee automatiquement"
+  ]
+ },
+ {
+  "agent": "performance",
+  "nom": "TSC Performance Expert",
+  "etat": "partiel : 45 % de la grille mesurée, épreuves PC à passer",
+  "niveau_declare": 4,
+  "fiches": 3,
+  "fiches_par_statut": {
+   "verifie": 3
+  },
+  "fiches_vieilles": [],
+  "outils": 8,
+  "outils_depot": 6,
+  "memoire": 3,
+  "apprentissage": false,
+  "epreuves": [
+   "OK perf_csv (5/5 sur les derniers passages)",
+   "OK perf_avant_apres (5/5 sur les derniers passages)"
+  ],
+  "epreuves_pc": [
+   "Test-PerfLab.ps1 + diagnostic avant/après"
+  ],
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "performance",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "performance",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "manque": [
+   "mesure frametime fiable derriere ReShade (PresentMon ne voit pas la vraie chaine)",
+   "mesure du budget VRAM reel sur le Shadow (QueryVideoMemoryInfo depuis le module DX11)",
+   "comparateur avant/apres a essayer sur de vraies captures PresentMon du Shadow (teste seulement sur captures simulees)"
+  ]
+ },
+ {
+  "agent": "mods",
+  "nom": "TSC Mod Engineering Expert",
+  "etat": "non mesuré d'ici",
+  "niveau_declare": 4,
+  "fiches": 3,
+  "fiches_par_statut": {
+   "verifie": 3
+  },
+  "fiches_vieilles": [],
+  "outils": 10,
+  "outils_depot": 1,
+  "memoire": 6,
+  "apprentissage": false,
+  "epreuves": [],
+  "epreuves_pc": [
+   "game.log réel -> mod et fichier fautifs ; contrôle .scs"
+  ],
+  "certification": null,
+  "examen_entree": null,
+  "manque": [
+   "analyseur automatique de game.log (erreurs -> mod -> fichier)",
+   "fiches SII/SUI/.mat/.tobj officielles sourcees",
+   "etendre Verifier_Mods_TSC.ps1 (PC) au controle complet avant livraison, sans creer un 2e verificateur"
+  ]
+ },
+ {
+  "agent": "son",
+  "nom": "TSC Sound Engineering Expert",
+  "etat": "opérationnel (mesuré)",
+  "niveau_declare": 2,
+  "fiches": 6,
+  "fiches_par_statut": {
+   "verifie": 4,
+   "verifie_partiel": 1,
+   "concu": 1
+  },
+  "fiches_vieilles": [],
+  "outils": 8,
+  "outils_depot": 5,
+  "memoire": 17,
+  "apprentissage": false,
+  "epreuves": [
+   "OK son_lufs (10/10 sur les derniers passages)",
+   "OK son_crete_vraie (10/10 sur les derniers passages)",
+   "OK son_regime (9/10 sur les derniers passages)",
+   "OK son_regime_bas (10/10 sur les derniers passages)",
+   "OK son_regime_reel (10/10 sur les derniers passages)",
+   "OK son_innovation_regime (9/10 sur les derniers passages)",
+   "OK son_raccord (10/10 sur les derniers passages)",
+   "OK son_cycle (10/10 sur les derniers passages)"
+  ],
+  "epreuves_pc": [],
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "son",
+   "examen": "apres_amelioration",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 80,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100,
+    "innovation": 100,
+    "qualite": 100
+   },
+   "non_mesure": [
+    "autonomie"
+   ],
+   "avant": 95.3,
+   "criteres_en_baisse": []
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:25:19+00:00",
+   "agent": "son",
+   "examen": "entree",
+   "note_sur_100": 95.3,
+   "grille_mesuree_pct": 80,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 93,
+    "innovation": 80,
+    "qualite": 100
+   },
+   "non_mesure": [
+    "autonomie"
+   ]
+  },
+  "manque": [
+   "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
+   "module d'isolation : soustraction spectrale du bruit + detection et classement des evenements (numpy) ; separation par reseau (Demucs, MIT) seulement si torch est installe sur le Shadow, accord de Mendy",
+   "detection automatique des points de boucle",
+   "test d'ecoute en jeu d'un son TSC"
+  ]
+ },
+ {
+  "agent": "forge",
+  "nom": "TSC FMOD Sound Engineering / Sound Forge Expert",
+  "etat": "partiel : 20 % de la grille mesurée, épreuves PC à passer",
+  "niveau_declare": 3,
+  "fiches": 7,
+  "fiches_par_statut": {
+   "verifie_partiel": 1,
+   "verifie": 5,
+   "a_verifier": 1
+  },
+  "fiches_vieilles": [],
+  "outils": 7,
+  "outils_depot": 4,
+  "memoire": 7,
+  "apprentissage": true,
+  "epreuves": [
+   "OK forge_roles (10/10 sur les derniers passages)",
+   "ÉCHEC forge_ia_js (7/10 sur les derniers passages)"
+  ],
+  "epreuves_pc": [
+   "build fmodstudiocl de l'exemple Peterbilt + GUID"
+  ],
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "forge",
+   "examen": "apres_amelioration",
+   "note_sur_100": 90.0,
+   "grille_mesuree_pct": 20,
+   "detail": {
+    "autonomie": 90
+   },
+   "non_mesure": [
+    "connaissances",
+    "diagnostic",
+    "qualite",
+    "innovation"
+   ],
+   "avant": 80.0,
+   "criteres_en_baisse": []
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:25:19+00:00",
+   "agent": "forge",
+   "examen": "entree",
+   "note_sur_100": 80.0,
+   "grille_mesuree_pct": 20,
+   "detail": {
+    "autonomie": 80
+   },
+   "non_mesure": [
+    "connaissances",
+    "diagnostic",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "manque": [
+   "pilotage fmodstudiocl de bout en bout (build + export GUID) teste sur le PC",
+   "generateur .soundref/.sui a partir des GUID reels",
+   "controle automatique du mod audio avant de le declarer utilisable",
+   "dossier projet complet sur le Bureau + rapport de tests"
+  ]
+ },
+ {
+  "agent": "conduite",
+  "nom": "TSC Driving Intelligence Expert",
+  "etat": "partiel : 45 % de la grille mesurée, épreuves PC à passer",
+  "niveau_declare": 5,
+  "fiches": 4,
+  "fiches_par_statut": {
+   "verifie": 1,
+   "verifie_partiel": 3
+  },
+  "fiches_vieilles": [],
+  "outils": 9,
+  "outils_depot": 1,
+  "memoire": 2,
+  "apprentissage": false,
+  "epreuves": [
+   "OK conduite_cas_texte (5/5 sur les derniers passages)",
+   "OK conduite_infraction (5/5 sur les derniers passages)"
+  ],
+  "epreuves_pc": [
+   "rejouer traces.json sur le Pilote de tête"
+  ],
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "conduite",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "conduite",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "manque": [
+   "tests rejoues automatiquement sur traces.json a chaque version",
+   "analyse des memoires recues des joueurs",
+   "comparer tacho.js au controleur 561/2006 sur les memes traces (code du pilote sur le PC) ; semaine et repos hebdomadaire pas encore controles"
+  ]
+ },
+ {
+  "agent": "logiciel",
+  "nom": "TSC Software Engineering Expert",
+  "etat": "partiel : 25 % de la grille mesurée",
+  "niveau_declare": 5,
+  "fiches": 3,
+  "fiches_par_statut": {
+   "verifie": 3
+  },
+  "fiches_vieilles": [],
+  "outils": 7,
+  "outils_depot": 0,
+  "memoire": 2,
+  "apprentissage": false,
+  "epreuves": [
+   "OK logiciel_tests (10/10 sur les derniers passages)",
+   "OK logiciel_js (10/10 sur les derniers passages)"
+  ],
+  "epreuves_pc": [],
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "logiciel",
+   "examen": "apres_amelioration",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 25,
+   "detail": {
+    "qualite": 100
+   },
+   "non_mesure": [
+    "connaissances",
+    "diagnostic",
+    "autonomie",
+    "innovation"
+   ],
+   "avant": 100.0,
+   "criteres_en_baisse": []
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:25:19+00:00",
+   "agent": "logiciel",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 25,
+   "detail": {
+    "qualite": 100
+   },
+   "non_mesure": [
+    "connaissances",
+    "diagnostic",
+    "autonomie",
+    "innovation"
+   ]
+  },
+  "manque": [
+   "sources dans un depot versionne (aujourd'hui des bundles)",
+   "suite de tests unique lancee avant chaque version",
+   "verification ETS2 nouvelle version (SDK, plugins)"
+  ]
+ },
+ {
+  "agent": "qualite",
+  "nom": "TSC Knowledge & Quality Expert",
+  "etat": "partiel : 50 % de la grille mesurée",
+  "niveau_declare": 3,
+  "fiches": 4,
+  "fiches_par_statut": {
+   "verifie": 3,
+   "concu": 1
+  },
+  "fiches_vieilles": [],
+  "outils": 6,
+  "outils_depot": 3,
+  "memoire": 2,
+  "apprentissage": false,
+  "epreuves": [
+   "OK qualite_base (10/10 sur les derniers passages)",
+   "OK qualite_mutation (10/10 sur les derniers passages)",
+   "OK qualite_boucle (10/10 sur les derniers passages)"
+  ],
+  "epreuves_pc": [],
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "qualite",
+   "examen": "apres_amelioration",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 50,
+   "detail": {
+    "qualite": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "connaissances",
+    "autonomie",
+    "innovation"
+   ],
+   "avant": 100.0,
+   "criteres_en_baisse": []
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:25:19+00:00",
+   "agent": "qualite",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 50,
+   "detail": {
+    "qualite": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "connaissances",
+    "autonomie",
+    "innovation"
+   ]
+  },
+  "manque": [
+   "liste de controle de livraison par type (mod, appli, plugin)",
+   "detection des erreurs deja corrigees qui reviennent"
+  ]
+ },
+ {
+  "agent": "atelier",
+  "nom": "TSC Atelier Spartan / Blender Expert",
+  "etat": "non mesuré d'ici",
+  "niveau_declare": 3,
+  "fiches": 4,
+  "fiches_par_statut": {
+   "verifie": 2,
+   "verifie_partiel": 2
+  },
+  "fiches_vieilles": [],
+  "outils": 6,
+  "outils_depot": 0,
+  "memoire": 1,
+  "apprentissage": true,
+  "epreuves": [],
+  "epreuves_pc": [
+   "Blender -b -P : UV, échelle, origine d'un modèle SCS"
+  ],
+  "certification": null,
+  "examen_entree": null,
+  "manque": [
+   "pilotage de Blender en arriere-plan (blender -b -P) teste",
+   "fiches API Python Blender 3.6 et formats PMG/PMD/PMA sourcees",
+   "controles automatiques UV / echelle / origine / nombre de triangles",
+   "export SCS -> mod par le moteur de TSC Mod Engineering (pas de second moteur)"
+  ]
+ }
+]

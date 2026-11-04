@@ -2,7 +2,16 @@
 
 - Source : https://www.legislation.gov.uk/eur/2006/561/chapter/II/adopted/data.htm (texte adopté, articles 6 à 9, lu le 03/11/2026)
 - Version : texte ADOPTÉ en 2006. Le règlement (UE) 2020/1054 l'a modifié depuis (repos hebdomadaire, retour au domicile) : ces modifications ne sont PAS dans cette fiche.
+- Source ajoutée le 04/11/2026 : https://www.legislation.gov.uk/eur/2006/561/article/4 (définitions, texte révisé au 21/04/2025, qui intègre les modifications ultérieures telles que publiées au Royaume-Uni).
 - Domaine : conduite (tachygraphe du Pilote de tête). Statut : vérifié partiel.
+
+## Article 4 : définitions (texte révisé)
+- Pause : période où le conducteur ne conduit pas et ne fait aucun autre travail, utilisée uniquement pour récupérer.
+- Repos journalier normal : au moins 11 h, ou en deux parties : d'abord au moins 3 h d'un seul tenant, puis au moins 9 h d'un seul tenant.
+- Repos journalier réduit : au moins 9 h et moins de 11 h.
+- Repos hebdomadaire normal : au moins 45 h. Réduit : moins de 45 h, au minimum 24 h consécutives, aux conditions de l'article 8(6).
+- Temps de conduite : la durée de conduite enregistrée par le tachygraphe (règlement 165/2014), automatiquement ou à la main.
+- Équipage multiple : au moins deux conducteurs à bord entre deux repos journaliers ; la présence du second est facultative la première heure, obligatoire ensuite.
 
 ## Article 6 : conduite
 - Par jour : 9 h maximum, 10 h au plus deux fois par semaine.
@@ -24,5 +33,6 @@
 - Le repos journalier normal peut être interrompu au plus deux fois, pour 1 h au total, si le conducteur a une couchette.
 
 ## À confirmer avant de l'appliquer dans le tachygraphe TSC
-- La durée exacte du repos hebdomadaire normal (45 h) et le repos journalier fractionné 3 h + 9 h ne sont pas dans les articles lus : lire la version consolidée sur EUR-Lex.
+- Réglé le 04/11 par l'article 4 : repos hebdomadaire normal 45 h, repos journalier fractionné 3 h puis 9 h.
+- Restent à lire : l'article 8 consolidé (conditions du repos hebdomadaire réduit, règles 2020/1054 sur le repos hors cabine et le retour au domicile).
 - Dans ETS2 le temps est accéléré : le tachygraphe TSC compte en temps du jeu.
