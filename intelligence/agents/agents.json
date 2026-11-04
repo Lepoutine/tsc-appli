@@ -312,6 +312,16 @@
      "nom": "projet V8 de Mendy (FMOD 2.03, script, build)",
      "lieu": "pc",
      "chemin": "Outils admin\\soundforge\\projets\\tsc_v8_mendy"
+    },
+    {
+     "nom": "juge PANNs Cnn14 gele (NumPy, local)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/juge_panns.py"
+    },
+    {
+     "nom": "TSC-IA Son (tetes realisme + etat, boucles guidees par le juge)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/ia_son.py"
     }
    ],
    "connaissances": [
@@ -320,13 +330,15 @@
     "guide_metier",
     "tsc_clapet",
     "filtrage_cabine",
-    "ecoute_ia_audio"
+    "ecoute_ia_audio",
+    "juge_panns"
    ],
    "manque": [
     "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
     "module d'isolation : soustraction spectrale du bruit + detection et classement des evenements (numpy) ; separation par reseau (Demucs, MIT) seulement si torch est installe sur le Shadow, accord de Mendy",
     "detection automatique des points de boucle",
-    "test d'ecoute en jeu d'un son TSC"
+    "test d'ecoute en jeu d'un son TSC",
+    "plus de vrais sons libres (Wikimedia Commons) et les choix G/J de Mendy pour la tete realisme"
    ],
    "demande_avant": "mesurer le son (spectre, niveaux, regimes) avant de proposer un reglage",
    "fil": "Créer TSC Sound Forge pour ETS2",
@@ -347,7 +359,8 @@
     "https://www.youtube.com/shorts/Y3HHvN-h8nc",
     "https://www.youtube.com/shorts/tLxCs8VVJKM",
     "https://www.youtube.com/shorts/lk9rRn_1YUM"
-   ]
+   ],
+   "apprentissage": "TSC-IA Son : tetes sur empreintes PANNs gelees, regles communes (boucle.py), donnees project-files/tsc_intelligence/expert_son/ia_son"
   },
   {
    "id": "forge",

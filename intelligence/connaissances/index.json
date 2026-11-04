@@ -519,6 +519,29 @@
         "165/2014",
         "legal"
       ]
+    },
+    {
+      "id": "juge_panns",
+      "titre": "Juge son PANNs Cnn14 gele : provenance, licence CC BY 4.0, limites",
+      "domaine": "son",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/son/juge_panns.md",
+      "sources": [
+        "https://github.com/qiuqiangkong/audioset_tagging_cnn",
+        "https://zenodo.org/records/3987831"
+      ],
+      "version": "Cnn14_mAP=0.431 (md5 541141fa...), lu le 04/11/2026",
+      "date_verif": "2026-11-04",
+      "statut": "verifie",
+      "mots_cles": [
+        "panns",
+        "cnn14",
+        "juge",
+        "embedding",
+        "audioset",
+        "licence",
+        "cc by"
+      ]
     }
   ]
 }
