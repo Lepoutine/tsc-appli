@@ -175,16 +175,22 @@
      "nom": "ecran Optimisation (tablette)",
      "lieu": "code",
      "chemin": "Tete_Pilote_TSC/ui/opti.js"
+    },
+    {
+     "nom": "comparateur avant/apres PresentMon (verdict prouve ou non)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/performance/frametime.py"
     }
    ],
    "connaissances": [
     "perf_shadow_constats",
-    "presentmon"
+    "presentmon",
+    "vram_budget_dxgi"
    ],
    "manque": [
     "mesure frametime fiable derriere ReShade (PresentMon ne voit pas la vraie chaine)",
-    "fiche VRAM / budget textures HD",
-    "comparaison avant/apres automatique"
+    "mesure du budget VRAM reel sur le Shadow (QueryVideoMemoryInfo depuis le module DX11)",
+    "comparateur avant/apres a essayer sur de vraies captures PresentMon du Shadow (teste seulement sur captures simulees)"
    ],
    "demande_avant": "mesurer (diagnostic + journal) avant de proposer une optimisation",
    "fil": "TSC Performance Lab et TSC Graphics"
@@ -456,16 +462,23 @@
      "nom": "carte des routes",
      "lieu": "code",
      "chemin": "Tete_Pilote_TSC/carte/roads.json"
+    },
+    {
+     "nom": "controleur 561/2006 (pauses, conduite journaliere, repos 24 h)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/conduite/regles_561.py"
     }
    ],
    "connaissances": [
     "sdk_telemetrie_scs",
-    "reglement_561_2006"
+    "reglement_561_2006",
+    "limites_api_telemetrie",
+    "tachygraphe_165_2014"
    ],
    "manque": [
     "tests rejoues automatiquement sur traces.json a chaque version",
-    "fiche limites de l'API telemetrie (ce qui n'est pas expose)",
-    "analyse des memoires recues des joueurs"
+    "analyse des memoires recues des joueurs",
+    "comparer tacho.js au controleur 561/2006 sur les memes traces (code du pilote sur le PC) ; semaine et repos hebdomadaire pas encore controles"
    ],
    "demande_avant": "lire pilote_decisions.log et les memoires recues avant de changer un reglage",
    "fil": "Reprise App, Site HUB et MOD"

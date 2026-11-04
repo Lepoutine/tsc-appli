@@ -54,27 +54,60 @@
  {
   "agent": "performance",
   "nom": "TSC Performance Expert",
-  "etat": "non mesuré d'ici",
+  "etat": "partiel : 45 % de la grille mesurée, épreuves PC à passer",
   "niveau_declare": 4,
-  "fiches": 2,
+  "fiches": 3,
   "fiches_par_statut": {
-   "verifie": 2
+   "verifie": 3
   },
   "fiches_vieilles": [],
-  "outils": 7,
-  "outils_depot": 5,
+  "outils": 8,
+  "outils_depot": 6,
   "memoire": 3,
   "apprentissage": false,
-  "epreuves": [],
+  "epreuves": [
+   "OK perf_csv (5/5 sur les derniers passages)",
+   "OK perf_avant_apres (5/5 sur les derniers passages)"
+  ],
   "epreuves_pc": [
    "Test-PerfLab.ps1 + diagnostic avant/après"
   ],
-  "certification": null,
-  "examen_entree": null,
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "performance",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "performance",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
   "manque": [
    "mesure frametime fiable derriere ReShade (PresentMon ne voit pas la vraie chaine)",
-   "fiche VRAM / budget textures HD",
-   "comparaison avant/apres automatique"
+   "mesure du budget VRAM reel sur le Shadow (QueryVideoMemoryInfo depuis le module DX11)",
+   "comparateur avant/apres a essayer sur de vraies captures PresentMon du Shadow (teste seulement sur captures simulees)"
   ]
  },
  {
@@ -120,31 +153,33 @@
   "memoire": 17,
   "apprentissage": false,
   "epreuves": [
-   "OK son_lufs (5/5 sur les derniers passages)",
-   "OK son_crete_vraie (5/5 sur les derniers passages)",
-   "OK son_regime (4/5 sur les derniers passages)",
-   "OK son_regime_bas (5/5 sur les derniers passages)",
-   "OK son_regime_reel (5/5 sur les derniers passages)",
-   "OK son_innovation_regime (4/5 sur les derniers passages)",
-   "OK son_raccord (5/5 sur les derniers passages)",
-   "OK son_cycle (5/5 sur les derniers passages)"
+   "OK son_lufs (10/10 sur les derniers passages)",
+   "OK son_crete_vraie (10/10 sur les derniers passages)",
+   "OK son_regime (9/10 sur les derniers passages)",
+   "OK son_regime_bas (10/10 sur les derniers passages)",
+   "OK son_regime_reel (10/10 sur les derniers passages)",
+   "OK son_innovation_regime (9/10 sur les derniers passages)",
+   "OK son_raccord (10/10 sur les derniers passages)",
+   "OK son_cycle (10/10 sur les derniers passages)"
   ],
   "epreuves_pc": [],
   "certification": {
-   "date": "2026-11-04T17:25:19+00:00",
+   "date": "2026-11-04T17:36:30+00:00",
    "agent": "son",
-   "examen": "entree",
-   "note_sur_100": 95.3,
+   "examen": "apres_amelioration",
+   "note_sur_100": 100.0,
    "grille_mesuree_pct": 80,
    "detail": {
     "connaissances": 100,
-    "diagnostic": 93,
-    "innovation": 80,
+    "diagnostic": 100,
+    "innovation": 100,
     "qualite": 100
    },
    "non_mesure": [
     "autonomie"
-   ]
+   ],
+   "avant": 95.3,
+   "criteres_en_baisse": []
   },
   "examen_entree": {
    "date": "2026-11-04T17:25:19+00:00",
@@ -183,30 +218,32 @@
   "fiches_vieilles": [],
   "outils": 7,
   "outils_depot": 4,
-  "memoire": 6,
+  "memoire": 7,
   "apprentissage": true,
   "epreuves": [
-   "OK forge_roles (5/5 sur les derniers passages)",
-   "OK forge_ia_js (3/5 sur les derniers passages)"
+   "OK forge_roles (10/10 sur les derniers passages)",
+   "ÉCHEC forge_ia_js (7/10 sur les derniers passages)"
   ],
   "epreuves_pc": [
    "build fmodstudiocl de l'exemple Peterbilt + GUID"
   ],
   "certification": {
-   "date": "2026-11-04T17:25:19+00:00",
+   "date": "2026-11-04T17:36:30+00:00",
    "agent": "forge",
-   "examen": "entree",
-   "note_sur_100": 80.0,
+   "examen": "apres_amelioration",
+   "note_sur_100": 90.0,
    "grille_mesuree_pct": 20,
    "detail": {
-    "autonomie": 80
+    "autonomie": 90
    },
    "non_mesure": [
     "connaissances",
     "diagnostic",
     "qualite",
     "innovation"
-   ]
+   ],
+   "avant": 80.0,
+   "criteres_en_baisse": []
   },
   "examen_entree": {
    "date": "2026-11-04T17:25:19+00:00",
@@ -234,28 +271,61 @@
  {
   "agent": "conduite",
   "nom": "TSC Driving Intelligence Expert",
-  "etat": "non mesuré d'ici",
+  "etat": "partiel : 45 % de la grille mesurée, épreuves PC à passer",
   "niveau_declare": 5,
-  "fiches": 2,
+  "fiches": 4,
   "fiches_par_statut": {
    "verifie": 1,
-   "verifie_partiel": 1
+   "verifie_partiel": 3
   },
   "fiches_vieilles": [],
-  "outils": 8,
-  "outils_depot": 0,
+  "outils": 9,
+  "outils_depot": 1,
   "memoire": 2,
   "apprentissage": false,
-  "epreuves": [],
+  "epreuves": [
+   "OK conduite_cas_texte (5/5 sur les derniers passages)",
+   "OK conduite_infraction (5/5 sur les derniers passages)"
+  ],
   "epreuves_pc": [
    "rejouer traces.json sur le Pilote de tête"
   ],
-  "certification": null,
-  "examen_entree": null,
+  "certification": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "conduite",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
+  "examen_entree": {
+   "date": "2026-11-04T17:36:30+00:00",
+   "agent": "conduite",
+   "examen": "entree",
+   "note_sur_100": 100.0,
+   "grille_mesuree_pct": 45,
+   "detail": {
+    "connaissances": 100,
+    "diagnostic": 100
+   },
+   "non_mesure": [
+    "autonomie",
+    "qualite",
+    "innovation"
+   ]
+  },
   "manque": [
    "tests rejoues automatiquement sur traces.json a chaque version",
-   "fiche limites de l'API telemetrie (ce qui n'est pas expose)",
-   "analyse des memoires recues des joueurs"
+   "analyse des memoires recues des joueurs",
+   "comparer tacho.js au controleur 561/2006 sur les memes traces (code du pilote sur le PC) ; semaine et repos hebdomadaire pas encore controles"
   ]
  },
  {
@@ -273,14 +343,14 @@
   "memoire": 2,
   "apprentissage": false,
   "epreuves": [
-   "OK logiciel_tests (5/5 sur les derniers passages)",
-   "OK logiciel_js (5/5 sur les derniers passages)"
+   "OK logiciel_tests (10/10 sur les derniers passages)",
+   "OK logiciel_js (10/10 sur les derniers passages)"
   ],
   "epreuves_pc": [],
   "certification": {
-   "date": "2026-11-04T17:25:19+00:00",
+   "date": "2026-11-04T17:36:30+00:00",
    "agent": "logiciel",
-   "examen": "entree",
+   "examen": "apres_amelioration",
    "note_sur_100": 100.0,
    "grille_mesuree_pct": 25,
    "detail": {
@@ -291,7 +361,9 @@
     "diagnostic",
     "autonomie",
     "innovation"
-   ]
+   ],
+   "avant": 100.0,
+   "criteres_en_baisse": []
   },
   "examen_entree": {
    "date": "2026-11-04T17:25:19+00:00",
@@ -331,15 +403,15 @@
   "memoire": 2,
   "apprentissage": false,
   "epreuves": [
-   "OK qualite_base (5/5 sur les derniers passages)",
-   "OK qualite_mutation (5/5 sur les derniers passages)",
-   "OK qualite_boucle (5/5 sur les derniers passages)"
+   "OK qualite_base (10/10 sur les derniers passages)",
+   "OK qualite_mutation (10/10 sur les derniers passages)",
+   "OK qualite_boucle (10/10 sur les derniers passages)"
   ],
   "epreuves_pc": [],
   "certification": {
-   "date": "2026-11-04T17:25:19+00:00",
+   "date": "2026-11-04T17:36:30+00:00",
    "agent": "qualite",
-   "examen": "entree",
+   "examen": "apres_amelioration",
    "note_sur_100": 100.0,
    "grille_mesuree_pct": 50,
    "detail": {
@@ -350,7 +422,9 @@
     "connaissances",
     "autonomie",
     "innovation"
-   ]
+   ],
+   "avant": 100.0,
+   "criteres_en_baisse": []
   },
   "examen_entree": {
    "date": "2026-11-04T17:25:19+00:00",

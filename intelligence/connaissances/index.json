@@ -1,6 +1,6 @@
 {
   "nom": "Base de connaissances commune TSC Intelligence",
-  "maj": "2026-11-03",
+  "maj": "2026-11-04",
   "regle": "Chaque fiche a une source, une version, une date de verification, un domaine et un statut. Rien d'invente : sans source, pas de fiche.",
   "statuts": {
     "verifie": "lu dans une documentation officielle, ou constate dans les fichiers du jeu, sur le PC ou en jeu",
@@ -315,15 +315,16 @@
     },
     {
       "id": "reglement_561_2006",
-      "titre": "Temps de conduite, pauses et repos UE (561/2006, articles 6 a 9)",
+      "titre": "Temps de conduite, pauses et repos UE (561/2006, art. 4 et 6 a 9)",
       "domaine": "conduite",
       "lieu": "depot",
       "fichier": "intelligence/connaissances/conduite/reglement_561_2006.md",
       "sources": [
-        "https://www.legislation.gov.uk/eur/2006/561/chapter/II/adopted/data.htm"
+        "https://www.legislation.gov.uk/eur/2006/561/chapter/II/adopted/data.htm",
+        "https://www.legislation.gov.uk/eur/2006/561/article/4"
       ],
-      "version": "texte adopte 2006 (hors modifications 2020/1054)",
-      "date_verif": "2026-11-03",
+      "version": "art. 6-9 texte adopte 2006 ; art. 4 texte revise au 21/04/2025",
+      "date_verif": "2026-11-04",
       "statut": "verifie_partiel",
       "mots_cles": [
         "tachygraphe",
@@ -450,6 +451,73 @@
         "prix",
         "perception",
         "audio lab"
+      ]
+    },
+    {
+      "id": "vram_budget_dxgi",
+      "titre": "Budget VRAM reel : DXGI QueryVideoMemoryInfo (Budget, CurrentUsage)",
+      "domaine": "performance",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/performance/vram_budget_dxgi.md",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/ns-dxgi1_4-dxgi_query_video_memory_info"
+      ],
+      "version": "DXGI 1.4, Microsoft Learn au 04/11/2026",
+      "date_verif": "2026-11-04",
+      "statut": "verifie",
+      "mots_cles": [
+        "vram",
+        "budget",
+        "dxgi",
+        "textures hd",
+        "cache",
+        "saccades",
+        "memoire video"
+      ]
+    },
+    {
+      "id": "limites_api_telemetrie",
+      "titre": "API telemetrie SCS : unites, regles de fil, ce qui n'est pas expose",
+      "domaine": "conduite",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/conduite/limites_api_telemetrie.md",
+      "sources": [
+        "https://rust-digger.code-maven.com/src/scs-sdk-rs-0.2.2/sdk/include/common/scssdk_telemetry_truck_common_channels.h",
+        "https://rust-digger.code-maven.com/src/scs-sdk-rs-0.2.2/sdk/readme.txt"
+      ],
+      "version": "copie du SDK SCS (scs-sdk-rs 0.2.2), canaux camion seulement",
+      "date_verif": "2026-11-04",
+      "statut": "verifie_partiel",
+      "mots_cles": [
+        "telemetrie",
+        "limites",
+        "unites",
+        "fil",
+        "canaux",
+        "pilote",
+        "tachygraphe"
+      ]
+    },
+    {
+      "id": "tachygraphe_165_2014",
+      "titre": "Tachygraphe : activites a enregistrer, carte conducteur (165/2014 art. 34)",
+      "domaine": "conduite",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/conduite/tachygraphe_165_2014.md",
+      "sources": [
+        "https://www.legislation.gov.uk/eur/2014/165/article/34"
+      ],
+      "version": "texte revise legislation.gov.uk (base UE 20/08/2020)",
+      "date_verif": "2026-11-04",
+      "statut": "verifie_partiel",
+      "mots_cles": [
+        "tachygraphe",
+        "carte conducteur",
+        "activites",
+        "disponibilite",
+        "autre travail",
+        "165/2014",
+        "legal"
       ]
     }
   ]

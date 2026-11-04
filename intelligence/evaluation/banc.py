@@ -33,6 +33,8 @@ BASE = os.path.dirname(ICI)
 DEPOT = os.path.dirname(BASE)
 HISTO = os.path.join(ICI, "historique.jsonl")
 sys.path.insert(0, os.path.join(BASE, "experts", "son"))
+sys.path.insert(0, os.path.join(BASE, "experts", "performance"))
+sys.path.insert(0, os.path.join(BASE, "experts", "conduite"))
 sys.path.insert(0, BASE)
 sys.path.insert(0, os.path.join(BASE, "outils"))
 
@@ -318,6 +320,102 @@ def logiciel_js(rng):
             if r.returncode:
                 ko.append(f)
     return not ko, "%s" % (", ".join(ko) or "aucune erreur"), "aucune erreur"
+
+
+# ---------------------------------------------------------------- performance (expert 3)
+def capture(rng, fps, n=3000, saccades=0.0, gigue=0.08):
+    """Frametimes en ms d'une capture : bruit lent (les images voisines se ressemblent) + saccades rares."""
+    base = 1000.0 / fps
+    lent = np.convolve(rng.normal(0, 1, n + 60), np.ones(60) / np.sqrt(60), "valid")[:n]
+    ft = base * (1 + gigue * 0.5 * lent + gigue * 0.5 * rng.normal(0, 1, n))
+    k = rng.random(n) < saccades
+    ft[k] *= rng.uniform(2.5, 4.0, k.sum())
+    return np.clip(ft, 1.0, None)
+
+
+@epreuve("performance", 1, "lire un CSV PresentMon (1.x ou 2.x) et retrouver images/s et 1 % bas", "connaissances")
+def perf_csv(rng):
+    import frametime
+    fps = float(rng.uniform(35, 140))
+    ft = capture(rng, fps)
+    col = ["MsBetweenPresents", "FrameTime"][int(rng.integers(2))]
+    with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as f:
+        f.write("Application,%s\n" % col)
+        for i, v in enumerate(ft):
+            f.write("%s,%.4f\n" % ("eurotrucks2.exe" if i % 7 else "dwm.exe", v))
+        nom = f.name
+    try:
+        lu = frametime.lire_csv(nom, "eurotrucks2.exe")
+    finally:
+        os.unlink(nom)
+    vrai = ft[[i for i in range(len(ft)) if i % 7]]
+    s, v = frametime.stats(lu), frametime.stats(vrai)
+    ok = len(lu) == len(vrai) and abs(s["fps_moyen"] - v["fps_moyen"]) < 0.01 and abs(s["fps_1pc_bas"] - v["fps_1pc_bas"]) < 0.01
+    return ok, "%s : %d images, %.2f img/s, 1 %% bas %.2f" % (col, len(lu), s["fps_moyen"], s["fps_1pc_bas"]), "%d images, %.2f, %.2f" % (len(vrai), v["fps_moyen"], v["fps_1pc_bas"])
+
+
+@epreuve("performance", 2, "avant/après : reconnaître un vrai gain, une absence de gain et une régression de saccades", "diagnostic")
+def perf_avant_apres(rng):
+    import frametime
+    fps = float(rng.uniform(40, 90))
+    cas = [("mieux", capture(rng, fps), capture(rng, fps * rng.uniform(1.08, 1.15))),
+           ("pas de différence prouvée", capture(rng, fps), capture(rng, fps)),
+           ("pire", capture(rng, fps), capture(rng, fps, saccades=0.03))]
+    got = [frametime.comparer(a, b, graine=int(rng.integers(1 << 30)))["verdict"] for _, a, b in cas]
+    return got == [c[0] for c in cas], " / ".join(got), " / ".join(c[0] for c in cas)
+
+
+# ---------------------------------------------------------------- conduite (expert 6)
+def journee_legale(rng):
+    """Une journée tirée au hasard qui respecte les art. 6, 7, 8 (2 ou 3 blocs de conduite)."""
+    tr, total = [], 0
+    for b in range(int(rng.integers(2, 4))):
+        if b:
+            if rng.random() < 0.5:
+                tr.append(("repos", int(rng.integers(45, 70))))
+            else:
+                tr += [("repos", int(rng.integers(15, 25))), ("conduite", int(rng.integers(20, 60))), ("repos", int(rng.integers(30, 40)))]
+                total += tr[-2][1]
+        d = int(rng.integers(60, 200))
+        if total + d > 520:
+            break
+        tr.append(("conduite", d)); total += d
+        if rng.random() < 0.4:
+            tr.append(("travail", int(rng.integers(10, 40))))
+    tr.append(("repos", int(rng.integers(660, 720))))
+    return tr
+
+
+@epreuve("conduite", 1, "561/2006 : cas écrits d'après les articles 4, 6, 7, 8 (pause 15+30, ordre inversé, 10 h, 24 h)", "connaissances")
+def conduite_cas_texte(rng):
+    import regles_561 as r
+    cas = [([("conduite", 270), ("repos", 45), ("conduite", 270), ("repos", 660)], []),
+           ([("conduite", 200), ("repos", 15), ("conduite", 70), ("repos", 30), ("conduite", 200), ("repos", 660)], []),
+           ([("conduite", 200), ("repos", 30), ("conduite", 70), ("repos", 15), ("conduite", 10), ("repos", 660)], ["7"]),
+           ([("conduite", 270), ("repos", 45), ("conduite", 270), ("repos", 45), ("conduite", 70), ("repos", 660)], ["6(1)"]),
+           ([("conduite", 240), ("repos", 180), ("conduite", 240), ("repos", 540)], []),
+           ([("conduite", 200), ("travail", 800), ("repos", 540)], ["8(2)"])]
+    got = [[i["article"] for i in r.controler(t)["infractions"]] for t, _ in cas]
+    return got == [c[1] for c in cas], str(got), str([c[1] for c in cas])
+
+
+@epreuve("conduite", 2, "trouver UNE infraction glissée au hasard dans des journées légales, sans fausse alarme", "diagnostic")
+def conduite_infraction(rng):
+    import regles_561 as r
+    propres = [journee_legale(rng) for _ in range(6)]
+    fausses = sum(bool(r.controler(t)["infractions"]) for t in propres)
+    t = [s for j in propres[:3] for s in j]
+    i = int(rng.integers(3))
+    attendu = ["7", "6(1)", "8(2)"][i]
+    if i == 0:  # un bloc de 4 h 31 à 4 h 50 sans pause
+        t = [("conduite", int(rng.integers(271, 290))), ("repos", 45), ("conduite", 60), ("repos", 700)] + t
+    elif i == 1:  # 10 h 10 à 11 h de conduite avec pauses correctes
+        x = int(rng.integers(610, 660))
+        t = [("conduite", 270), ("repos", 45), ("conduite", 270), ("repos", 45), ("conduite", x - 540), ("repos", 660)] + t  # 750 + 660 <= 24 h : pas d'autre infraction
+    else:  # repos journalier qui finit après 24 h
+        t = [("conduite", 200), ("repos", 45), ("conduite", 200), ("travail", int(rng.integers(450, 600))), ("repos", 660)] + t
+    trouve = [x["article"] for x in r.controler(t)["infractions"]]
+    return fausses == 0 and trouve == [attendu], "fausses alarmes %d, trouvé %s" % (fausses, trouve), "0, ['%s']" % attendu
 
 
 # ---------------------------------------------------------------- épreuves du PC (jamais comptées réussies d'ici)

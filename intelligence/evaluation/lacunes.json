@@ -1,5 +1,5 @@
 {
- "genere": "2026-11-04T17:26",
+ "genere": "2026-11-04T17:36",
  "lacunes": [
   {
    "agent": "atelier",
@@ -8,16 +8,10 @@
    "quoi": "examen d'entrée à construire (épreuves PC : Blender -b -P : UV, échelle, origine d'un modèle SCS)"
   },
   {
-   "agent": "conduite",
+   "agent": "forge",
    "priorite": 1,
-   "type": "base de connaissances trop mince",
-   "quoi": "2 fiche(s) : compléter avec la documentation officielle et les sources libres du domaine"
-  },
-  {
-   "agent": "conduite",
-   "priorite": 1,
-   "type": "aucun examen",
-   "quoi": "examen d'entrée à construire (épreuves PC : rejouer traces.json sur le Pilote de tête)"
+   "type": "épreuve ratée",
+   "quoi": "forge_ia_js : obtenu adoptée True, rôle 0.8888888888888888, garder/jeter 0.8888888888888888, attendu version adoptée, >= 90 % sur le juge"
   },
   {
    "agent": "graphics",
@@ -36,18 +30,6 @@
    "priorite": 1,
    "type": "aucun examen",
    "quoi": "examen d'entrée à construire (épreuves PC : game.log réel -> mod et fichier fautifs ; contrôle .scs)"
-  },
-  {
-   "agent": "performance",
-   "priorite": 1,
-   "type": "base de connaissances trop mince",
-   "quoi": "2 fiche(s) : compléter avec la documentation officielle et les sources libres du domaine"
-  },
-  {
-   "agent": "performance",
-   "priorite": 1,
-   "type": "aucun examen",
-   "quoi": "examen d'entrée à construire (épreuves PC : Test-PerfLab.ps1 + diagnostic avant/après)"
   },
   {
    "agent": "textures",
@@ -107,19 +89,31 @@
    "agent": "conduite",
    "priorite": 2,
    "type": "outil ou capacité manquante",
-   "quoi": "fiche limites de l'API telemetrie (ce qui n'est pas expose)"
-  },
-  {
-   "agent": "conduite",
-   "priorite": 2,
-   "type": "outil ou capacité manquante",
    "quoi": "analyse des memoires recues des joueurs"
   },
   {
    "agent": "conduite",
    "priorite": 2,
+   "type": "outil ou capacité manquante",
+   "quoi": "comparer tacho.js au controleur 561/2006 sur les memes traces (code du pilote sur le PC) ; semaine et repos hebdomadaire pas encore controles"
+  },
+  {
+   "agent": "conduite",
+   "priorite": 2,
    "type": "fiche à vérifier",
-   "quoi": "reglement_561_2006 (verifie_partiel) : Temps de conduite, pauses et repos UE (561/2006, articles 6 a 9)"
+   "quoi": "reglement_561_2006 (verifie_partiel) : Temps de conduite, pauses et repos UE (561/2006, art. 4 et 6 a 9)"
+  },
+  {
+   "agent": "conduite",
+   "priorite": 2,
+   "type": "fiche à vérifier",
+   "quoi": "limites_api_telemetrie (verifie_partiel) : API telemetrie SCS : unites, regles de fil, ce qui n'est pas expose"
+  },
+  {
+   "agent": "conduite",
+   "priorite": 2,
+   "type": "fiche à vérifier",
+   "quoi": "tachygraphe_165_2014 (verifie_partiel) : Tachygraphe : activites a enregistrer, carte conducteur (165/2014 art. 34)"
   },
   {
    "agent": "forge",
@@ -227,13 +221,13 @@
    "agent": "performance",
    "priorite": 2,
    "type": "outil ou capacité manquante",
-   "quoi": "fiche VRAM / budget textures HD"
+   "quoi": "mesure du budget VRAM reel sur le Shadow (QueryVideoMemoryInfo depuis le module DX11)"
   },
   {
    "agent": "performance",
    "priorite": 2,
    "type": "outil ou capacité manquante",
-   "quoi": "comparaison avant/apres automatique"
+   "quoi": "comparateur avant/apres a essayer sur de vraies captures PresentMon du Shadow (teste seulement sur captures simulees)"
   },
   {
    "agent": "qualite",
@@ -314,6 +308,24 @@
    "quoi": "outils_libres (verifie_partiel) : Outils existants et ressources libres"
   },
   {
+   "agent": "conduite",
+   "priorite": 3,
+   "type": "critère de certification non mesuré",
+   "quoi": "Autonomie opérationnelle"
+  },
+  {
+   "agent": "conduite",
+   "priorite": 3,
+   "type": "critère de certification non mesuré",
+   "quoi": "Qualité et fiabilité des livrables"
+  },
+  {
+   "agent": "conduite",
+   "priorite": 3,
+   "type": "critère de certification non mesuré",
+   "quoi": "Innovation démontrée"
+  },
+  {
    "agent": "forge",
    "priorite": 3,
    "type": "critère de certification non mesuré",
@@ -357,6 +369,24 @@
   },
   {
    "agent": "logiciel",
+   "priorite": 3,
+   "type": "critère de certification non mesuré",
+   "quoi": "Innovation démontrée"
+  },
+  {
+   "agent": "performance",
+   "priorite": 3,
+   "type": "critère de certification non mesuré",
+   "quoi": "Autonomie opérationnelle"
+  },
+  {
+   "agent": "performance",
+   "priorite": 3,
+   "type": "critère de certification non mesuré",
+   "quoi": "Qualité et fiabilité des livrables"
+  },
+  {
+   "agent": "performance",
    "priorite": 3,
    "type": "critère de certification non mesuré",
    "quoi": "Innovation démontrée"
