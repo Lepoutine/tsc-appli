@@ -604,6 +604,16 @@ float3 neural_ldr(float2 uv, float3 c) { return c; }   // pas encore de reseau a
 // <</TSC_NEURAL>>
 float4 ps_ldr(VSO i) : SV_Target {
 	float4 t = tCouleur.SampleLevel(sPt, i.uv, 0);
+	// 0.18 : vue de controle 4 = guide de TSC Neural (distance du G-buffer de CETTE vue, albedo en bas a droite) ;
+	// rouge = pas de guide. Sert a verifier que chaque ecran recoit bien SA profondeur (cles ldr_hdr0..2).
+	if (p0.x > 3.5) {
+		if (p11.w < 0.5) return float4(t.rgb * float3(1, 0.25, 0.25), 1);
+		float dp = tProf.SampleLevel(sPt, i.uv, 0);
+		float v = ciel(dp) ? 1 : (cabine(dp) ? 0 : saturate(log2(1 + lineaire(dp)) / 10));
+		float3 g = float3(v, v, v);
+		if (i.uv.x > 0.66 && i.uv.y > 0.66) g = p11.z > 0.5 ? saturate(tGb2.SampleLevel(sPt, i.uv, 0).rgb) : float3(1, 0, 1);
+		return float4(lerp(max(t.rgb, 0), g, 0.7), 1);
+	}
 	if (!fini3(t.rgb)) t.rgb = 0;   // 0.15.2
 	if (p20.x > 0) { float3 a = anticrenelage(i.uv, t.rgb); if (fini3(a)) t.rgb = a; }
 	float3 c = max(t.rgb, 0);

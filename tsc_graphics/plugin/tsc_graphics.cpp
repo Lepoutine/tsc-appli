@@ -63,7 +63,7 @@ void *memcpy(void *d, const void *s, SIZE_T n) { unsigned char *a = (unsigned ch
 }
 #define INVALID ((HANDLE)(long long)-1)
 #define VT(o) (*(void ***)(o))
-#define VERSION "tsc-graphics 0.17"
+#define VERSION "tsc-graphics 0.18"
 #define REL(o) do { if (o) { ((UINT (WINAPI *)(void *))VT(o)[2])(o); (o) = 0; } } while (0)
 
 /* ---------- journal ---------- */
@@ -128,7 +128,11 @@ struct Reglages {
 	   l'etage ldr et TSC Neural) : le reseau apprend alors sur ce qu'il recoit vraiment en jeu (run4 : detail 0,84 hors jeu,
 	   0,62 en jeu). hdr/prof/albedo restent ceux du jeu tel quel (copies faites avant la passe). */
 	float enr_effet = 0;
-	float enr_jeu8_seul = 0;   /* 0.17 : 1 = seule l'image jeu8 est enregistree (16 Mo au lieu de ~112 Mo par jeu) */
+	float enr_jeu8_seul = 0;
+	/* 0.18 : TSC Neural guide par le jeu : profondeur et albedo de CHAQUE vue gardes jusqu'a l'etage apres tone mapping.
+	   Les vues HDR et 8 bits n'arrivent pas dans le meme ordre (3 ecrans, releve 04/11 : HDR gauche, droite, centre ;
+	   8 bits gauche, centre, droite) : ldr_hdrK = numero de la vue HDR qui correspond a la K-ieme vue 8 bits. */
+	float ldr_hdr0 = 0, ldr_hdr1 = 2, ldr_hdr2 = 1;   /* 0.17 : 1 = seule l'image jeu8 est enregistree (16 Mo au lieu de ~112 Mo par jeu) */
 	/* 0.14 : TSC Meteo. Ambiance pluie lissee (d'apres la passe des gouttes du jeu, ou l'humidite forcee) : ciel couvert et nuages de pluie,
 	   monde delave et plus froid, brume au sol (par la hauteur), rideau de pluie en 3 couches derriere lesquelles on voit le decor,
 	   table de couleurs de pluie (tsc-graphics-lut-pluie.bin) melangee a celle du jour. Tout a chaud ; meteo = 0 coupe tout. */
@@ -168,7 +172,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"enr_effet", &R.enr_effet}, {"enr_jeu8_seul", &R.enr_jeu8_seul}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"textures_relister", &R.textures_relister}, {"hd_budget_mo", &R.hd_budget_mo},
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"enr_effet", &R.enr_effet}, {"enr_jeu8_seul", &R.enr_jeu8_seul}, {"ldr_hdr0", &R.ldr_hdr0}, {"ldr_hdr1", &R.ldr_hdr1}, {"ldr_hdr2", &R.ldr_hdr2}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"textures_relister", &R.textures_relister}, {"hd_budget_mo", &R.hd_budget_mo},
 		{"meteo", &R.meteo}, {"brume_sol", &R.brume_sol}, {"brume_hauteur", &R.brume_hauteur}, {"oeil", &R.oeil}, {"rideau", &R.rideau}, {"pluie_vitesse", &R.pluie_vitesse},
 		{"pluie_incl", &R.pluie_incl}, {"nuages", &R.nuages}, {"pluie_delave", &R.pluie_delave}, {"pluie_froid", &R.pluie_froid}, {"pluie_contraste", &R.pluie_contraste}, {"optique", &R.optique}, {"anticrenelage", &R.anticrenelage}, {"air", &R.air}, {"visibilite", &R.visibilite}, {"ao_horizons", &R.ao_horizons}, {"libre1", &R.libre[0]}, {"libre2", &R.libre[1]}, {"libre3", &R.libre[2]}, {"libre4", &R.libre[3]}, {"libre5", &R.libre[4]}, {"libre6", &R.libre[5]}, {"libre7", &R.libre[6]}, {"libre8", &R.libre[7]}, {"libre9", &R.libre[8]}, {"libre10", &R.libre[9]}, {"libre11", &R.libre[10]}, {"libre12", &R.libre[11]},
 		{"ldr_lut_pluie", &R.ldr_lut_pluie}, {"pluie_montee_s", &R.pluie_montee_s}, {"pluie_fin_s", &R.pluie_fin_s} };
@@ -269,7 +273,8 @@ static void trace_dessins() { if (g_trace && g_trace_dessins) { Ligne l; l.s("  
 enum { E_RIEN, E_GBUF, E_HDR };
 static int g_etape;                       /* ou en est la vue en cours */
 static void *g_hdr_tex, *g_vue_prof;      /* cible HDR et profondeur de la vue en cours (references gardees) */
-static void *g_gb_prof; static int g_prof_pret, g_instant_dem; static i64 g_n_instant;   /* 0.16.5 : copie de la profondeur a la fin du G-buffer */
+static void *g_gb_prof; static int g_prof_pret, g_instant_dem; static i64 g_n_instant;
+static void *g_pv[3], *g_pv_srv[3], *g_av[3], *g_av_srv[3]; static int g_pv_ok[3], g_av_ok[3]; static UINT g_prof_fs; static i64 g_n_guide;   /* 0.18 : copies par vue pour l'etage 8 bits */   /* 0.16.5 : copie de la profondeur a la fin du G-buffer */
 static int g_vues_image, g_vues_traitees; static i64 g_n_petites;  /* G-buffer de petites vues ignorees (sondes) */ /* vues vues / traitees sur l'image en cours */
 static int g_dans_gouttes; static i64 g_gouttes, g_gouttes_rapport;
 static float g_mouille = 0, g_amb_pluie = 0; static int g_pluie;
@@ -509,7 +514,7 @@ static bool copies_pretes(void *hdr, void *prof) {
 		REL(g_prof_srv); REL(g_prof);
 		TEX2D_DESC n = {d.Width, d.Height, 1, 1, ft, 1, 0, 0, 8, 0, 0};
 		if (dev_tex(&n, &g_prof) < 0) { g_prof = 0; return false; }
-		SRV_DESC sd = {fs, 4, 0, 1, {0, 0}};
+		SRV_DESC sd = {fs, 4, 0, 1, {0, 0}}; g_prof_fs = fs;
 		((HRESULT (WINAPI *)(void *, void *, const SRV_DESC *, void **))VT(g_dev)[D_CreateSRV])(g_dev, g_prof, &sd, &g_prof_srv);
 		g_prof_w = d.Width; g_prof_h = d.Height; g_prof_fmt = ft;
 		g_vram = (u64)h.Width * h.Height * 8 * (g_coul_mips > 1 ? 4 : 3) / 3 + (u64)d.Width * d.Height * 8;
@@ -596,6 +601,23 @@ static void remettre(EtatJeu &e) {
 	REL(e.srv[0]); REL(e.srv[1]); REL(e.srv[2]); REL(e.srv[3]); REL(e.srv[4]); REL(e.smp[0]); REL(e.smp[1]); REL(e.cb);
 }
 /* passe TSC sur une vue : appelee quand le jeu quitte la cible HDR de la vue (profondeur encore intacte) */
+/* 0.18 : copie GPU de la profondeur et de l'albedo de la vue k (deja copies dans g_prof / g_gb2) pour l'etage 8 bits */
+static void copie_vue(void *src, void **dst, void **srv, int fs) {
+	TEX2D_DESC a, b; desc_tex(src, a);
+	if (*dst) { desc_tex(*dst, b); if (a.Width != b.Width || a.Height != b.Height || a.Format != b.Format) { REL(*srv); REL(*dst); } }
+	if (!*dst) {
+		TEX2D_DESC n = {a.Width, a.Height, 1, 1, a.Format, 1, 0, 0, 8, 0, 0};
+		if (dev_tex(&n, dst) < 0) { *dst = 0; return; }
+		if (fs) { SRV_DESC sd = {(UINT)fs, 4, 0, 1, {0, 0}}; ((HRESULT (WINAPI *)(void *, void *, const SRV_DESC *, void **))VT(g_dev)[D_CreateSRV])(g_dev, *dst, &sd, srv); }
+		else ((HRESULT (WINAPI *)(void *, void *, const void *, void **))VT(g_dev)[D_CreateSRV])(g_dev, *dst, 0, srv);
+	}
+	if (*srv) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, *dst, src);
+}
+static void garder_vue(int k, bool gb2_ok) {
+	if (k < 0 || k > 2) return;
+	copie_vue(g_prof, &g_pv[k], &g_pv_srv[k], (int)g_prof_fs); g_pv_ok[k] = g_pv_srv[k] != 0;
+	g_av_ok[k] = 0; if (gb2_ok && g_gb2) { copie_vue(g_gb2, &g_av[k], &g_av_srv[k], 0); g_av_ok[k] = g_av_srv[k] != 0; }
+}
 static void passe_vue(void *hdr, void *prof) {
 	if (g_arret || !g_shaders_ok || !g_etat || g_vues_traitees >= (int)R.max_vues) return;
 	if (!copies_pretes(hdr, prof)) return;
@@ -609,7 +631,7 @@ static void passe_vue(void *hdr, void *prof) {
 	float m_veg = R.vegetation; if ((int)R.mode == 1) m_veg *= 0.5f;
 	const bool gb2_ok = g_gb2_valide;
 	float cbv[96] = {
-		(float)g_vue, mouille, tan_v, g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
+		(float)(g_vue < 4 ? g_vue : 0), mouille, tan_v,   /* 0.18 : vue 4 = controle de l'etage 8 bits seulement */ g_coul_h ? (float)g_coul_w / (float)g_coul_h : 1.0f,
 		R.proche, R.plage_min, R.plage_max, R.decalage_z,
 		(float)g_coul_w, (float)g_coul_h, g_coul_w ? 1.0f / g_coul_w : 0, g_coul_h ? 1.0f / g_coul_h : 0,
 		R.intensite, R.rugosite, R.flou, R.trainees,
@@ -649,8 +671,10 @@ static void passe_vue(void *hdr, void *prof) {
 		if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
 	}
 	g_prof_pret = 0;
-	if (g_enr_image && R.enr_jeu8_seul < 0.5f) {   /* image d'enregistrement : le jeu tel quel, sans effet TSC */
-		vider_tex(g_coul, "hdr", g_vues_traitees); vider_tex(g_prof, "prof", g_vues_traitees);
+	garder_vue(g_vues_traitees, gb2_ok);
+	if (g_enr_image && (R.enr_jeu8_seul < 0.5f || R.enr_jeu8_seul > 1.5f)) {   /* image d'enregistrement : le jeu tel quel, sans effet TSC */
+		if (R.enr_jeu8_seul < 1.5f) vider_tex(g_coul, "hdr", g_vues_traitees);   /* 0.18 : enr_jeu8_seul = 2 : jeu8 + profondeur + albedo, sans hdr */
+		vider_tex(g_prof, "prof", g_vues_traitees);
 		if (gb2_ok) vider_tex(g_gb2, "albedo", g_vues_traitees);
 	}
 	const bool lm_ok = g_ps_lm && g_lm_srv && g_lm_rtv;
@@ -710,6 +734,14 @@ static void passe_ldr(void *tex) {
 	cbv[56] = R.ldr_sat_hautes; cbv[57] = R.ldr_temperature; cbv[58] = R.ldr_teinte; cbv[59] = R.ldr_noirs; cbv[60] = R.ldr_verts;
 	cbv[62] = R.ldr_lut; cbv[63] = g_lut_srv ? 32.0f : 0.0f;
 	meteo_cb(cbv);
+	/* 0.18 : profondeur + albedo de la vue correspondante (t1, t2) pour TSC Neural guide ; p11.z/w = albedo/profondeur presents */
+	int kl = g_ldr_n - 1, kh = g_vues_traitees <= 1 ? 0 : (int)(kl == 0 ? R.ldr_hdr0 : kl == 1 ? R.ldr_hdr1 : R.ldr_hdr2);
+	void *gp = 0, *ga = 0;
+	if (kl >= 0 && kl < 3 && kh >= 0 && kh < 3 && g_pv_ok[kh]) { gp = g_pv_srv[kh]; ga = g_av_ok[kh] ? g_av_srv[kh] : 0; }
+	cbv[0] = (float)g_vue; cbv[3] = d.Height ? (float)d.Width / d.Height : 1.0f;
+	{ float a = R.fov_v * 0.5f * 3.14159265f / 180.0f; float a2 = a * a; cbv[2] = (a * (1 - a2 / 6 + a2 * a2 / 120)) / (1 - a2 / 2 + a2 * a2 / 24 - a2 * a2 * a2 / 720); }
+	cbv[4] = R.proche; cbv[5] = R.plage_min; cbv[6] = R.plage_max; cbv[7] = R.decalage_z;
+	cbv[46] = ga ? 1.0f : 0.0f; cbv[47] = gp ? 1.0f : 0.0f; if (gp) g_n_guide++;
 	EtatJeu sv;
 	g_nous++;
 	sauver(sv);
@@ -730,7 +762,7 @@ static void passe_ldr(void *tex) {
 	((void (WINAPI *)(void *, UINT))VT(g_ctx)[C_IASetTopology])(g_ctx, 4);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_VSSetShader])(g_ctx, g_vs, 0, 0);
 	((void (WINAPI *)(void *, void *, void *const *, UINT))VT(g_ctx)[C_PSSetShader])(g_ctx, g_ps_ldr, 0, 0);
-	void *srv[6] = {g_ldr_srv, 0, 0, 0, g_lut_srv, g_lutp_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
+	void *srv[6] = {g_ldr_srv, gp, ga, 0, g_lut_srv, g_lutp_srv}; void *smp[2] = {g_samp_lin, g_samp_pt};
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSRV])(g_ctx, 0, 6, srv);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetSamplers])(g_ctx, 0, 2, smp);
 	((void (WINAPI *)(void *, UINT, UINT, void *const *))VT(g_ctx)[C_PSSetCB])(g_ctx, 0, 1, &g_cb);
@@ -1628,7 +1660,7 @@ static void apres_image(void *sc) {
 		u.s(" ; variantes en ligne"); for (int k = 0; k < 4; k++) { u.s(" "); u.s(g_vb[k].actif ? "oui" : (g_vb[k].tente ? "refus" : "-")); } u.s(" ; lignes csv "); u.i(g_tx_lignes); u.s(" ; extraites "); u.i(g_vide_n); u.s(" ("); u.i(g_vide_octets >> 20); u.s(" Mo, formats refuses "); u.i(g_vide_refus); u.s(")"); journal(u);
 		{ Ligne x; x.s("TSC Textures HD : disponibles "); x.i(g_hd_n); x.s(", posees (uniques) "); x.i(g_hd_crees); x.s(", reutilisees "); x.i(g_hd_reutil); x.s(", refusees "); x.i(g_hd_refus); x.s(", appels remplaces "); x.i(g_hd_rempl); x.s(", memoire HD "); x.i(g_hd_octets >> 20); x.s(" Mo / budget "); x.i((i64)R.hd_budget_mo); x.s(", hors budget "); x.i(g_hd_budget_refus); x.s(R.textures_hd > 0 ? " (marche)" : " (coupe)"); journal(x); }
 		Ligne w; w.s("TSC Textures (entrees remises) :"); for (int i = 0; i < 140; i++) if (g_repose_i[i]) { w.s(" "); w.i(i); w.s("="); w.i(g_repose_i[i]); } journal(w); } }
-	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_relister_vu < 0) g_relister_vu = R.textures_relister; else if (R.textures_relister != g_relister_vu) { g_relister_vu = R.textures_relister; hd_lister(); } if (g_dev) { compiler(); charger_lut(); } { static float vue_prec = -1; if (R.vue != vue_prec) { vue_prec = R.vue; int v = (int)R.vue; g_vue = v > 0 && v < 4 ? v : 0; } } }
+	if (now - t_ini > 1000) { t_ini = now; lire_ini(false); if (g_relister_vu < 0) g_relister_vu = R.textures_relister; else if (R.textures_relister != g_relister_vu) { g_relister_vu = R.textures_relister; hd_lister(); } if (g_dev) { compiler(); charger_lut(); } { static float vue_prec = -1; if (R.vue != vue_prec) { vue_prec = R.vue; int v = (int)R.vue; g_vue = v > 0 && v < 5 ? v : 0; } } }
 	static i64 n_total; n_total++;
 	{ static float prec = -1; if (prec < 0) prec = R.trace; else if (R.trace != prec) { prec = R.trace; if (!g_trace) { g_trace = 2; g_tn = 0; logline("trace d'une image demandee par l'ini"); } } }
 	{ static float prec = -1; if (prec < 0) prec = R.enregistre; else if (R.enregistre != prec) { prec = R.enregistre; if (R.enregistre > 0) { g_enr_reste = (int)R.enregistre; g_enr_t = 0; Ligne l; l.s("TSC Neural : enregistrement de "); l.i(g_enr_reste); l.s(" images (une toutes les 2 s, sans effet)"); journal(l); } } }
@@ -1649,7 +1681,7 @@ static void apres_image(void *sc) {
 		Ligne l; l.s("mesure : "); l.f(1000.0 * g_n_img / (g_somme_ms > 0 ? g_somme_ms : 1), 1); l.s(" img/s, image moy "); l.f(g_somme_ms / g_n_img); l.s(" ms, pire ");
 		l.f(g_pire_ms); l.s(" ms, TSC CPU (profileur compris) "); l.f(g_cpu_ms / g_n_img, 3); l.s(" ms, TSC GPU "); if (g_n_gpu) l.f(g_gpu_ms / g_n_gpu, 3); else l.s("-"); l.s(" ms ; vues traitees/image ");
 		l.f((double)g_vues_rapport / g_n_img, 2); l.s(" ; effet "); l.s(g_effet_on > 0.5f && R.actif > 0.5f ? "marche" : "arret"); l.s(" ; pluie "); l.s(g_pluie ? "oui" : "non");
-		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; ambiance pluie "); l.f(g_amb_pluie); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" ; vues finies avant effacement "); l.i(g_n_fin_eff); l.s(" ; profondeurs copiees fin G-buffer "); l.i(g_n_instant); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
+		l.s(" (gouttes max "); l.i(g_gouttes_rapport); l.s(") ; humidite "); l.f(R.humidite >= 0 ? R.humidite : g_mouille); l.s(" ; ambiance pluie "); l.f(g_amb_pluie); l.s(" ; G-buffer vus "); l.i(g_n_gbuf); l.s(" ; vues finies avant effacement "); l.i(g_n_fin_eff); l.s(" ; profondeurs copiees fin G-buffer "); l.i(g_n_instant); l.s(" ; vues 8 bits guidees "); l.i(g_n_guide); l.s(" (petites vues ignorees "); l.i(g_n_petites); l.s(")"); l.s(", HDR vus "); l.i(g_n_hdr);
 		l.s(" ; effacement z="); l.f(g_val_effacement, 3); l.s(" ; crochets reposes "); l.i(g_reposes); l.s(" ; changements de cibles "); l.i(g_n_omsrt); l.s(", dessins "); l.i(g_n_dessins);
 		prof_rapport(l, g_n_img);
 		journal(l);
@@ -1658,7 +1690,7 @@ static void apres_image(void *sc) {
 			if (c > R.budget_ms && g_qualite > 0.4f) { g_qualite *= 0.85f; if (g_qualite < 0.4f) g_qualite = 0.4f; Ligne b; b.s("budget : TSC GPU "); b.f(c, 2); b.s(" ms > "); b.f(R.budget_ms, 2); b.s(" ms -> qualite "); b.f(g_qualite, 2); journal(b); }
 			else if (c < R.budget_ms * 0.6 && g_qualite < 1) { g_qualite *= 1.05f; if (g_qualite > 1) g_qualite = 1; }
 		}
-		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_fin_eff = 0; g_n_instant = 0; g_n_petites = 0; g_n_omsrt = g_n_dessins = 0;
+		g_t_rapport = now; g_somme_ms = g_pire_ms = g_cpu_ms = g_gpu_ms = 0; g_n_img = g_n_gpu = 0; g_vues_rapport = 0; g_gouttes_rapport = 0; g_n_gbuf = g_n_hdr = 0; g_n_fin_eff = 0; g_n_instant = 0; g_n_guide = 0; g_n_petites = 0; g_n_omsrt = g_n_dessins = 0;
 	}
 	if (g_trace) {
 		if (--g_trace == 0) { Ligne l; l.s("=== fin de la trace ==="); trace_txt(l); ecrire("tsc-graphics-trace.log", g_tbuf, g_tn); logline("trace ecrite dans tsc-graphics-trace.log"); }

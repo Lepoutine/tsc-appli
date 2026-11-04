@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 from modele import TSCNeural, Discriminateur
+from caracteristiques import guide_depuis, N_ENTREES
 import exporter
 
 EXT = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
@@ -30,12 +31,31 @@ def charger(p, hauteur):
     return torch.from_numpy(np.asarray(im, np.float32) / 255).permute(2, 0, 1)
 
 
+def charger_jeu(p, guide):
+    """v0.7 : image jeu8 (+ 6 canaux du G-buffer si guide : fichiers _prof.npy / _albedo.npy du meme ecran, neural_lire.py)."""
+    x = charger(p, 0)
+    if not guide:
+        return x
+    b = p[: p.rfind("_jeu8")]
+    if not os.path.exists(b + "_prof.npy"):
+        return None
+    pr = np.load(b + "_prof.npy"); al = np.load(b + "_albedo.npy") if os.path.exists(b + "_albedo.npy") else None
+    if pr.shape[:2] != tuple(x.shape[1:]):
+        return None
+    return torch.cat([x, guide_depuis(pr, al)], 0)
+
+
+def rvb(x):
+    return x[:, :3]
+
+
 class Banque:
     """Images gardees en memoire (RAM), tirage de morceaux aleatoires a echelle variable.
     groupes > 0 : les images sont rangees en groupes de scenes (couleur moyenne + luminosite, k-moyennes) et chaque groupe
     est tire aussi souvent que les autres (v0.2 : 1er essai teinte vert-jaune car les videos sont surtout de la foret)."""
-    def __init__(self, chemins, hauteur, t, groupes=0):
-        self.im = [charger(p, hauteur) for p in chemins]; self.t = t
+    def __init__(self, chemins, hauteur, t, groupes=0, guide=False):
+        self.im = [charger(p, hauteur) for p in chemins] if not guide else [m for m in (charger_jeu(p, True) for p in chemins) if m is not None]
+        self.t = t
         self.grp = [list(range(len(self.im)))]
         if groupes > 1 and len(self.im) >= groupes * 3:
             f = torch.stack([torch.cat([x.mean((1, 2)), x.std((1, 2))]) for x in self.im])
@@ -89,7 +109,7 @@ def ecart(m, jeu, ref_stats, appareil):
     """Ecart (plus bas = plus proche du reel) entre la signature des images du jeu passees dans le reseau et celle du reel."""
     s = []
     for x in jeu:
-        y = m(x[None].to(appareil)) if m is not None else x[None].to(appareil)
+        y = m(x[None].to(appareil)) if m is not None else rvb(x[None].to(appareil))
         s.append(stats(y))
     s = torch.stack(s).mean(0)
     return float((s - ref_stats).abs().sum())
@@ -116,6 +136,7 @@ def main():
     a.add_argument("--graine", type=int, default=1)
     a.add_argument("--detail", type=float, default=6.0, help="v0.6 : poids qui garde l'energie du detail fin du jeu (run3/run4 lissaient ~43 %%)")
     a.add_argument("--detail_min", type=float, default=0.75, help="v0.6 : detail fin garde mini (sortie/jeu, images de test) pour devenir champion")
+    a.add_argument("--guide", type=int, default=0, help="v0.7 : 1 = TSC Neural guide par le G-buffer (fichiers _prof.npy/_albedo.npy, plugin 0.18)")
     a.add_argument("--variations", type=float, default=1.0, help="v0.5 : force des variations d'entree (exposition, gamma, teinte chaude/froide) ; 0 = aucune")
     o = a.parse_args()
     os.makedirs(o.sortie, exist_ok=True)
@@ -131,14 +152,21 @@ def main():
     test_j, train_j, test_r, train_r = pj[:nj], pj[nj:], pr[:nr], pr[nr:]
     json.dump({"test_jeu": test_j, "test_reel": test_r}, open(os.path.join(o.sortie, "jeu_de_test.json"), "w"), indent=1)
     print(f"images jeu {len(train_j)} (+{nj} test), reel {len(train_r)} (+{nr} test)")
-    BJ, BR = Banque(train_j, 0, o.taille), Banque(train_r, o.hauteur, o.taille, groupes=o.groupes)
-    tj = [charger(p, 0) for p in test_j]
+    if o.guide:
+        test_j = [p for p in test_j if charger_jeu(p, True) is not None]
+    BJ, BR = Banque(train_j, 0, o.taille, guide=bool(o.guide)), Banque(train_r, o.hauteur, o.taille, groupes=o.groupes)
+    tj = [charger_jeu(p, bool(o.guide)) for p in test_j]
+    print(f"images jeu gardees : {len(BJ.im)} entrainement, {len(tj)} test" + (" (guidees G-buffer)" if o.guide else ""))
     tr = [charger(p, o.hauteur) for p in test_r]
     ref = torch.stack([stats(x[None].to(appareil)) for x in tr]).mean(0)
 
-    G, D = TSCNeural().to(appareil), Discriminateur().to(appareil)
+    G, D = TSCNeural(guide=bool(o.guide)).to(appareil), Discriminateur().to(appareil)
     if o.depart:
-        G.load_state_dict(torch.load(o.depart, map_location=appareil, weights_only=True)["modele"])
+        sd = torch.load(o.depart, map_location=appareil, weights_only=True)["modele"]
+        w = sd["c1.weight"]
+        if w.shape[1] < G.c1.weight.shape[1]:   # v0.7 : depart d'un reseau non guide -> canaux du G-buffer a 0 au depart
+            w2 = torch.zeros_like(G.c1.weight); w2[:, : w.shape[1]] = w; sd["c1.weight"] = w2
+        G.load_state_dict(sd)
     oG = torch.optim.Adam(G.parameters(), o.lr, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), o.lr * o.lr_juge, betas=(0.5, 0.99))
     # v0.2.1 : moyenne glissante des poids (EMA) : c'est ELLE qui est jugee et exportee (run1 oscillait apres 6 000)
     Gm = copy.deepcopy(G).eval()
@@ -158,10 +186,15 @@ def main():
     for it in range(1, o.iterations + 1):
         if it - dernier_champion > o.arret and dernier_champion > 0:
             print(f"arret : pas de progres depuis {o.arret} iterations (champion a {dernier_champion})"); break
-        x = BJ.lot(o.lot, gen).to(appareil); r = BR.lot(o.lot, gen).to(appareil)
+        xg = BJ.lot(o.lot, gen).to(appareil); r = BR.lot(o.lot, gen).to(appareil)
+        x = xg[:, :3]
         if o.variations > 0:
             x = varier(x, gen, o.variations)
-        y = G(x)
+        if o.guide:
+            g = xg[:, 3:] * (torch.rand(xg.shape[0], 1, 1, 1, device=appareil) > 0.1).float()   # 10 % sans G-buffer (vue sans copie)
+            y = G(torch.cat([x, g], 1))
+        else:
+            y = G(x)
         # discriminateur : reel = 1, jeu transforme = 0 (moindres carres)
         lD = ((D(r) - 1) ** 2).mean() + (D(y.detach()) ** 2).mean()
         oD.zero_grad(set_to_none=True); lD.backward(); oD.step()
@@ -234,7 +267,7 @@ def detail_garde(G, jeu, appareil):
     """v0.6 : mediane sur les images de test du rapport d'energie passe-haut (r=1) sortie / jeu ; 1 = detail intact."""
     r = []
     for x in jeu:
-        x = x[None].to(appareil); y = G(x); ly, lx = lum(y), lum(x)
+        x = x[None].to(appareil); y = G(x); ly, lx = lum(y), lum(rvb(x))
         r.append(float((ly - flou(ly, 1)).abs().mean() / (lx - flou(lx, 1)).abs().mean().clamp_min(1e-4)))
     return float(np.median(r)) if r else 1.0
 
@@ -248,7 +281,7 @@ def dominante(G, jeu, appareil):
     pire = 0.0
     for g, ga, ch in VARIANTES:
         t = torch.tensor([1 + ch, 1 + ch * 0.2, 1 - ch]).view(3, 1, 1)
-        pire = max(pire, _dominante(G, [(x.clamp_min(0) ** ga * g * t).clamp(0, 1) for x in jeu], appareil))
+        pire = max(pire, _dominante(G, [torch.cat([(x[:3].clamp_min(0) ** ga * g * t).clamp(0, 1), x[3:]], 0) for x in jeu], appareil))
     return pire
 
 
@@ -256,7 +289,7 @@ def dominante(G, jeu, appareil):
 def _dominante(G, jeu, appareil):
     s = torch.zeros(3); n = 0
     for x in jeu:
-        x = x[None].to(appareil); y = G(x)
+        x = x[None].to(appareil); y = G(x); x = rvb(x)
         mx = x.max(1, keepdim=True)[0]; mn = x.min(1, keepdim=True)[0]
         m = (((mx - mn) / mx.clamp_min(0.05)) < 0.08).float()
         d = (y - lum(y)) - (x - lum(x))
@@ -280,7 +313,7 @@ def apercu(G, imgs, appareil, chemin):
     G.eval(); lignes = []
     for x in imgs:
         y = G(x[None].to(appareil))[0].cpu()
-        lignes.append(torch.cat([x, y], 2))
+        lignes.append(torch.cat([x[:3], y], 2))
     G.train()
     w = max(l.shape[2] for l in lignes)
     p = torch.cat([F.pad(l, (0, w - l.shape[2])) for l in lignes], 1)

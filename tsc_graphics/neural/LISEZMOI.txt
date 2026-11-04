@@ -25,3 +25,9 @@ image ; et garde-fou de champion --detail_min (0,75) : un modele qui lisse ne pe
 v0.6 (suite) : le generateur voit l'image adoucie 3x3 au pixel (voisins a 2, 6, 16 px inchanges) et le detail fin du jeu est
 rajoute tel quel, exactement comme ps_ldr du plugin 0.17 (libre10 = 0). Un reseau run3/run4 (v0.5) reste utilisable en 0.17 :
 il est alors applique sur l'image adoucie (mode B, juge 2,77 au lieu de 2,34 mais detail garde 0,81). libre10 = 1 = ancien mode.
+
+v0.7 (04/11, plugin 0.18) : TSC Neural GUIDE par le jeu (--guide 1). Le reseau recoit en plus, pour chaque pixel, l'albedo du
+G-buffer (sRGB), la distance (log2(1+m)/10), les masques ciel et cabine de SON ecran. Donnees : enregistrer avec
+enregistre = N, enr_effet = 1, enr_jeu8_seul = 2 (jeu8 + profondeur + albedo, sans hdr), puis neural_lire.py (fichiers
+iNNNNNN_<ecran>_jeu8.png / _prof.npy / _albedo.npy). --depart d'un reseau non guide possible (canaux du G-buffer a 0 au depart).
+10 % des morceaux sont appris sans G-buffer (vue sans copie). En jeu : vue = 4 montre le guide recu par chaque ecran.
