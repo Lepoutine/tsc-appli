@@ -212,9 +212,19 @@ def main():
     pj = lister(o.jeu, "_jeu8"); pr = lister(o.reel)
     if len(pj) < 5 or len(pr) < 5:
         raise SystemExit(f"pas assez d'images : jeu {len(pj)}, reel {len(pr)}")
-    gen.shuffle(pj); gen.shuffle(pr)
-    nj, nr = max(1, len(pj) // 10), max(1, len(pr) // 10)
-    test_j, train_j, test_r, train_r = pj[:nj], pj[nj:], pr[:nr], pr[nr:]
+    gen.shuffle(pr)
+    # v0.8.4 : test du jeu tire par BLOCS de prises consecutives (iNNNNNN_<ecran>, 1 prise / 2 s) : les 3 ecrans d'une prise et ses
+    # voisines restent du meme cote, sinon le test "jamais vu" ressemble trop a l'entrainement.
+    def prise(p):
+        import re
+        m = re.match(r"i(\d+)_", os.path.basename(p))
+        return (os.path.dirname(p), int(m.group(1)) // 10) if m else (os.path.dirname(p), os.path.basename(p))
+    blocs = sorted({prise(p) for p in pj}, key=str); gen.shuffle(blocs)
+    tb = set(blocs[: max(1, len(blocs) // 10)])
+    test_j = [p for p in pj if prise(p) in tb]; train_j = [p for p in pj if prise(p) not in tb]
+    gen.shuffle(train_j)
+    nj, nr = len(test_j), max(1, len(pr) // 10)
+    test_r, train_r = pr[:nr], pr[nr:]
     json.dump({"test_jeu": test_j, "test_reel": test_r}, open(os.path.join(o.sortie, "jeu_de_test.json"), "w"), indent=1)
     print(f"images jeu {len(train_j)} (+{nj} test), reel {len(train_r)} (+{nr} test)")
     if o.guide:
