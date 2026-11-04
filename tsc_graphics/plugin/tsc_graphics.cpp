@@ -128,6 +128,7 @@ struct Reglages {
 	   l'etage ldr et TSC Neural) : le reseau apprend alors sur ce qu'il recoit vraiment en jeu (run4 : detail 0,84 hors jeu,
 	   0,62 en jeu). hdr/prof/albedo restent ceux du jeu tel quel (copies faites avant la passe). */
 	float enr_effet = 0;
+	float enr_jeu8_seul = 0;   /* 0.17 : 1 = seule l'image jeu8 est enregistree (16 Mo au lieu de ~112 Mo par jeu) */
 	/* 0.14 : TSC Meteo. Ambiance pluie lissee (d'apres la passe des gouttes du jeu, ou l'humidite forcee) : ciel couvert et nuages de pluie,
 	   monde delave et plus froid, brume au sol (par la hauteur), rideau de pluie en 3 couches derriere lesquelles on voit le decor,
 	   table de couleurs de pluie (tsc-graphics-lut-pluie.bin) melangee a celle du jour. Tout a chaud ; meteo = 0 coupe tout. */
@@ -167,7 +168,7 @@ static void lire_ini(bool force) {
 		{"exposition", &R.exposition}, {"gamma_monde", &R.gamma_monde}, {"hautes", &R.hautes}, {"saturation", &R.saturation},
 		{"veg_teinte", &R.veg_teinte}, {"neutre", &R.neutre},
 		{"ldr", &R.ldr}, {"ldr_expo", &R.ldr_expo}, {"ldr_contraste", &R.ldr_contraste}, {"ldr_epaule", &R.ldr_epaule}, {"ldr_sat", &R.ldr_sat},
-		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"enr_effet", &R.enr_effet}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"textures_relister", &R.textures_relister}, {"hd_budget_mo", &R.hd_budget_mo},
+		{"ldr_sat_hautes", &R.ldr_sat_hautes}, {"ldr_temperature", &R.ldr_temperature}, {"ldr_teinte", &R.ldr_teinte}, {"ldr_noirs", &R.ldr_noirs}, {"ldr_verts", &R.ldr_verts}, {"ldr_lut", &R.ldr_lut}, {"enregistre", &R.enregistre}, {"enr_effet", &R.enr_effet}, {"enr_jeu8_seul", &R.enr_jeu8_seul}, {"sonde_textures", &R.sonde_textures}, {"vider_textures", &R.vider_textures}, {"textures_hd", &R.textures_hd}, {"textures_relister", &R.textures_relister}, {"hd_budget_mo", &R.hd_budget_mo},
 		{"meteo", &R.meteo}, {"brume_sol", &R.brume_sol}, {"brume_hauteur", &R.brume_hauteur}, {"oeil", &R.oeil}, {"rideau", &R.rideau}, {"pluie_vitesse", &R.pluie_vitesse},
 		{"pluie_incl", &R.pluie_incl}, {"nuages", &R.nuages}, {"pluie_delave", &R.pluie_delave}, {"pluie_froid", &R.pluie_froid}, {"pluie_contraste", &R.pluie_contraste}, {"optique", &R.optique}, {"anticrenelage", &R.anticrenelage}, {"air", &R.air}, {"visibilite", &R.visibilite}, {"ao_horizons", &R.ao_horizons}, {"libre1", &R.libre[0]}, {"libre2", &R.libre[1]}, {"libre3", &R.libre[2]}, {"libre4", &R.libre[3]}, {"libre5", &R.libre[4]}, {"libre6", &R.libre[5]}, {"libre7", &R.libre[6]}, {"libre8", &R.libre[7]}, {"libre9", &R.libre[8]}, {"libre10", &R.libre[9]}, {"libre11", &R.libre[10]}, {"libre12", &R.libre[11]},
 		{"ldr_lut_pluie", &R.ldr_lut_pluie}, {"pluie_montee_s", &R.pluie_montee_s}, {"pluie_fin_s", &R.pluie_fin_s} };
@@ -648,7 +649,7 @@ static void passe_vue(void *hdr, void *prof) {
 		if (gb2_ok) ((void (WINAPI *)(void *, void *, void *))VT(g_ctx)[C_CopyResource])(g_ctx, g_gb2, g_gb2_tex);
 	}
 	g_prof_pret = 0;
-	if (g_enr_image) {   /* image d'enregistrement : le jeu tel quel, sans effet TSC */
+	if (g_enr_image && R.enr_jeu8_seul < 0.5f) {   /* image d'enregistrement : le jeu tel quel, sans effet TSC */
 		vider_tex(g_coul, "hdr", g_vues_traitees); vider_tex(g_prof, "prof", g_vues_traitees);
 		if (gb2_ok) vider_tex(g_gb2, "albedo", g_vues_traitees);
 	}
