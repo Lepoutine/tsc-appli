@@ -28,10 +28,11 @@ class TSCNeural(nn.Module):
 class Discriminateur(nn.Module):
     def __init__(self, c=48):
         super().__init__()
+        sn = nn.utils.spectral_norm   # v0.4 : juge bride (run2 : le juge gagnait apres 12 000 et le reseau derivait)
         def bloc(i, o, s):
-            return [nn.Conv2d(i, o, 4, s, 1), nn.LeakyReLU(0.2, True)]
+            return [sn(nn.Conv2d(i, o, 4, s, 1)), nn.LeakyReLU(0.2, True)]
         self.m = nn.Sequential(*bloc(3, c, 2), *bloc(c, 2 * c, 2), *bloc(2 * c, 4 * c, 2), *bloc(4 * c, 4 * c, 1),
-                               nn.Conv2d(4 * c, 1, 4, 1, 1))
+                               sn(nn.Conv2d(4 * c, 1, 4, 1, 1)))
 
     def forward(self, x):
         return self.m(x * 2 - 1)

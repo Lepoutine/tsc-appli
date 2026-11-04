@@ -108,6 +108,9 @@ def main():
     a.add_argument("--groupes", type=int, default=6, help="groupes de scenes reelles tires a egalite")
     a.add_argument("--dominante_max", type=float, default=0.015, help="derive de teinte maxi des gris (sinon pas champion)")
     a.add_argument("--hautes", type=float, default=6.0, help="poids qui protege le ciel et les hautes lumieres")
+    a.add_argument("--noirs", type=float, default=6.0, help="poids qui protege les noirs (pas d'ombres bouchees)")
+    a.add_argument("--lr_juge", type=float, default=0.5, help="vitesse du juge par rapport au reseau")
+    a.add_argument("--arret", type=int, default=10000, help="arret si pas de nouveau champion depuis N iterations")
     a.add_argument("--lr", type=float, default=1e-4); a.add_argument("--ema", type=float, default=0.999)
     a.add_argument("--depart", default="", help="modele.pt a reprendre (apprentissage continu)")
     a.add_argument("--graine", type=int, default=1)
@@ -133,7 +136,7 @@ def main():
     G, D = TSCNeural().to(appareil), Discriminateur().to(appareil)
     if o.depart:
         G.load_state_dict(torch.load(o.depart, map_location=appareil, weights_only=True)["modele"])
-    oG = torch.optim.Adam(G.parameters(), o.lr, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), o.lr, betas=(0.5, 0.99))
+    oG = torch.optim.Adam(G.parameters(), o.lr, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), o.lr * o.lr_juge, betas=(0.5, 0.99))
     # v0.2.1 : moyenne glissante des poids (EMA) : c'est ELLE qui est jugee et exportee (run1 oscillait apres 6 000)
     Gm = copy.deepcopy(G).eval()
     for q in Gm.parameters(): q.requires_grad_(False)
@@ -148,8 +151,10 @@ def main():
     meilleur = champion["ecart"] if champion else base
     print(f"ecart au reel : jeu brut {base:.4f} (100 %), reel contre reel {plancher:.4f} (0 %)" + (f", champion {meilleur:.4f} ({pct(meilleur):.0f} %)" if champion else ""))
     journal = open(os.path.join(o.sortie, "journal.txt"), "a", encoding="utf-8")
-    t0 = time.time()
+    t0 = time.time(); dernier_champion = 0
     for it in range(1, o.iterations + 1):
+        if it - dernier_champion > o.arret and dernier_champion > 0:
+            print(f"arret : pas de progres depuis {o.arret} iterations (champion a {dernier_champion})"); break
         x = BJ.lot(o.lot, gen).to(appareil); r = BR.lot(o.lot, gen).to(appareil)
         y = G(x)
         # discriminateur : reel = 1, jeu transforme = 0 (moindres carres)
@@ -168,12 +173,16 @@ def main():
         # v0.3 : hautes lumieres protegees (run1 brulait le ciel en blanc : nuages et bleu perdus)
         ht = ((lx - 0.6) / 0.3).clamp(0, 1); ht = ht * ht * (3 - 2 * ht)
         lh = (ht * (y - x).abs()).sum() / ht.sum().clamp_min(1) / 3 + F.relu(ly.flatten(1).quantile(0.99, 1) - lx.flatten(1).quantile(0.99, 1) - 0.02).mean()
-        lG = la + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln + o.hautes * lh
+        # v0.4 : noirs proteges (run2 : p1 0,051 -> 0,003, ombres bouchees) : les tres sombres restent proches du jeu
+        # et le 1er centile ne descend pas sous 60 % de celui du jeu
+        nb = ((0.12 - lx) / 0.12).clamp(0, 1)
+        lb = (nb * (y - x).abs()).sum() / nb.sum().clamp_min(1) / 3 + F.relu(0.6 * lx.flatten(1).quantile(0.01, 1) - ly.flatten(1).quantile(0.01, 1)).mean() * 10
+        lG = la + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln + o.hautes * lh + o.noirs * lb
         oG.zero_grad(set_to_none=True); lG.backward(); oG.step()
         with torch.no_grad():
             for pm, pg in zip(Gm.parameters(), G.parameters()): pm.lerp_(pg, 1 - o.ema)
         if it % 200 == 0:
-            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} hautes {lh.item():.4f} {time.time() - t0:.0f} s"
+            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} hautes {lh.item():.4f} noirs {lb.item():.4f} {time.time() - t0:.0f} s"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
         if it % 2000 == 0 or it == o.iterations:
             e = ecart(Gm, tj, ref, appareil); dom = dominante(Gm, tj, appareil)
@@ -189,6 +198,8 @@ def main():
                 exporter.ecrire(Gm, o.hlsl, os.path.join(o.sortie, "tsc-graphics.hlsl"), note=f"iteration {it}, ecart {e:.4f}")
                 json.dump({"ecart": e, "pourcent_restant": pct(e), "objectif_10pc": pct(e) <= 10, "iteration": it, "jeu_brut": base, "plancher_reel": plancher, "fichier": nom}, open(champion_f, "w"), indent=1)
                 apercu(Gm, tj[:3], appareil, os.path.join(o.sortie, f"apercu_{it:06d}.png"))
+                predictions(Gm, tj, test_j, appareil, os.path.join(o.sortie, "predictions_champion"))
+                dernier_champion = it
                 print("   -> nouveau champion, HLSL ecrit dans", o.sortie)
     print("fini. meilleur ecart", meilleur, "(jeu brut", base, ")")
 
@@ -204,6 +215,16 @@ def dominante(G, jeu, appareil):
         d = (y - lum(y)) - (x - lum(x))
         s += ((d * m).sum((0, 2, 3)) / m.sum().clamp_min(1)).cpu(); n += 1
     return float((s / max(n, 1)).abs().max())
+
+
+@torch.no_grad()
+def predictions(G, imgs, chemins, appareil, dossier):
+    """Toutes les images de test passees dans le champion, en PNG (meme nom + _neural), pour le juge v2 hors jeu."""
+    os.makedirs(dossier, exist_ok=True)
+    for x, p in zip(imgs, chemins):
+        y = G(x[None].to(appareil))[0].cpu()
+        n = os.path.splitext(os.path.basename(p))[0]
+        Image.fromarray((y.permute(1, 2, 0).clamp(0, 1).numpy() * 255 + 0.5).astype(np.uint8)).save(os.path.join(dossier, n + "_neural.png"))
 
 
 @torch.no_grad()
