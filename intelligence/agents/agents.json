@@ -390,7 +390,13 @@
     "dossier projet complet sur le Bureau + rapport de tests"
    ],
    "demande_avant": "lancer l'analyseur ETS2 et lire le releve du jeu avant de demander ou sont banques et camions ; jamais de GUID ni de .bank inventes",
-   "fil": "Créer TSC Sound Forge pour ETS2"
+   "fil": "Créer TSC Sound Forge pour ETS2",
+   "apprentissage": {
+    "regles": "intelligence/apprentissage/regles.json",
+    "boucle": "sound_forge/ui/forge_ia.js",
+    "donnees": "choix de Mendy dans Forge (role, je garde / je jette), traits mesures du son",
+    "etat": "teste dans Chromium le 04/11 sur 60 choix simules ; pas encore de vrais choix de Mendy"
+   }
   },
   {
    "id": "conduite",
@@ -610,7 +616,13 @@
     "export SCS -> mod par le moteur de TSC Mod Engineering (pas de second moteur)"
    ],
    "demande_avant": "ouvrir le modele du jeu (pmg, .mat, UV) dans une copie de travail avant de modifier",
-   "fil": "Créer l'atelier Spartan Studio et l'admin des accès"
+   "fil": "Créer l'atelier Spartan Studio et l'admin des accès",
+   "apprentissage": {
+    "regles": "intelligence/apprentissage/regles.json",
+    "boucle": "intelligence/apprentissage/boucle.py",
+    "donnees": "choix de Mendy dans Spartan Studio (a definir avec le fil de l'atelier)",
+    "etat": "regles et boucle pretes et testees ; pas encore branchees dans Spartan Studio"
+   }
   }
  ],
  "centrale": {

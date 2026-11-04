@@ -65,6 +65,12 @@
     <div class="ed" id="ed">
      <div class="wv" id="wv"><canvas id="wvc"></canvas><span class="hint">Tire les bords rouges pour couper, la zone or est la boucle</span></div>
      <div class="qual" id="qual"></div>
+     <div class="tri">
+      <button class="b gold" type="button" id="bGarde" title="Ce son me plaît (touche G)">✓ Je garde (G)</button>
+      <button class="b" type="button" id="bJette" title="Ce son ne me plaît pas (touche J)">✗ Je jette (J)</button>
+      <button class="b red" type="button" id="bSuivant" title="Passe au prochain son pas encore trié et le joue (touche S)">Son suivant à trier (S)</button>
+      <span class="mut" id="iaProp"></span>
+     </div>
      <div class="grid2">
       <div class="ctl"><span>Rôle</span><select id="eRole"></select></div>
       <div class="ctl"><span>Régime</span><input type="range" id="eRpm" min="400" max="2600" step="50"><output id="oRpm"></output></div>
@@ -133,6 +139,17 @@
     <div class="ctl" style="margin-top:8px"><span>Couleur</span><input type="range" id="gMel" min="0" max="100" value="60"><output id="oMel">60 %</output></div>
     <div class="mut" id="gEtat" style="font-size:12px;margin-top:6px"></div>
    </div>
+   <div class="card" id="iaCarte">
+    <h3>IA Forge : elle apprend de ton oreille</h3>
+    <div class="kv" id="iaEtat"></div>
+    <p class="mut" style="font-size:12px;margin:8px 0 4px">Mêmes règles que l'IA Pro Photoréalisme : 1 choix sur 10 reste caché pour la juger, une nouvelle version n'est gardée que si elle fait au moins aussi bien, chaque version est sauvegardée, rien ne quitte ton PC. Elle réapprend seule tous les 5 choix.</p>
+    <ol class="etapes iaj" id="iaJournal"></ol>
+    <div class="simbt">
+     <button class="b gold" type="button" id="bIaApprend">Apprendre maintenant</button>
+     <button class="b" type="button" id="bIaRetour">Version précédente</button>
+     <button class="b" type="button" id="bIaExport" title="Enregistre tes choix dans le dossier TSC_Sound_Forge pour l'expert son">Enregistrer mes choix</button>
+    </div>
+   </div>
    <div class="card">
     <h3>Étapes</h3>
     <ol class="etapes" id="etapes"></ol>
@@ -179,6 +196,7 @@
 <div class="toast" id="toast" hidden role="status"></div>
 <script src="forge_audio.js"></script>
 <script src="forge_gen.js"></script>
+<script src="forge_ia.js"></script>
 <script src="forge.js"></script>
 </body>
 </html>
