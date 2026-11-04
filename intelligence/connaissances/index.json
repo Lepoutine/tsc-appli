@@ -428,6 +428,29 @@
         "game.log",
         "tscf_lab"
       ]
+    },
+    {
+      "id": "ecoute_ia_audio",
+      "titre": "Ecoute par IA : modele audio Gemini (capacites, 16 kbit/s mono, prix)",
+      "domaine": "son",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/son/ecoute_ia_audio.md",
+      "sources": [
+        "https://ai.google.dev/gemini-api/docs/generate-content/audio",
+        "https://aistudio.google.com/docs/pricing"
+      ],
+      "version": "docs Google au 03/11/2026",
+      "date_verif": "2026-11-03",
+      "statut": "verifie",
+      "mots_cles": [
+        "ecoute",
+        "ia audio",
+        "gemini",
+        "api",
+        "prix",
+        "perception",
+        "audio lab"
+      ]
     }
   ]
 }

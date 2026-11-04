@@ -301,7 +301,8 @@
     "exemple_peterbilt",
     "guide_metier",
     "tsc_clapet",
-    "filtrage_cabine"
+    "filtrage_cabine",
+    "ecoute_ia_audio"
    ],
    "manque": [
     "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
