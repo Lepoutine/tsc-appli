@@ -1,17 +1,11 @@
 {
- "genere": "2026-11-04T17:36",
+ "genere": "2026-11-04T22:28",
  "lacunes": [
   {
    "agent": "atelier",
    "priorite": 1,
    "type": "aucun examen",
    "quoi": "examen d'entrée à construire (épreuves PC : Blender -b -P : UV, échelle, origine d'un modèle SCS)"
-  },
-  {
-   "agent": "forge",
-   "priorite": 1,
-   "type": "épreuve ratée",
-   "quoi": "forge_ia_js : obtenu adoptée True, rôle 0.8888888888888888, garder/jeter 0.8888888888888888, attendu version adoptée, >= 90 % sur le juge"
   },
   {
    "agent": "graphics",
@@ -30,6 +24,12 @@
    "priorite": 1,
    "type": "aucun examen",
    "quoi": "examen d'entrée à construire (épreuves PC : game.log réel -> mod et fichier fautifs ; contrôle .scs)"
+  },
+  {
+   "agent": "son",
+   "priorite": 1,
+   "type": "épreuve ratée",
+   "quoi": "son_regime : obtenu 432 (ambigu : [432, 864]), attendu 1727 ±5 %"
   },
   {
    "agent": "textures",
@@ -270,6 +270,12 @@
    "priorite": 2,
    "type": "outil ou capacité manquante",
    "quoi": "test d'ecoute en jeu d'un son TSC"
+  },
+  {
+   "agent": "son",
+   "priorite": 2,
+   "type": "outil ou capacité manquante",
+   "quoi": "choix G/J de Mendy dans Forge a verser dans la tete realisme ; camions modernes absents des sources libres"
   },
   {
    "agent": "son",

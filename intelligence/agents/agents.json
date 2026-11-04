@@ -331,14 +331,15 @@
     "tsc_clapet",
     "filtrage_cabine",
     "ecoute_ia_audio",
-    "juge_panns"
+    "juge_panns",
+    "bibliotheque_commons_son"
    ],
    "manque": [
     "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
     "module d'isolation : soustraction spectrale du bruit + detection et classement des evenements (numpy) ; separation par reseau (Demucs, MIT) seulement si torch est installe sur le Shadow, accord de Mendy",
     "detection automatique des points de boucle",
     "test d'ecoute en jeu d'un son TSC",
-    "plus de vrais sons libres (Wikimedia Commons) et les choix G/J de Mendy pour la tete realisme"
+    "choix G/J de Mendy dans Forge a verser dans la tete realisme ; camions modernes absents des sources libres"
    ],
    "demande_avant": "mesurer le son (spectre, niveaux, regimes) avant de proposer un reglage",
    "fil": "Créer TSC Sound Forge pour ETS2",

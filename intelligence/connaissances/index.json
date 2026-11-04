@@ -542,6 +542,29 @@
         "licence",
         "cc by"
       ]
+    },
+    {
+      "id": "bibliotheque_commons_son",
+      "titre": "Bibliotheque libre de vrais moteurs (61 fichiers Wikimedia Commons, licences et attribution)",
+      "domaine": "son",
+      "lieu": "depot",
+      "fichier": "intelligence/connaissances/son/bibliotheque_commons.md",
+      "sources": [
+        "https://commons.wikimedia.org/w/api.php (metadonnees de licence par fichier, INDEX.csv)"
+      ],
+      "version": "collecte du 04/11/2026",
+      "date_verif": "2026-11-04",
+      "statut": "verifie",
+      "mots_cles": [
+        "bibliotheque",
+        "commons",
+        "cc0",
+        "cc by",
+        "cc by-sa",
+        "attribution",
+        "diesel",
+        "camion"
+      ]
     }
   ]
 }

@@ -14,5 +14,5 @@
 
 ## Limites (méthode Graphics : comparer à contenu semblable)
 - Les vrais enregistrements entre eux sont loin (distance 0,29 à 0,34) : le juge entend aussi le micro, le vent, la pièce. Ne comparer qu'à régime égal, et ne jamais lire la distance brute comme « plus réel ».
-- Sur un extrait court tiré au hasard, la tête « réalisme » se trompe encore (6 sur 8 au banc) : il faut plus de vrais sons (bibliothèque libre) et les choix de Mendy.
+- Sur un extrait court tiré au hasard, la tête « réalisme » (centres de classes) se trompait 2 fois sur 8 au banc. Le 04/11 au soir : +45 vrais moteurs libres (fiche bibliotheque_commons_son) et tête logistique équilibrée ; validation un-contre-tous par fenêtre de 4 s : synthèses reconnues 53/59 (contre 46/59), vrais fichiers 59/61 (contre 57/61) ; au banc, 10 sur 12 même sans aucun son du même camion à l'apprentissage (contre 9 sur 12 avec). Reste faible : les synthèses à coups de gaz (v3_2).
 - Le juge mesure, il n'écoute pas pour Mendy.
