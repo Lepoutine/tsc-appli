@@ -41,7 +41,13 @@ class TestMesure(unittest.TestCase):
     def test_regime_estime(self):
         for tr, ineg in ((600, 0.0), (900, 0.0), (600, 0.35), (750, 0.25)):
             r = ms.mesurer(moteur(tr, inegal=ineg), SR, 8)
-            self.assertAlmostEqual(r["regime_estime_tr_min"], tr, delta=0.08 * tr)
+            if not ineg:
+                self.assertAlmostEqual(r["regime_estime_tr_min"], tr, delta=0.08 * tr)
+            else:
+                # allumage tres inegal : l'octave est ambigue, la bonne reponse doit figurer parmi les candidats
+                # annonces (04/11/2026 : le doublement automatique faussait les vrais enregistrements Scania)
+                self.assertTrue(r["regime_ambigu"])
+                self.assertTrue(any(abs(c - tr) <= 0.08 * tr for c in r["regime_candidats"]), r["regime_candidats"])
 
     def test_lecture_wav_16_bits(self):
         p = os.path.join(self.d, "a.wav")

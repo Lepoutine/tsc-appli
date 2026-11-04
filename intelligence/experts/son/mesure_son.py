@@ -74,34 +74,63 @@ def enveloppe(x, sr, fc=40.0):
     return np.convolve(np.abs(x), np.ones(n) / n, mode="same")
 
 
-def allumage(x, sr, cylindres):
-    """Frequence d'allumage par autocorrelation de l'enveloppe (plus fiable que le pic du spectre au ralenti)."""
-    e = enveloppe(x, sr, 400.0)
-    e = e - e.mean()
+def allumage(x, sr, cylindres, details=False):
+    """Frequence d'allumage par somme des harmoniques du spectre (15-250 Hz).
+
+    Version du 04/11/2026 : l'ancienne autocorrelation d'enveloppe lisait l'ondulation de la forme d'onde au lieu
+    de l'allumage sur les vrais enregistrements (164L : 3000 tr/min au lieu de 500). Trouve par le banc TSC Virtuoso.
+    L'octave reste parfois ambigue (allumage inegal, signature des cylindres) : details=True rend les candidats et
+    le drapeau « ambigu » ; le regime est alors a confirmer (nom du fichier, oreille de Mendy), jamais affirme.
+    """
     pas = max(sr // 2000, 1)
-    e = e[::pas]
-    sr2 = sr / pas
-    n = 1 << int(np.ceil(np.log2(2 * len(e))))
-    ac = np.fft.irfft(np.abs(np.fft.rfft(e, n)) ** 2)[: len(e)]
-    if ac[0] <= 0:
-        return None, None
-    ac = ac / ac[0]
-    # allumage entre 15 Hz (V8 ~ 225 tr/min) et 250 Hz : on cherche le 1er pic fort
-    lo, hi = int(sr2 / 250), int(sr2 / 15)
-    seg = ac[lo:hi]
-    if len(seg) < 3:
-        return None, None
-    # 1er pic local qui atteint 30 % du plus fort : evite de prendre 2 coups d'allumage
-    # pour un seul quand l'allumage est inegal (V8 a vilebrequin croise)
-    fort = float(seg.max())
-    i = int(np.argmax(seg)) + lo
-    for j in range(1, len(seg) - 1):
-        if seg[j] >= seg[j - 1] and seg[j] >= seg[j + 1] and seg[j] >= 0.3 * fort:
-            i = j + lo
-            break
-    f = sr2 / i
-    tr_min = f * 60.0 / (cylindres / 2.0)
-    return float(f), float(tr_min)
+    y = x[: len(x) // pas * pas].reshape(-1, pas).mean(1) if len(x) >= pas else x
+    fs = sr / pas
+    N = 1 << 14
+    if len(y) < N // 4:
+        return (None, None, {"ambigu": True, "candidats": []}) if details else (None, None)
+    w = np.hanning(N)
+    acc = None
+    for i in range(0, max(1, len(y) - N + 1), N // 2):
+        s = y[i:i + N]
+        if len(s) < N:
+            s = np.pad(s, (0, N - len(s)))
+        P = np.abs(np.fft.rfft((s - s.mean()) * w)) ** 2
+        acc = P if acc is None else acc + P
+    f = np.fft.rfftfreq(N, 1 / fs)
+    L = np.log(acc + acc.max() * 1e-6)
+    cand = np.arange(15.0, 250.0, 0.05)
+    sc = np.zeros(len(cand))
+    poids = 0.0
+    for k in range(1, 7):
+        sc += np.interp(cand * k, f, L, right=L.min()) * 0.85 ** (k - 1)
+        poids += 0.85 ** (k - 1)
+    sc /= poids
+    pics = [i for i in range(1, len(sc) - 1) if sc[i] >= sc[i - 1] and sc[i] >= sc[i + 1]]
+    if not pics:
+        return (None, None, {"ambigu": True, "candidats": []}) if details else (None, None)
+    m = max(sc[i] for i in pics)
+    bons = [i for i in pics if sc[i] >= m - 0.6]       # quasi ex aequo : on garde le plus aigu (evite les sous-multiples)
+    i = max(bons, key=lambda q: cand[q])
+
+    def autour(fc):  # meilleur score a +-3 % de fc
+        j = int(np.argmin(np.abs(cand - fc)))
+        r = max(1, int(0.03 * fc / 0.05))
+        lo, hi = max(0, j - r), min(len(sc), j + r + 1)
+        k = lo + int(np.argmax(sc[lo:hi]))
+        return float(cand[k]), float(sc[k])
+    fa = float(cand[i])
+    # pas de doublement automatique : sur les vrais Scania (164L, R580, R620) il donnait des regimes faux.
+    # L'octave du dessus ou du dessous est rendue comme candidat quand elle marque presque autant.
+    tr_min = fa * 60.0 / (cylindres / 2.0)
+    if not details:
+        return fa, tr_min
+    alt = {round(tr_min)}
+    for fc in (fa / 2, fa * 2):
+        if 15 <= fc < 250:
+            f2, s2 = autour(fc)
+            if s2 >= m - 2.0:
+                alt.add(round(f2 * 60.0 / (cylindres / 2.0)))
+    return fa, tr_min, {"ambigu": len(alt) > 1, "candidats": sorted(alt)}
 
 
 def craquements(x, sr, k=4.0):
@@ -131,9 +160,11 @@ def mesurer(x, sr, cylindres=8):
     r["bandes_pct"] = {nom: round(100.0 * float(p[(f >= a) & (f < b)].sum()) / total, 1) for nom, a, b in BANDES}
     r["centroide_hz"] = round(float((f * p).sum() / max(p.sum(), 1e-12)), 0)
 
-    fa, tr = allumage(x, sr, cylindres)
+    fa, tr, dt = allumage(x, sr, cylindres, details=True)
     r["allumage_hz"] = round(fa, 1) if fa else None
     r["regime_estime_tr_min"] = round(tr) if tr else None
+    r["regime_ambigu"] = dt["ambigu"]
+    r["regime_candidats"] = dt["candidats"]
     if fa:
         def autour(fc, larg=0.08):
             m = (f >= fc * (1 - larg)) & (f <= fc * (1 + larg))

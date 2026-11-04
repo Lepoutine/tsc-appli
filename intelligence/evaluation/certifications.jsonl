@@ -1,0 +1,4 @@
+{"date": "2026-11-04T17:25:19+00:00", "agent": "forge", "examen": "entree", "note_sur_100": 80.0, "grille_mesuree_pct": 20, "detail": {"autonomie": 80}, "non_mesure": ["connaissances", "diagnostic", "qualite", "innovation"]}
+{"date": "2026-11-04T17:25:19+00:00", "agent": "logiciel", "examen": "entree", "note_sur_100": 100.0, "grille_mesuree_pct": 25, "detail": {"qualite": 100}, "non_mesure": ["connaissances", "diagnostic", "autonomie", "innovation"]}
+{"date": "2026-11-04T17:25:19+00:00", "agent": "qualite", "examen": "entree", "note_sur_100": 100.0, "grille_mesuree_pct": 50, "detail": {"qualite": 100, "diagnostic": 100}, "non_mesure": ["connaissances", "autonomie", "innovation"]}
+{"date": "2026-11-04T17:25:19+00:00", "agent": "son", "examen": "entree", "note_sur_100": 95.3, "grille_mesuree_pct": 80, "detail": {"connaissances": 100, "diagnostic": 93, "innovation": 80, "qualite": 100}, "non_mesure": ["autonomie"]}
