@@ -108,11 +108,7 @@ def test_hlsl_depot_compile_avec_guide():
 
 
 def test_juge_vision_gele_et_gradient():
-    try:
-        import timm  # noqa
-    except ImportError:
-        return
-    import juge_vision as jv
+    import juge_vision as jv   # v0.8.1 : aucune dependance (ni timm ni safetensors)
     J = jv.JugeVision()
     x = torch.rand(2, 3, 96, 96, requires_grad=True)
     jv.perte_generateur(J, x).backward()
@@ -133,6 +129,30 @@ def test_elargir_garde_la_sortie():
         with torch.no_grad():
             assert (a(e) - b(torch.cat([e, g], 1) if guide else e)).abs().max() < 1e-6
         assert "float h1[48]" in exporter.code_hlsl(b)
+
+
+def test_dino_identique_a_timm_et_lecteur_safetensors():
+    try:
+        import timm
+        from safetensors.torch import save_file
+    except ImportError:
+        return   # verification de reference faite la ou timm est installe (cloud)
+    import juge_vision as jv
+    torch.manual_seed(0)
+    t = timm.create_model("vit_small_patch14_dinov2.lvd142m", pretrained=False, dynamic_img_size=True, num_classes=0).eval()
+    with torch.no_grad():
+        for q in t.parameters():
+            q.normal_(0, 0.05)
+    with tempfile.TemporaryDirectory() as tmp:
+        f = os.path.join(tmp, "m.safetensors")
+        save_file({k: v.contiguous() for k, v in t.state_dict().items()}, f)
+        m = jv.creer_dino(f)
+    x = torch.rand(1, 3, 224, 224)
+    with torch.no_grad():
+        b = m.jetons(x)
+        for blk in m.blocks:
+            b = blk(b)
+        assert (t.forward_features(x) - m.norm(b)).abs().max() < 1e-4
 
 
 if __name__ == "__main__":

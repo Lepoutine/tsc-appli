@@ -7,6 +7,7 @@
 # IMPORTANT : DINOv2 ne sert QU'A l'entrainement, il ne va jamais dans le jeu (le jeu garde notre petit reseau TSC Neural).
 # Il ne doit pas non plus servir a MESURER le resultat (le juge de mesure reste independant : sinon on se note soi-meme).
 # Poids : fichier model.safetensors du depot Hugging Face timm/vit_small_patch14_dinov2.lvd142m (~88 Mo), donne par --juge_vision.
+# v0.8.1 : architecture et lecteur safetensors ecrits ici (aucun paquet a installer : timm/pyyaml ne s'installent pas en Python 3.15).
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,13 +17,78 @@ MOY = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
 ECT = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
 
+def lire_safetensors(fichier):
+    """Lecteur safetensors sans dependance (format public : 8 octets = taille de l'en-tete JSON, en-tete, puis donnees brutes)."""
+    import json, struct
+    types = {"F32": torch.float32, "F16": torch.float16, "BF16": torch.bfloat16}
+    with open(fichier, "rb") as fo:
+        n = struct.unpack("<Q", fo.read(8))[0]
+        tete = json.loads(fo.read(n))
+        brut = fo.read()
+    sd = {}
+    for k, v in tete.items():
+        if k == "__metadata__":
+            continue
+        a, b = v["data_offsets"]
+        t = torch.frombuffer(bytearray(brut[a:b]), dtype=types[v["dtype"]]).reshape(v["shape"])
+        sd[k] = t.float()
+    return sd
+
+
+class _Bloc(nn.Module):
+    def __init__(self, d, tetes):
+        super().__init__()
+        self.tetes = tetes
+        self.norm1 = nn.LayerNorm(d, eps=1e-6); self.norm2 = nn.LayerNorm(d, eps=1e-6)
+        self.attn = nn.Module(); self.attn.qkv = nn.Linear(d, 3 * d); self.attn.proj = nn.Linear(d, d)
+        self.ls1 = nn.Module(); self.ls1.gamma = nn.Parameter(torch.ones(d))
+        self.ls2 = nn.Module(); self.ls2.gamma = nn.Parameter(torch.ones(d))
+        self.mlp = nn.Module(); self.mlp.fc1 = nn.Linear(d, 4 * d); self.mlp.fc2 = nn.Linear(4 * d, d)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        q, k, v = self.attn.qkv(self.norm1(x)).reshape(B, N, 3, self.tetes, C // self.tetes).permute(2, 0, 3, 1, 4)
+        a = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).reshape(B, N, C)
+        x = x + self.ls1.gamma * self.attn.proj(a)
+        return x + self.ls2.gamma * self.mlp.fc2(F.gelu(self.mlp.fc1(self.norm2(x))))
+
+
+class DinoS14(nn.Module):
+    """ViT-S/14 DINOv2, memes noms de poids que timm (vit_small_patch14_dinov2.lvd142m) : aucun paquet a installer."""
+    num_prefix_tokens = 1
+
+    def __init__(self, d=384, profondeur=12, tetes=6, grille=37):
+        super().__init__()
+        self.embed_dim, self.grille = d, grille
+        self.patch_embed = nn.Module(); self.patch_embed.proj = nn.Conv2d(3, d, 14, 14)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, d))
+        self.pos_embed = nn.Parameter(torch.zeros(1, 1 + grille * grille, d))
+        self.blocks = nn.ModuleList([_Bloc(d, tetes) for _ in range(profondeur)])
+        self.norm = nn.LayerNorm(d, eps=1e-6)
+
+    def jetons(self, x):
+        t = self.patch_embed.proj(x)
+        B, C, H, W = t.shape
+        t = t.flatten(2).transpose(1, 2)
+        pe = self.pos_embed
+        if (H, W) != (self.grille, self.grille):   # = resample_abs_pos_embed de timm (bicubique, antialias)
+            g = pe[:, 1:].reshape(1, self.grille, self.grille, C).permute(0, 3, 1, 2)
+            g = F.interpolate(g, size=(H, W), mode="bicubic", antialias=True).permute(0, 2, 3, 1).reshape(1, H * W, C)
+            pe = torch.cat([pe[:, :1], g], 1)
+        return torch.cat([self.cls_token.expand(B, -1, -1), t], 1) + pe
+
+
 def creer_dino(fichier=None):
-    import timm
-    kw = dict(dynamic_img_size=True, num_classes=0)
+    m = DinoS14()
     if fichier:
-        m = timm.create_model("vit_small_patch14_dinov2.lvd142m", pretrained=True, pretrained_cfg_overlay=dict(file=fichier), **kw)
+        sd = lire_safetensors(fichier)
+        manque, inattendu = m.load_state_dict(sd, strict=False)
+        inattendu = [k for k in inattendu if not k.startswith("head")]
+        if manque or inattendu:
+            raise SystemExit(f"poids DINOv2 incompatibles : manque {manque[:5]}, inattendu {inattendu[:5]}")
     else:   # tests uniquement : poids aleatoires
-        m = timm.create_model("vit_small_patch14_dinov2.lvd142m", pretrained=False, **kw)
+        for q in m.parameters():
+            nn.init.normal_(q, 0, 0.02) if q.dim() > 1 else None
     return m.eval()
 
 
@@ -56,9 +122,7 @@ class JugeVision(nn.Module):
         x = F.interpolate(x, size=(self.taille, self.taille), mode="bilinear", align_corners=False, antialias=True)
         x = (x - MOY.to(x)) / ECT.to(x)
         m = self.dino
-        t = m.patch_embed(x)
-        t = m._pos_embed(t)
-        t = m.norm_pre(t)
+        t = m.jetons(x)
         g = self.taille // 14
         sorties = []
         for i, b in enumerate(m.blocks):
