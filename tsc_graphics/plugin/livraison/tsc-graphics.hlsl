@@ -1,4 +1,4 @@
-// TSC Neural Graphics 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
+// TSC Neural Graphics 0.16.1 (lumiere TSC : ombres/ciel/exposition, libre5-8) + 0.16 (TSC Neural : reseau appris, libre4) + 0.15.3 (pied de courbe sur libre1-3) + 0.15.2 (valeurs non finies neutralisees a chaque etage, trame cabine) + 0.15 (anticrenelage, air physique, occlusion par horizons) + 0.14.2 (optique : douceur d'objectif) + 0.14 (TSC Meteo : ciel couvert, nuages de pluie, brume au sol, rideau de pluie, table de couleurs de pluie) + 0.9.3 (pas de marbrure : neutres proteges, verts mieux cibles, tramage anti-marches) + 0.9.2 (table de couleurs 3D apprise sur les videos) + 0.9.1 (meme reference de lumiere pour les 3 ecrans) + 0.9 (etage apres tone mapping du jeu) + 0.8 (calage exposition/neutre/teinte apres T3) + 0.7 (devoile, contraste local, noirs, soleil, vegetation) + 0.6 « route mouillee v1 + camera v1 + ambiances + eau sur vitre + budget » : passe temps reel sur chaque vue d'ETS2, dans la cible HDR, avant exposition, tone mapping et
 // interface (recharge a chaud par le plugin). Copyright (c) 2026 Truck So Clean France.
 // t0 = copie HDR de la vue (RGBA16F, lumieres non ecretees), t1 = copie de sa profondeur (D32 en Z inverse).
 // Le resultat remplace la cible HDR du jeu ; tout est recalcule a chaque image depuis la profondeur reelle.
@@ -177,7 +177,11 @@ float lm_propre() {
 	[unroll] for (int y = 0; y < 4; y++) [unroll] for (int x = 0; x < 4; x++) s += lum(tCouleur.SampleLevel(sLin, float2(0.125 + x * 0.25, 0.125 + y * 0.25), max(p5.w - 1, 0)).rgb);
 	return max(s / 16, 1e-4);
 }
-float lm_vue() { return p15.y > 0.5 ? max(tLm.Load(int3(0, 0, 0)), 1e-4) : lm_propre(); }
+// 0.15.2 : reference de lumiere toujours finie (une valeur infinie ou NaN dans la vue du jeu passe par les mips et contaminait la brume au sol)
+// test sur les bits (exposant plein = infini ou NaN) : le compilateur optimise ne peut pas le supprimer, contrairement a isnan
+bool fini3(float3 c) { return all((asuint(c) & 0x7f800000u) != 0x7f800000u); }
+bool fini1(float x) { return (asuint(x) & 0x7f800000u) != 0x7f800000u; }
+float lm_vue() { float l = p15.y > 0.5 ? tLm.Load(int3(0, 0, 0)) : lm_propre(); return fini1(l) ? clamp(l, 1e-4, 1e4) : 1.0; }
 float4 ps_lm(VSO i) : SV_Target { return lm_propre(); }
 // ---------- 0.15 : occlusion par horizons (facon HBAO/GTAO, ecrite pour TSC) ----------
 // Pour 3 directions tournees par pixel, on cherche de chaque cote le point le plus « haut » au-dessus du plan de la surface
@@ -457,7 +461,7 @@ float3 meteo(float2 uv, float3 c, float lm, float nuit) {
 		float3 coul = lm * float3(0.93, 0.97, 1.02) * lerp(1.25, 0.6, nuit);
 		float3 diff = tCouleur.SampleLevel(sLin, uv, min(5, p5.w)).rgb;        // la nuit, la brume prend la lumiere des phares et lampadaires
 		coul += max(diff - lm, 0) * 0.5 * nuit;
-		c = lerp(c, coul, f);
+		if (f > 0 && fini3(coul)) c = lerp(c, coul, f);   // 0.15.2 : jamais 0 x infini (trame noir/blanc vue sur la cabine)
 	}
 	// 3) rideau de pluie : 3 couches (4, 11, 30 m), visibles seulement devant le decor plus lointain, eclairees par la lumiere locale
 	if (p17.x > 0 && pa > 0.05) {
@@ -504,20 +508,51 @@ float3 optique(float2 uv, float3 c) {
 	float3 o = c - ((s - b1) * 0.8 + (b1 - b2) * 0.35) * w * r;
 	return min(max(o, 0), 65504);
 }
+// ---------- 0.16.1 : lumiere TSC (cles libre5-8, a chaud) d'apres la mesure du reel (gfx-009, 156 images de jour sec contre 120 vues du jeu) :
+// soleil/ombre au sol 3,6 reel contre 6,0 jeu, ciel/sol 1,4 contre 5,0, saturation du ciel 0,09 contre 0,14.
+// libre5 = ombres : compresse l'ECLAIRAGE (couleur / albedo du G-buffer), pas la matiere : les ombres recoivent plus de lumiere du ciel
+//          (0,29 ramene 6,0 a 3,6) ; libre6 = ciel moins fort que le sol (0 = inchange, 1 = ciel / 2) ; libre7 = ciel moins sature (0-1) ;
+//          libre8 = exposition du monde hors ciel (+1 = x2) ; libre9 = albedo moyen de reference (0 -> 0,08).
+float3 lumiere_tsc(float2 uv, float3 c, float lm) {
+	if (p22.x <= 0 && p22.y <= 0 && p22.z <= 0 && p22.w == 0) return c;
+	float d = tProf.SampleLevel(sPt, uv, 0);
+	if (cabine(d)) return c;
+	if (ciel(d)) {
+		c /= 1 + max(p22.y, 0);
+		float l = lum(c); c = l + (c - l) * (1 - saturate(p22.z));
+		return c;
+	}
+	if (p22.x > 0 && p11.w > 0.5) {
+		// 0.16.2 : l'albedo du G-buffer est deja LINEAIRE (RGBA16F, mesure PC 04/11 : asphalte 0,076) ; l'ancien pow(2,2) le rendait
+		// ~10 fois trop petit, S enorme et f colle a 0,5 (tout assombri). Albedo moyen de reference = libre9 (0 -> 0,08, mediane mesuree).
+		float3 alb = saturate(tGb2.SampleLevel(sPt, uv, 0).rgb);
+		float la = max(lum(alb), 0.02), ar = p23.x > 0 ? p23.x : 0.08;
+		float S = lum(c) / la, Sr = lm / ar;                 // eclairage du pixel, et eclairage de reference de la vue
+		float f = clamp(pow(max(Sr, 1e-5) / max(S, 1e-5), min(p22.x, 0.6)), 0.5, 3.0);
+		c *= f;
+	}
+	c *= max(1 + p22.w, 0.1);
+	return c;
+}
 float4 ps_principal(VSO i) : SV_Target {
 	float4 r = route(i);
 	if ((int)p0.x != 0) return r;   // vues de controle : sans camera
 	float lm = lm_vue();
 	float nt = nuit_de(lm);
-	float3 v = monde_photo(i.uv, r.rgb, lm, nt);
-	v = meteo(i.uv, v, lm, nt);
-	v = vitre(i.uv, v);
-	v = camera(i.uv, v);
+	// 0.15.2 : chaque etage est verifie ; une valeur non finie reprend l'etage precedent (avant : f = v meme si v etait deja faux,
+	// d'ou des blocs noirs (NaN -> 0) et clairs (infini -> 65504) que l'histoire du jeu (bloom, exposition) gardait figes)
+	float3 src = fini3(r.rgb) ? max(r.rgb, 0) : 0;
+	float3 v = monde_photo(i.uv, src, lm, nt); if (!fini3(v)) v = src;
+	float3 w = meteo(i.uv, v, lm, nt); if (fini3(w)) v = w;
+	w = vitre(i.uv, v); if (fini3(w)) v = w;
+	w = camera(i.uv, v); if (fini3(w)) v = w;
+	w = lumiere_tsc(i.uv, v, lm); if (fini3(w)) v = w;   // 0.16.1
 	float3 f = finition(i.uv, v, lm, nt);
-	f = lerp(v, f, saturate(p6.x));
-	f = optique(i.uv, f);
-	if (any(isnan(f)) || any(isinf(f))) f = v;
-	return float4(min(max(f, 0), 65504), r.a);
+	f = lerp(v, f, saturate(p6.x)); if (!fini3(f)) f = v;
+	w = optique(i.uv, f); if (fini3(w)) f = w;
+	// garde-fou : notre passe ne fait jamais apparaitre une lumiere enorme la ou le jeu n'en a pas (boucle avec l'exposition du jeu)
+	f = min(max(f, 0), max(src * 8, lm * 64));
+	return float4(min(f, 65504), r.a);
 }
 
 // ---------- 0.9 : etage APRES l'auto-exposition et le tone mapping du jeu ----------
@@ -549,9 +584,20 @@ float3 anticrenelage(float2 uv, float3 c0) {
 	float3 voisin = tCouleur.SampleLevel(sLin, uv + pas * 0.5, 0).rgb;
 	return lerp(c0, voisin, saturate(p20.x) * (0.35 + 0.5 * sub));
 }
+// ---------- 0.16 : TSC Neural (reseau appris sur les videos reelles de Mendy, outil tsc_graphics/neural) ----------
+// Cle libre4 = force (0 = coupe). Le bloc entre les deux marqueurs est REECRIT par neural/exporter.py (poids appris) ; ne pas l'editer a la main.
+float srgb_enc(float x) { x = saturate(x); return x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055; }
+float srgb_dec(float x) { x = saturate(x); return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4); }
+float3 srgb_enc3(float3 c) { return float3(srgb_enc(c.r), srgb_enc(c.g), srgb_enc(c.b)); }
+float3 srgb_dec3(float3 c) { return float3(srgb_dec(c.r), srgb_dec(c.g), srgb_dec(c.b)); }
+float3 nl_tap(float2 uv, float dx, float dy) { return srgb_enc3(tCouleur.SampleLevel(sPt, uv + float2(dx, dy) * p2.zw, 0).rgb); }
+// <<TSC_NEURAL>>
+float3 neural_ldr(float2 uv, float3 c) { return c; }   // pas encore de reseau appris : image inchangee
+// <</TSC_NEURAL>>
 float4 ps_ldr(VSO i) : SV_Target {
 	float4 t = tCouleur.SampleLevel(sPt, i.uv, 0);
-	if (p20.x > 0) t.rgb = anticrenelage(i.uv, t.rgb);
+	if (!fini3(t.rgb)) t.rgb = 0;   // 0.15.2
+	if (p20.x > 0) { float3 a = anticrenelage(i.uv, t.rgb); if (fini3(a)) t.rgb = a; }
 	float3 c = max(t.rgb, 0);
 	// balance : temperature (+ chaud / - froid) et teinte (+ vert / - magenta)
 	c *= float3(1 + 0.08 * p14.y, 1 + 0.06 * p14.z, 1 - 0.08 * p14.y);
@@ -569,6 +615,14 @@ float4 ps_ldr(VSO i) : SV_Target {
 	if (p13.y != 1) c = 0.18 * pow(max(c, 1e-5) / 0.18, p13.y);
 	// point noir
 	if (p14.w != 0) { float b = p14.w * 0.02; c = max(c - b, 0) / (1 - b); }
+	// 0.15.3 : pied de courbe (cles libre1 = force 0-0,95, libre2 = seuil en sRGB, 0 = 0,25, libre3 = forme, 0 = 1) :
+	// abaisse les tout derniers noirs (voile laiteux mesure : p1 0,16 contre 0,03-0,04 reel) sans ecraser les tons sombres au-dessus du seuil.
+	if (p21.x > 0) {
+		float le = pow(max(lum(c), 0), 1 / 2.2), T = p21.y > 0 ? p21.y : 0.25, g = p21.z > 0 ? p21.z : 1;
+		float sm = smoothstep(0, T, le);
+		float m = 1 - min(p21.x, 0.95) * pow(1 - sm, g);    // multiplicateur en sRGB : 1 - force au noir, 1 au seuil et au-dessus
+		c *= pow(max(m, 0.05), 2.2);
+	}
 	float l = lum(c);
 	// verts jaunes trop vifs (vegetation du jeu) : moins satures, un peu plus clairs
 	if (p15.x > 0) {
@@ -599,6 +653,8 @@ float4 ps_ldr(VSO i) : SV_Target {
 		o = lerp(oneutre, o, wn);
 		c = lerp(c, saturate(o), saturate(p15.z));
 	}
+	// 0.16 : TSC Neural remplace l'etalonnage ci-dessus (il a appris tout le passage jeu -> reel) ; libre4 = force
+	if (p21.w > 0) { float3 nn = neural_ldr(i.uv, max(t.rgb, 0)); if (fini3(nn)) c = lerp(max(t.rgb, 0), nn, saturate(p21.w)); }
 	// 0.9.3 : tramage d'1/255 avant le retour en 8 bits : supprime les marches de couleur dans les degrades (plafond, ciel)
 	{
 		float n = frac(sin(dot(i.pos.xy, float2(12.9898, 78.233))) * 43758.5453) + frac(sin(dot(i.pos.xy + 17.1, float2(39.346, 11.135))) * 24634.6345) - 1;

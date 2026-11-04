@@ -512,7 +512,7 @@ float3 optique(float2 uv, float3 c) {
 // soleil/ombre au sol 3,6 reel contre 6,0 jeu, ciel/sol 1,4 contre 5,0, saturation du ciel 0,09 contre 0,14.
 // libre5 = ombres : compresse l'ECLAIRAGE (couleur / albedo du G-buffer), pas la matiere : les ombres recoivent plus de lumiere du ciel
 //          (0,29 ramene 6,0 a 3,6) ; libre6 = ciel moins fort que le sol (0 = inchange, 1 = ciel / 2) ; libre7 = ciel moins sature (0-1) ;
-//          libre8 = exposition du monde hors ciel (+1 = x2).
+//          libre8 = exposition du monde hors ciel (+1 = x2) ; libre9 = albedo moyen de reference (0 -> 0,08).
 float3 lumiere_tsc(float2 uv, float3 c, float lm) {
 	if (p22.x <= 0 && p22.y <= 0 && p22.z <= 0 && p22.w == 0) return c;
 	float d = tProf.SampleLevel(sPt, uv, 0);
@@ -523,9 +523,11 @@ float3 lumiere_tsc(float2 uv, float3 c, float lm) {
 		return c;
 	}
 	if (p22.x > 0 && p11.w > 0.5) {
-		float3 alb = pow(saturate(tGb2.SampleLevel(sPt, uv, 0).rgb), 2.2);
-		float la = max(lum(alb), 0.03);
-		float S = lum(c) / la, Sr = lm / 0.25;               // eclairage du pixel, et eclairage de reference (albedo moyen 0,25)
+		// 0.16.2 : l'albedo du G-buffer est deja LINEAIRE (RGBA16F, mesure PC 04/11 : asphalte 0,076) ; l'ancien pow(2,2) le rendait
+		// ~10 fois trop petit, S enorme et f colle a 0,5 (tout assombri). Albedo moyen de reference = libre9 (0 -> 0,08, mediane mesuree).
+		float3 alb = saturate(tGb2.SampleLevel(sPt, uv, 0).rgb);
+		float la = max(lum(alb), 0.02), ar = p23.x > 0 ? p23.x : 0.08;
+		float S = lum(c) / la, Sr = lm / ar;                 // eclairage du pixel, et eclairage de reference de la vue
 		float f = clamp(pow(max(Sr, 1e-5) / max(S, 1e-5), min(p22.x, 0.6)), 0.5, 3.0);
 		c *= f;
 	}
