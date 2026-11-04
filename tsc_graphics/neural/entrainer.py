@@ -4,7 +4,7 @@
 # Images reelles : images extraites des videos de Mendy (jpg/png). Donnees privees : jamais publiees.
 # Regles : 10 % des images de chaque cote sont mises de cote (jamais vues a l'entrainement) pour juger ; un modele n'est
 # exporte que s'il bat le champion precedent sur ces images ; chaque version est gardee (retour arriere possible).
-import argparse, glob, json, os, random, time
+import argparse, copy, glob, json, os, random, time
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -107,6 +107,8 @@ def main():
     a.add_argument("--neutres", type=float, default=8.0, help="poids qui garde gris les gris du jeu (route, beton, ciel couvert)")
     a.add_argument("--groupes", type=int, default=6, help="groupes de scenes reelles tires a egalite")
     a.add_argument("--dominante_max", type=float, default=0.015, help="derive de teinte maxi des gris (sinon pas champion)")
+    a.add_argument("--hautes", type=float, default=6.0, help="poids qui protege le ciel et les hautes lumieres")
+    a.add_argument("--lr", type=float, default=1e-4); a.add_argument("--ema", type=float, default=0.999)
     a.add_argument("--depart", default="", help="modele.pt a reprendre (apprentissage continu)")
     a.add_argument("--graine", type=int, default=1)
     o = a.parse_args()
@@ -131,7 +133,10 @@ def main():
     G, D = TSCNeural().to(appareil), Discriminateur().to(appareil)
     if o.depart:
         G.load_state_dict(torch.load(o.depart, map_location=appareil, weights_only=True)["modele"])
-    oG = torch.optim.Adam(G.parameters(), 2e-4, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), 2e-4, betas=(0.5, 0.99))
+    oG = torch.optim.Adam(G.parameters(), o.lr, betas=(0.5, 0.99)); oD = torch.optim.Adam(D.parameters(), o.lr, betas=(0.5, 0.99))
+    # v0.2.1 : moyenne glissante des poids (EMA) : c'est ELLE qui est jugee et exportee (run1 oscillait apres 6 000)
+    Gm = copy.deepcopy(G).eval()
+    for q in Gm.parameters(): q.requires_grad_(False)
 
     champion_f = os.path.join(o.sortie, "champion.json")
     champion = json.load(open(champion_f)) if os.path.exists(champion_f) else None
@@ -160,25 +165,30 @@ def main():
         mx = x.max(1, keepdim=True)[0]; mn = x.min(1, keepdim=True)[0]
         neutre = (1 - ((mx - mn) / mx.clamp_min(0.05)).clamp(0, 1) * 4).clamp(0, 1)   # 1 sur les gris du jeu
         ln = (neutre * (y - ly - (x - lx)).abs()).sum() / neutre.sum().clamp_min(1) / 3
-        lG = la + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln
+        # v0.3 : hautes lumieres protegees (run1 brulait le ciel en blanc : nuages et bleu perdus)
+        ht = ((lx - 0.6) / 0.3).clamp(0, 1); ht = ht * ht * (3 - 2 * ht)
+        lh = (ht * (y - x).abs()).sum() / ht.sum().clamp_min(1) / 3 + F.relu(ly.flatten(1).quantile(0.99, 1) - lx.flatten(1).quantile(0.99, 1) - 0.02).mean()
+        lG = la + o.structure * ls + o.identite * li + o.chroma * lc + o.neutres * ln + o.hautes * lh
         oG.zero_grad(set_to_none=True); lG.backward(); oG.step()
+        with torch.no_grad():
+            for pm, pg in zip(Gm.parameters(), G.parameters()): pm.lerp_(pg, 1 - o.ema)
         if it % 200 == 0:
-            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} {time.time() - t0:.0f} s"
+            ligne = f"{it} D {lD.item():.3f} G {la.item():.3f} structure {ls.item():.4f} identite {li.item():.4f} teinte {lc.item():.4f} gris {ln.item():.4f} hautes {lh.item():.4f} {time.time() - t0:.0f} s"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
         if it % 2000 == 0 or it == o.iterations:
-            G.eval(); e = ecart(G, tj, ref, appareil); dom = dominante(G, tj, appareil); G.train()
+            e = ecart(Gm, tj, ref, appareil); dom = dominante(Gm, tj, appareil)
             nom = os.path.join(o.sortie, f"modele_{it:06d}.pt")
-            torch.save({"modele": G.state_dict(), "ecart": e, "iteration": it}, nom)
+            torch.save({"modele": Gm.state_dict(), "ecart": e, "iteration": it}, nom)
             ligne = f"== {it} : ecart au reel {e:.4f} = {pct(e):.0f} % restant (objectif <= 10 %) ; derive des gris {dom:.4f} (max {o.dominante_max}) ; jeu brut {base:.4f}, meilleur {meilleur:.4f}"
             print(ligne); journal.write(ligne + "\n"); journal.flush()
             if dom > o.dominante_max:
                 print("   -> refuse : dominante de couleur sur les gris du jeu")
             elif e < meilleur:
                 meilleur = e
-                torch.save({"modele": G.state_dict(), "ecart": e, "iteration": it}, os.path.join(o.sortie, "champion.pt"))
-                exporter.ecrire(G, o.hlsl, os.path.join(o.sortie, "tsc-graphics.hlsl"), note=f"iteration {it}, ecart {e:.4f}")
+                torch.save({"modele": Gm.state_dict(), "ecart": e, "iteration": it}, os.path.join(o.sortie, "champion.pt"))
+                exporter.ecrire(Gm, o.hlsl, os.path.join(o.sortie, "tsc-graphics.hlsl"), note=f"iteration {it}, ecart {e:.4f}")
                 json.dump({"ecart": e, "pourcent_restant": pct(e), "objectif_10pc": pct(e) <= 10, "iteration": it, "jeu_brut": base, "plancher_reel": plancher, "fichier": nom}, open(champion_f, "w"), indent=1)
-                apercu(G, tj[:3], appareil, os.path.join(o.sortie, f"apercu_{it:06d}.png"))
+                apercu(Gm, tj[:3], appareil, os.path.join(o.sortie, f"apercu_{it:06d}.png"))
                 print("   -> nouveau champion, HLSL ecrit dans", o.sortie)
     print("fini. meilleur ecart", meilleur, "(jeu brut", base, ")")
 
