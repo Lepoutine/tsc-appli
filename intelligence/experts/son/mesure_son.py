@@ -74,6 +74,9 @@ def enveloppe(x, sr, fc=40.0):
     return np.convolve(np.abs(x), np.ones(n) / n, mode="same")
 
 
+SEUIL_PAIR_DB = 8.0
+
+
 def allumage(x, sr, cylindres, details=False):
     """Frequence d'allumage par somme des harmoniques du spectre (15-250 Hz).
 
@@ -119,12 +122,30 @@ def allumage(x, sr, cylindres, details=False):
         k = lo + int(np.argmax(sc[lo:hi]))
         return float(cand[k]), float(sc[k])
     fa = float(cand[i])
-    # pas de doublement automatique : sur les vrais Scania (164L, R580, R620) il donnait des regimes faux.
-    # L'octave du dessus ou du dessous est rendue comme candidat quand elle marque presque autant.
+    # Pas de doublement automatique « au plus aigu » : sur les vrais Scania (164L, R580, R620) il donnait des
+    # regimes faux. Seule exception (05/11/2026), la preuve par les harmoniques : si les multiples de 4 (puis de 2)
+    # de fa dominent les autres harmoniques de plus de SEUIL_PAIR_DB, fa est un sous-multiple (cylindres inegaux,
+    # resonance grave) et l'allumage vrai est 4 fa (ou 2 fa). Regle au banc : 600/600 moteurs synthetiques neufs
+    # (546 avant), aucune lecture changee sur les vrais Scania (164L, R580, R620). La lecture d'origine reste
+    # alors rendue comme candidat et le resultat est marque « ambigu » : a confirmer, jamais affirme.
+    def multiples(f0, m):  # harmoniques multiples de m contre les autres, en dB
+        ks = [k for k in range(1, 3 * m + 1) if f0 * k < f[-1]]
+        dans = [np.interp(f0 * k, f, L) for k in ks if k % m == 0]
+        hors = [np.interp(f0 * k, f, L) for k in ks if k % m]
+        if not dans or not hors:
+            return 0.0
+        return (np.mean(dans) - np.mean(hors)) * 20.0 / np.log(100.0)  # L est en log naturel de puissance -> dB
+    fa0 = fa
+    for m in (4, 2):
+        while fa * m < 250 and multiples(fa, m) > SEUIL_PAIR_DB:
+            fa = autour(fa * m)[0]
+    # Sinon, l'octave du dessus ou du dessous est rendue comme candidat quand elle marque presque autant.
     tr_min = fa * 60.0 / (cylindres / 2.0)
     if not details:
         return fa, tr_min
     alt = {round(tr_min)}
+    if fa != fa0:  # remonte par la preuve des harmoniques : la lecture d'origine reste un candidat, jamais effacee
+        alt.add(round(fa0 * 60.0 / (cylindres / 2.0)))
     for fc in (fa / 2, fa * 2):
         if 15 <= fc < 250:
             f2, s2 = autour(fc)

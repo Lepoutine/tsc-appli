@@ -49,6 +49,18 @@ class TestMesure(unittest.TestCase):
                 self.assertTrue(r["regime_ambigu"])
                 self.assertTrue(any(abs(c - tr) <= 0.08 * tr for c in r["regime_candidats"]), r["regime_candidats"])
 
+    def test_haut_regime_cylindres_inegaux(self):
+        """05/11/2026 : V8 synthetique a 1400-1800 tr/min, cylindres inegaux, resonance grave 60-110 Hz.
+        L'ancien estimateur lisait le quart ou la moitie du regime. La preuve par les harmoniques remonte a la
+        bonne valeur et garde la lecture d'origine en candidat (resultat marque ambigu)."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "evaluation"))
+        import banc
+        for g in (90003, 90019, 90030, 90037):  # graines ou l ancien estimateur se trompait
+            rng = np.random.default_rng(g)
+            rpm = rng.uniform(450, 1800)
+            fa, v, d = ms.allumage(banc.moteur_synthetique(rng, rpm), banc.SR, 8, details=True)
+            self.assertLessEqual(abs(v - rpm) / rpm, 0.05, (g, rpm, v, d))
+
     def test_lecture_wav_16_bits(self):
         p = os.path.join(self.d, "a.wav")
         ecrire(p, moteur())

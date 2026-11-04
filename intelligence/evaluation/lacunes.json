@@ -1,5 +1,5 @@
 {
- "genere": "2026-11-04T22:28",
+ "genere": "2026-11-04T22:38",
  "lacunes": [
   {
    "agent": "atelier",
@@ -24,12 +24,6 @@
    "priorite": 1,
    "type": "aucun examen",
    "quoi": "examen d'entrée à construire (épreuves PC : game.log réel -> mod et fichier fautifs ; contrôle .scs)"
-  },
-  {
-   "agent": "son",
-   "priorite": 1,
-   "type": "épreuve ratée",
-   "quoi": "son_regime : obtenu 432 (ambigu : [432, 864]), attendu 1727 ±5 %"
   },
   {
    "agent": "textures",
@@ -276,6 +270,12 @@
    "priorite": 2,
    "type": "outil ou capacité manquante",
    "quoi": "choix G/J de Mendy dans Forge a verser dans la tete realisme ; camions modernes absents des sources libres"
+  },
+  {
+   "agent": "son",
+   "priorite": 2,
+   "type": "outil ou capacité manquante",
+   "quoi": "juge de realisme sans le meme camion : 72 % des fenetres vraies et 85 % des syntheses bien classees (05/11), R580 ralenti A et retour au ralenti juges faux ; trop peu d'exemples refuses (12 fichiers) : les choix G/J de Mendy sont le prochain apport"
   },
   {
    "agent": "son",
