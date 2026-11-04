@@ -18,7 +18,9 @@ def fini(run):
     c = os.path.join(runs_dir, run + "_console.txt")
     if not os.path.exists(c):
         return False
-    s = open(c, encoding="utf-8", errors="ignore").read()
+    brut = open(c, "rb").read()
+    # console redirigee par PowerShell (*>) = UTF-16 ; console ecrite par nuit.py = UTF-8
+    s = brut.decode("utf-16", errors="ignore") if brut[:2] in (b"\xff\xfe", b"\xfe\xff") else brut.decode("utf-8", errors="ignore")
     # fin normale, plantage Python, ou console muette depuis 20 min (processus tue, ex. memoire)
     return "fini." in s or "Traceback" in s or time.time() - os.path.getmtime(c) > 1200
 
