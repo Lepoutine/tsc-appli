@@ -12,7 +12,7 @@
   "outils": 8,
   "outils_depot": 0,
   "memoire": 4,
-  "apprentissage": false,
+  "apprentissage": true,
   "epreuves": [],
   "epreuves_pc": [
    "écart jeu/réel d'une version du plugin sur le jeu de captures fixe"
@@ -38,7 +38,7 @@
   "outils": 7,
   "outils_depot": 0,
   "memoire": 4,
-  "apprentissage": false,
+  "apprentissage": true,
   "epreuves": [],
   "epreuves_pc": [
    "TSC-IA textures : gain en dB sur images réelles jamais vues"

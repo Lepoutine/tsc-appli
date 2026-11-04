@@ -66,7 +66,13 @@
     "sources du socle tscf_probe 0.2 a 0.9h (introuvables sur le Shadow)"
    ],
    "demande_avant": "examiner le pipeline (audit) avant de promettre un effet",
-   "fil": "TSC Performance Lab et TSC Graphics"
+   "fil": "TSC Performance Lab et TSC Graphics",
+   "apprentissage": {
+    "regles": "Outils admin\\tsc_graphics\\tsc_ia\\regles_tsc_ia.json (PC)",
+    "boucle": "TSC-IA textures (numpy) sur le PC",
+    "donnees": "images reelles, 1 sur 10 = juge",
+    "etat": "adoptee 03/11 : +2,618 dB sur 47 images jamais vues (fil Graphics)"
+   }
   },
   {
    "id": "textures",
@@ -120,7 +126,13 @@
     "regle UV ecrite et verifiee automatiquement"
    ],
    "demande_avant": "lire les UV et le .mat du modele du jeu avant de peindre",
-   "fil": "TSC Performance Lab et TSC Graphics"
+   "fil": "TSC Performance Lab et TSC Graphics",
+   "apprentissage": {
+    "regles": "Outils admin\\tsc_graphics\\tsc_ia\\regles_tsc_ia.json (PC)",
+    "boucle": "TSC-IA textures (numpy) sur le PC",
+    "donnees": "images reelles, 1 sur 10 = juge",
+    "etat": "adoptee 03/11 : +2,618 dB sur 47 images jamais vues (fil Graphics)"
+   }
   },
   {
    "id": "performance",

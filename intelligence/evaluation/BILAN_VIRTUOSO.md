@@ -6,8 +6,8 @@ Grille de certification (objectifs, pas niveaux atteints) : Connaissances métie
 
 | IA | État | Note (grille mesurée) | Examen d'entrée | Fiches | Outils | Mémoire | Apprend |
 |---|---|---|---|---|---|---|---|
-| IA Pro Photoréalisme | non mesuré d'ici | non mesuré | — | 1 (verifie_partiel 1) | 8 | 4 | non |
-| TSC Textures Expert | non mesuré d'ici | non mesuré | — | 1 (verifie_partiel 1) | 7 | 4 | non |
+| IA Pro Photoréalisme | non mesuré d'ici | non mesuré | — | 1 (verifie_partiel 1) | 8 | 4 | oui |
+| TSC Textures Expert | non mesuré d'ici | non mesuré | — | 1 (verifie_partiel 1) | 7 | 4 | oui |
 | TSC Performance Expert | non mesuré d'ici | non mesuré | — | 2 (verifie 2) | 7 | 3 | non |
 | TSC Mod Engineering Expert | non mesuré d'ici | non mesuré | — | 3 (verifie 3) | 10 | 6 | non |
 | TSC Sound Engineering Expert | opérationnel (mesuré) | 95/100 (80 %) | 95/100 | 6 (concu 1, verifie 4, verifie_partiel 1) | 8 | 17 | non |
