@@ -255,7 +255,7 @@ def main():
     journal = open(os.path.join(o.sortie, "journal.txt"), "a", encoding="utf-8")
     t0 = time.time(); dernier_champion = 0
     for it in range(1, o.iterations + 1):
-        if it - dernier_champion > o.arret and dernier_champion > 0:
+        if it - dernier_champion > o.arret:   # v0.8.3 : arret aussi si AUCUN champion (run5v tournait 30 000 iterations pour rien)
             print(f"arret : pas de progres depuis {o.arret} iterations (champion a {dernier_champion})"); break
         if o.reel_ram and it % 500 == 0:
             ch = BR.renouveler()
