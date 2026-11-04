@@ -41,13 +41,21 @@
   /* ---------- import ---------- */
   function devineRole(nom) {
     const n = nom.toLowerCase();
+    if (/\.(mp4|mkv|mov|webm)$|video|complet/.test(n)) return 'reference';
+    if (/coup.?de.?gaz|coups.?gaz|blip|revs?[ _]/.test(n)) return 'coup_gaz';
+    if (/claqu|crackl|backfire|petar|(^|[^a-z])pops?([^a-z]|$)/.test(n)) return 'claquement';
+    if (/engine.?brake|frein.?moteur|retarder|jake/.test(n)) return 'frein_moteur';
+    if (/air.?gear|gear|pschitt|boite|clunk/.test(n)) return 'boite_air';
+    if (/air.?compress|purge|cut.?off|decompr|low.?air/.test(n)) return 'air_purge';
+    if (/(^|[^a-z])hb[_ ]|park|frein.?(de.?)?parc|hand.?brake/.test(n)) return 'frein_parc';
+    if (/air.?brake|brake|frein.?air|frein.?pneu/.test(n)) return 'frein_air';
+    if (/lift.?axle|suspen|essieu/.test(n)) return 'suspension';
     if (/valve.?open|clapet.?(ouv|on)/.test(n)) return 'clapet_on';
     if (/valve.?clos|clapet.?(ferm|off)|op.?valve/.test(n)) return 'clapet_off';
     if (/(^|[^a-z])(rv8)?op[ _]?\d{3,4}|_op_|clapet|open.?pipe/.test(n) && /\d{3,4}/.test(n)) return 'clapet';
     if (/turbo|sifl|whistle/.test(n)) return 'turbo';
     if (/demar|start/.test(n)) return 'demarrage';
     if (/arret|stop|shut/.test(n)) return 'arret';
-    if (/brake|frein_moteur/.test(n)) return 'autre';
     if (/unload|no_?fuel|decel|sans|coast|lift|\d{3,4}_idle/.test(n)) return 'sans';
     if (/ralenti|idle/.test(n)) return 'ralenti';
     if (/charge|accel|load|on_|_on/.test(n)) return 'charge';
@@ -60,24 +68,69 @@
     if (c && +c[1] >= 4 && +c[1] <= 26 && /load/.test(nom.toLowerCase())) return +c[1] * 100;
     return SF.ROLES[role].rpm || 1200;
   }
+  /* Un pack (forge_pack.json) dit pour chaque fichier son rôle, son régime, son nom et le passage à garder.
+     Sans pack, Forge devine le rôle d'après le nom du fichier. */
+  const chemin = f => (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+  const finit = (chem, cle) => { chem = chem.toLowerCase(); cle = cle.toLowerCase(); return chem === cle || chem.endsWith('/' + cle); };
+  async function lisPack(liste) {
+    const f = liste.find(x => /(^|\/)forge_pack\.json$/i.test(chemin(x)));
+    if (!f) return null;
+    try { const o = JSON.parse(await f.text()); return Array.isArray(o.sons) ? o : null; } catch (e) { toast('forge_pack.json illisible.'); return null; }
+  }
   async function importe(files) {
-    const liste = Array.from(files || []); if (!liste.length) return;
-    let ok = 0;
-    for (const f of liste) {
+    const liste = Array.from(files || []).filter(f => f.size > 0); if (!liste.length) return;
+    const pack = await lisPack(liste);
+    const sons = liste.filter(f => /\.(wav|ogg|mp3|flac|m4a|aac|mp4|mkv|mov|webm)$/i.test(f.name) || /^(audio|video)\//.test(f.type));
+    // avec un pack, on n'importe que les fichiers qu'il liste (un dossier entier peut contenir d'autres choses)
+    const plan = [];
+    if (pack) {
+      pack.sons.forEach(e => { const f = sons.find(x => finit(chemin(x), e.fichier)); if (f) plan.push([f, e]); });
+      const manque = pack.sons.length - plan.length;
+      if (manque) toast(manque + ' son(s) du pack introuvables : choisis le dossier ' + (pack.dossier || 'TSC_Sound_Forge') + ' en entier.');
+    } else sons.forEach(f => plan.push([f, null]));
+    if (!plan.length) { if (!pack) toast('Aucun son reconnu (WAV, OGG, MP3, FLAC ou vidéo MP4).'); return; }
+    let ok = 0, deja = 0, n = 0;
+    const cache = {}; // un même fichier peut donner plusieurs couches (passages différents)
+    $('importEtat').hidden = false;
+    for (const [f, e] of plan) {
+      $('importEtat').textContent = 'Import ' + (++n) + ' / ' + plan.length + ' : ' + f.name;
       try {
-        const ab = await f.arrayBuffer();
-        const b = await SF.decode(ab);
+        const fic = e && e.nom ? e.nom : f.name.replace(/\.[^.]+$/, '');
+        const role0 = e && SF.ROLES[e.role] ? e.role : devineRole(f.name);
+        const d0 = e && e.debut != null ? +e.debut : 0;
+        const k = chemin(f), cle = e ? e.fichier + '@' + d0 : k;
+        if (P.couches.some(c => c.paquet ? c.paquet === cle : c.nom === fic && Math.abs(c.debut - d0) < 0.01)) { deja++; continue; }
+        if (!cache[k]) { const ab = await f.arrayBuffer(); cache[k] = { ab, b: await SF.decode(ab) }; }
+        const { ab, b } = cache[k];
         const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        const role = devineRole(f.name);
-        const c = { id, fichier: f.name, nom: f.name.replace(/\.[^.]+$/, ''), role, rpm: devineRpm(f.name, role),
-          gain: 0, bas: 0, haut: 0, fondu: 150, boucle: SF.ROLES[role].boucle, norm: false,
-          debut: 0, fin: b.duration, duree: b.duration, sr: b.sampleRate, canaux: b.numberOfChannels,
-          licence: 'perso', source: '', couleur: COUL[P.couches.length % COUL.length] };
+        const role = role0;
+        const fin = e && e.fin != null ? Math.min(+e.fin, b.duration) : b.duration;
+        const c = { id, fichier: f.name, nom: fic, role, rpm: e && e.rpm ? +e.rpm : devineRpm(f.name, role),
+          gain: e && e.gain ? +e.gain : 0, bas: 0, haut: 0, fondu: e && e.fondu != null ? +e.fondu : 150,
+          boucle: e && e.boucle != null ? !!e.boucle : SF.ROLES[role].boucle, norm: false,
+          debut: Math.max(0, d0), fin, duree: b.duration, sr: b.sampleRate, canaux: b.numberOfChannels,
+          paquet: cle, licence: e && e.licence ? e.licence : 'perso', source: e && e.source ? e.source : '', note: e && e.note ? e.note : '',
+          couleur: COUL[P.couches.length % COUL.length] };
         bufs[id] = b; P.couches.push(c); dbPut(id, ab); ok++;
         if (!sel) sel = id;
-      } catch (e) { toast('« ' + f.name + ' » n\'a pas pu être lu (format non pris en charge).'); }
+      } catch (x) { toast('« ' + f.name + ' » n\'a pas pu être lu (format non pris en charge).'); }
     }
-    if (ok) { sauve(); rendTout(); toast(ok + ' son' + (ok > 1 ? 's importés' : ' importé') + '.'); }
+    $('importEtat').hidden = true;
+    if (ok || deja) { sauve(); rendTout(); toast((pack ? 'Pack « ' + (pack.nom || 'TSC') + ' » : ' : '') + ok + ' son' + (ok > 1 ? 's importés' : ' importé') + (deja ? ', ' + deja + ' déjà là' : '') + '.'); }
+  }
+  /* Extraire le passage choisi (bords rouges) en nouvelle couche : la vidéo ou le long son reste intact. */
+  async function extrait() {
+    const c = couche(); if (!c || !bufs[c.id]) return;
+    if (c.fin - c.debut < 0.05) { toast('Passage trop court.'); return; }
+    const b = SF.extrait(bufs[c.id], c.debut, c.fin);
+    const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const role = c.role === 'reference' ? 'autre' : c.role;
+    const nom = nomPropre(c.nom + '_' + c.debut.toFixed(1) + '-' + c.fin.toFixed(1) + 's');
+    const n = { ...c, id, fichier: nom + '.wav', nom, role, debut: 0, fin: b.duration, duree: b.duration, sr: b.sampleRate, canaux: b.numberOfChannels,
+      boucle: SF.ROLES[role].boucle, paquet: '', note: 'extrait de ' + c.fichier + ' (' + tps(c.debut) + ' → ' + tps(c.fin) + ')', couleur: COUL[P.couches.length % COUL.length] };
+    bufs[id] = b; P.couches.push(n); sel = id;
+    try { dbPut(id, await SF.wav(b).arrayBuffer()); } catch (e) {}
+    sauve(); rendTout(); toast('Nouvelle couche « ' + nom + ' ». Choisis maintenant son rôle.');
   }
 
   /* ---------- dessin d'une forme d'onde ---------- */
@@ -109,26 +162,56 @@
     const L = $('lib');
     if (!P.couches.length) { L.innerHTML = '<div class="vide">Aucun son pour l\'instant.</div>'; return; }
     L.innerHTML = P.couches.map(c => '<button type="button" class="it' + (c.id === sel ? ' on' : '') + '" data-id="' + c.id + '"><i style="background:' + c.couleur + '"></i><b>' + esc(c.fichier) + '</b><small>' +
-      (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + '</small>' + (c.licence === 'refus' ? '<small class="lic">licence refusée : non exporté</small>' : (c.licence === 'ccby' || c.licence === 'mod') && !c.source ? '<small class="lic">auteur à indiquer</small>' : '') + '</button>').join('');
+      (c.sr / 1000).toFixed(c.sr % 1000 ? 1 : 0) + ' kHz · ' + c.duree.toFixed(1) + ' s' + (bufs[c.id] ? '' : ' · à réimporter') + ' · ' + esc(SF.ROLES[c.role].court) + '</small>' + (function () { const q = qualite(c); return q && q.alertes.length ? '<small class="lic">⚠ ' + esc(q.alertes[0]) + '</small>' : ''; })() + (c.licence === 'refus' ? '<small class="lic">licence refusée : non exporté</small>' : (c.licence === 'ccby' || c.licence === 'mod') && !c.source ? '<small class="lic">auteur à indiquer</small>' : '') + '</button>').join('');
   }
   function rendPistes() {
     const T = $('pistes');
     if (!P.couches.length) { T.innerHTML = '<div class="vide">Les couches de ton moteur s\'afficheront ici.</div>'; return; }
-    T.innerHTML = P.couches.map(c => '<button type="button" class="trk' + (c.id === sel ? ' on' : '') + '" data-id="' + c.id + '"><span class="nm"><b>' + esc(SF.ROLES[c.role].court) +
+    const F = $('filtreRole').value, R = c => SF.ROLES[c.role] || {};
+    const L = P.couches.filter(c => !F || (F === 'moteur' ? R(c).sim || c.role === 'demarrage' || c.role === 'arret' || c.role === 'clapet_on' || c.role === 'clapet_off' : F === 'effet' ? R(c).effet : c.role === F));
+    if (!L.length) { T.innerHTML = '<div class="vide">Aucun son dans cette famille.</div>'; return; }
+    T.innerHTML = L.map(c => '<button type="button" class="trk' + (c.id === sel ? ' on' : '') + '" data-id="' + c.id + '"><span class="nm"><b>' + esc(SF.ROLES[c.role].court) +
       (c.role === 'charge' || c.role === 'sans' || c.role === 'ralenti' ? ' ' + c.rpm : '') + '</b><small>' + esc(c.fichier) + '</small></span><canvas></canvas></button>').join('');
     T.querySelectorAll('.trk').forEach(el => onde(el.querySelector('canvas'), P.couches.find(c => c.id === el.dataset.id)));
   }
   function couche() { return P.couches.find(c => c.id === sel) || null; }
   function rendEd() {
     const c = couche(); $('ed').hidden = !c; $('edVide').hidden = !!c; $('edNom').textContent = c ? c.fichier : '';
-    ['bJoue', 'bStop', 'bBoucle', 'bAvant', 'bSuppr'].forEach(id => { $(id).disabled = !c; });
+    ['bJoue', 'bStop', 'bBoucle', 'bAvant', 'bSuppr', 'bExtrait'].forEach(id => { $(id).disabled = !c; });
     if (!c) return;
     $('eRole').value = c.role; $('eRpm').value = c.rpm; $('eGain').value = c.gain; $('eBas').value = c.bas; $('eHaut').value = c.haut;
     $('eFondu').value = c.fondu; $('eBoucle').checked = !!c.boucle; $('eNorm').checked = !!c.norm; $('eLic').value = c.licence || 'perso'; $('eSrc').value = c.source || '';
     $('eRpm').disabled = !(c.role === 'charge' || c.role === 'sans' || c.role === 'ralenti');
     $('eFondu').disabled = !c.boucle;
-    sorties(); onde($('wvc'), c, { edit: true });
+    sorties(); onde($('wvc'), c, { edit: true }); rendQualite(c);
   }
+  const qCache = {};
+  function qualite(c) {
+    if (!bufs[c.id]) return null;
+    const k = c.id + ':' + c.debut.toFixed(3) + ':' + c.fin.toFixed(3) + ':' + (c.boucle ? 1 : 0);
+    return qCache[k] || (qCache[k] = SF.qualite(bufs[c.id], c.debut, c.fin, c.boucle));
+  }
+  function rendQualite(c) {
+    const q = qualite(c), Q = $('qual');
+    if (!q) { Q.innerHTML = ''; return; }
+    const r = SF.ROLES[c.role];
+    Q.innerHTML = '<span class="q' + (q.crete > -1 ? ' ko' : '') + '">Crête ' + q.crete.toFixed(1) + ' dB</span>' +
+      '<span class="q">Niveau moyen ' + q.rms.toFixed(1) + ' dB</span>' +
+      '<span class="q' + (q.ecretage > 0.01 ? ' ko' : '') + '">Écrêtage ' + q.ecretage.toFixed(2) + ' %</span>' +
+      (q.raccord != null ? '<span class="q' + (q.raccord > 1.5 ? ' ko' : '') + '">Raccord ' + q.raccord.toFixed(1) + ' dB</span>' : '') +
+      '<span class="q">Durée ' + (c.fin - c.debut).toFixed(2) + ' s</span>' +
+      (r.jeu ? '<span class="q jeu">Dans le jeu : ' + esc(r.jeu) + '</span>' : '') +
+      (c.note ? '<div class="mut qn">' + esc(c.note) + '</div>' : '') +
+      (q.alertes.length ? '<div class="qa">' + q.alertes.map(esc).join('<br>') + '</div>' : '<div class="mut qn">Mesures propres. C\'est ton écoute qui tranche.</div>');
+  }
+  /* pupitre d'effets : chaque son ponctuel a son bouton (et une touche 1 à 9), joué par-dessus le moteur */
+  function effets() { return P.couches.filter(c => SF.ROLES[c.role] && SF.ROLES[c.role].effet && bufs[c.id]); }
+  function rendPads() {
+    const E = effets();
+    $('pads').innerHTML = E.length ? E.map((c, i) => '<button type="button" class="pad" data-pad="' + c.id + '" style="border-color:' + c.couleur + '"><b>' + (i < 9 ? (i + 1) + ' · ' : '') + esc(SF.ROLES[c.role].court) + '</b><small>' + esc(c.nom) + '</small></button>').join('')
+      : '<div class="vide">Donne un rôle d\'effet à un son (coup de gaz, claquements, purge, frein, boîte, suspension) : il apparaît ici.</div>';
+  }
+  function joueEffet(id) { const c = P.couches.find(x => x.id === id); if (c && bufs[c.id]) SF.joueEffet(c, bufs[c.id]); }
   function sorties() {
     const c = couche(); if (!c) return;
     $('oRpm').textContent = $('eRpm').disabled ? '—' : c.rpm; $('oGain').textContent = (c.gain > 0 ? '+' : '') + c.gain + ' dB';
@@ -143,7 +226,11 @@
       ['Lever de pied', n('sans') >= 1, 'conseillé : mêmes régimes sans charge'],
       ['Turbo', n('turbo') >= 1, 'facultatif'],
       ['Démarrage', n('demarrage') >= 1, 'facultatif (start_bad dans le jeu)'],
-      ['Clapet ouvert', n('clapet') >= 2, 'facultatif : TSC Clapet, 2 régimes ou plus, et un son d\'ouverture']
+      ['Clapet ouvert', n('clapet') >= 2, 'facultatif : TSC Clapet, 2 régimes ou plus, et un son d\'ouverture'],
+      ['Claquements', n('claquement') >= 1, 'au lever de pied et aux passages de rapport'],
+      ['Frein moteur', n('frein_moteur') >= 1, 'facultatif'],
+      ['Sons d\'air', n('air_purge') + n('frein_air') + n('boite_air') + n('frein_parc') + n('suspension') >= 3, 'purge, frein, pschitt de boîte, frein de parc, suspension'],
+      ['Vrais coups de gaz (référence)', n('coup_gaz') >= 1, 'pour régler les couches en charge à l\'oreille']
     ];
     $('roles').innerHTML = items.map(i => '<li class="' + (i[1] ? 'ok' : '') + '">' + (i[1] ? '✓ ' : '') + i[0] + ' <span class="mut">· ' + i[2] + '</span></li>').join('');
   }
@@ -158,7 +245,7 @@
     let cur = false;
     $('etapes').innerHTML = E.map(e => { let k = e[1] ? 'ok' : (!cur ? (cur = true, 'cur') : ''); return '<li class="' + k + '">' + e[0] + '</li>'; }).join('');
   }
-  function rendTout() { rendLib(); rendPistes(); rendEd(); rendRoles(); majProjet(); simMaj(); rendGen(); }
+  function rendTout() { rendLib(); rendPistes(); rendEd(); rendRoles(); rendPads(); majProjet(); simMaj(); rendGen(); }
 
   /* ---------- générateur TSC ---------- */
   function rendGen() {
@@ -283,7 +370,7 @@
       onde($('wvc'), c, { edit: true }); $('tc').textContent = tps(c.fin - c.debut);
     }
     wv.addEventListener('pointermove', bouge);
-    const fin = () => { if (prise) { prise = null; sauve(); rendPistes(); if (moteur.marche) { moteur.demarre(P.couches, bufs); simMaj(); } } };
+    const fin = () => { if (prise) { prise = null; sauve(); rendPistes(); rendLib(); const cq = couche(); if (cq) rendQualite(cq); if (moteur.marche) { moteur.demarre(P.couches, bufs); simMaj(); } } };
     wv.addEventListener('pointerup', fin); wv.addEventListener('pointercancel', fin);
   })();
 
@@ -291,9 +378,9 @@
   function telecharge(blob, nom) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
   async function exporteWav() {
     const refus = P.couches.filter(c => c.licence === 'refus').length;
-    const sansAuteur = P.couches.filter(c => (c.licence === 'ccby' || c.licence === 'mod') && !c.source && c.role !== 'autre');
+    const sansAuteur = P.couches.filter(c => (c.licence === 'ccby' || c.licence === 'mod') && !c.source && c.role !== 'autre' && c.role !== 'reference');
     if (sansAuteur.length) { toast('Indique l\'auteur et le lien de : ' + sansAuteur.map(c => c.fichier).join(', ') + ' (licence CC-BY ou son de mod).'); sel = sansAuteur[0].id; rendTout(); return; }
-    const L = P.couches.filter(c => bufs[c.id] && c.role !== 'autre' && c.licence !== 'refus');
+    const L = P.couches.filter(c => bufs[c.id] && c.role !== 'autre' && c.role !== 'reference' && c.licence !== 'refus');
     if (refus) toast(refus + ' son(s) à licence refusée laissé(s) de côté.');
     if (!L.length) { toast('Rien à exporter.'); return; }
     $('bExportWav').disabled = true;
@@ -301,7 +388,7 @@
       const noms = {};
       for (const c of L) {
         const r = await SF.rendu(c, bufs[c.id]);
-        let n = nomPropre(c.role + (c.role === 'charge' || c.role === 'sans' || c.role === 'ralenti' ? '_' + c.rpm : '')).toLowerCase();
+        let n = nomPropre(c.role + (c.role === 'charge' || c.role === 'sans' || c.role === 'ralenti' ? '_' + c.rpm : SF.ROLES[c.role].effet ? '_' + c.nom : '')).toLowerCase();
         if (noms[n]) n += '_' + (++noms[n]); else noms[n] = 1;
         telecharge(SF.wav(r), n + '.wav');
         await new Promise(ok => setTimeout(ok, 250));
@@ -395,6 +482,11 @@
     $('selMoteur').addEventListener('change', () => { P.moteur = $('selMoteur').value; sauve(); });
     const drop = $('drop');
     $('fic').addEventListener('change', e => { importe(e.target.files); e.target.value = ''; });
+    $('ficDossier').addEventListener('change', e => { importe(e.target.files); e.target.value = ''; });
+    $('bExtrait').onclick = extrait;
+    $('filtreRole').addEventListener('change', rendPistes);
+    $('pads').addEventListener('click', e => { const b = e.target.closest('[data-pad]'); if (b) joueEffet(b.dataset.pad); });
+    document.addEventListener('keydown', e => { if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.altKey && !(e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) { const c = effets()[+e.key - 1]; if (c) { e.preventDefault(); joueEffet(c.id); } } });
     drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fic').click(); } });
     ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
     ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
