@@ -42,3 +42,7 @@ Poids : https://huggingface.co/timm/vit_small_patch14_dinov2.lvd142m (fichier mo
 v0.8.2 : images gardees en 8 bits (4x moins de RAM) ; --reel_ram N = N images reelles en memoire, 5 % renouvelees toutes les 500 iterations (10 000 Panoramax : --reel_ram 1500).
 Richter et al. 2021 (Intel, Enhancing Photorealism Enhancement : G-buffer + caracteristiques pre-entrainees).
 Tests : python tsc_graphics/tests/test_neural.py (parite Python/HLSL, guide, detail, compilation, juge vision).
+v0.8.3 : APPARIEMENT (--appariement 1 par defaut avec --juge_vision). run5v (juge vision, morceaux reels au hasard) s'eloignait
+du reel (1,045 -> 1,114) : le juge reconnaissait le jeu a son CONTENU (cabine, autoroute, foret), que le reseau ne peut pas changer.
+Maintenant chaque morceau du jeu est compare a un des 8 morceaux reels les plus semblables (signature DINOv2) : le juge ne peut
+plus juger que la lumiere, la couleur et la matiere. Methode d'Intel (Richter et al. 2021, tirage apparie).

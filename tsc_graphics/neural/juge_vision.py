@@ -146,3 +146,48 @@ def perte_juge(J, reel, faux):
 
 def perte_generateur(J, faux):
     return sum(((a - 1) ** 2).mean() for a in J(faux)) / len(COUCHES)
+
+
+class Appariement:
+    """v0.8.3 : tirage des morceaux reels APPARIES au contenu des morceaux du jeu (methode d'Intel, Richter et al. 2021).
+    Sans cela le juge reconnait le jeu a son CONTENU (cabine, foret, autoroute...) que notre petit reseau ne peut pas changer :
+    il pousse alors le contraste au hasard (run5v : ecart 1,045 -> 1,114). Chaque morceau reel est indexe par sa signature
+    DINOv2 (moyenne des jetons de la couche 11) ; pour un morceau du jeu on tire un des k morceaux reels les plus proches."""
+
+    def __init__(self, J, banque, t, appareil, pas=0.5, k=8):
+        self.J, self.t, self.app, self.pas, self.k = J, t, appareil, pas, k
+        self.pos, self.sig = [], []
+        self.mettre_a_jour(banque, range(len(banque.im)))
+
+    def n(self):
+        return sum(len(p) for p in self.pos)
+
+    @torch.no_grad()
+    def signature(self, x):
+        f = self.J.caracteristiques(x.to(self.app))[-1]
+        return F.normalize(f.mean((2, 3)), dim=1)
+
+    @torch.no_grad()
+    def mettre_a_jour(self, banque, indices):
+        while len(self.pos) < len(banque.im):
+            self.pos.append([]); self.sig.append(None)
+        for k in indices:
+            x = banque.im[k]
+            h, w = x.shape[1:]
+            t = min(self.t, h, w); s = max(1, int(t * self.pas))
+            pos = [(i, j) for i in range(0, h - t + 1, s) for j in range(0, w - t + 1, s)]
+            m = torch.stack([banque.morceau(k, i, j, t, False) for i, j in pos])
+            self.pos[k] = [(i, j, t) for i, j in pos]
+            self.sig[k] = torch.cat([self.signature(m[a:a + 64]) for a in range(0, len(m), 64)]).cpu()
+        self._tout = torch.cat(self.sig); self._ref = [(k, q) for k in range(len(self.pos)) for q in range(len(self.pos[k]))]
+
+    @torch.no_grad()
+    def lot(self, banque, x, gen):
+        sim = self.signature(x[:, :3]).cpu() @ self._tout.T
+        meilleurs = sim.topk(min(self.k, sim.shape[1]), dim=1).indices
+        out = []
+        for b in range(x.shape[0]):
+            k, q = self._ref[int(meilleurs[b, gen.randrange(meilleurs.shape[1])])]
+            i, j, t = self.pos[k][q]
+            out.append(banque.morceau(k, i, j, t, gen.random() < 0.5))
+        return torch.stack(out)

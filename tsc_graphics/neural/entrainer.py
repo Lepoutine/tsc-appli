@@ -99,8 +99,9 @@ class Banque:
 
     def renouveler(self, part=0.05):
         """Remplace une part des images en memoire par d'autres images du dossier (seulement si max_ram)."""
+        changes = set()
         if not self.max_ram:
-            return
+            return []
         hors = list(set(self.chemins) - set(self.de))
         for _ in range(max(1, int(len(self.im) * part))):
             if not hors:
@@ -108,8 +109,15 @@ class Banque:
             p = hors.pop(self.reserve.randrange(len(hors)))
             x = self._lire(p)
             if x is not None:
-                k = self.reserve.randrange(len(self.im)); self.im[k] = x; self.de[k] = p
+                k = self.reserve.randrange(len(self.im)); self.im[k] = x; self.de[k] = p; changes.add(k)
         self._regrouper()
+        return sorted(changes)
+
+    def morceau(self, k, i, j, t, flip):
+        m = self._f(self.im[k][:3, i:i + t, j:j + t])
+        if t != self.t:
+            m = F.interpolate(m[None], size=(self.t, self.t), mode="bilinear", align_corners=False)[0]
+        return m.flip(-1) if flip else m
 
     def lot(self, n, gen):
         out = []
@@ -184,6 +192,7 @@ def main():
     a.add_argument("--detail", type=float, default=6.0, help="v0.6 : poids qui garde l'energie du detail fin du jeu (run3/run4 lissaient ~43 %%)")
     a.add_argument("--detail_min", type=float, default=0.75, help="v0.6 : detail fin garde mini (sortie/jeu, images de test) pour devenir champion")
     a.add_argument("--guide", type=int, default=0, help="v0.7 : 1 = TSC Neural guide par le G-buffer (fichiers _prof.npy/_albedo.npy, plugin 0.18)")
+    a.add_argument("--appariement", type=int, default=1, help="v0.8.3 : avec --juge_vision, chaque morceau du jeu est juge contre des morceaux REELS de contenu semblable (voisins DINOv2) ; 0 = tirage au hasard")
     a.add_argument("--reel_ram", type=int, default=0, help="v0.8.2 : nb maxi d'images reelles en memoire (0 = toutes), renouvelees 5 %% toutes les 500 iterations")
     a.add_argument("--cache", type=int, default=24, help="v0.8 : neurones caches par couche (24 = ~1 ms ; 48 = PC haut de gamme, a mesurer en jeu)")
     a.add_argument("--juge_vision", default="", help="v0.8 : model.safetensors de timm/vit_small_patch14_dinov2.lvd142m (juge appuye sur DINOv2, Apache 2.0)")
@@ -227,6 +236,9 @@ def main():
         JV = juge_vision.JugeVision(o.juge_vision).to(appareil)
         oJ = torch.optim.Adam([q for q in JV.parameters() if q.requires_grad], 2e-4 * o.lr_juge, betas=(0.5, 0.99))
         print("juge vision DINOv2 actif (gele, 142 M images reelles ; seules les tetes TSC apprennent)")
+    AP = juge_vision.Appariement(JV, BR, o.taille, appareil) if (JV is not None and o.appariement) else None
+    if AP is not None:
+        print(f"appariement : {AP.n()} morceaux reels indexes (le juge compare des scenes semblables)")
     # v0.2.1 : moyenne glissante des poids (EMA) : c'est ELLE qui est jugee et exportee (run1 oscillait apres 6 000)
     Gm = copy.deepcopy(G).eval()
     for q in Gm.parameters(): q.requires_grad_(False)
@@ -246,11 +258,17 @@ def main():
         if it - dernier_champion > o.arret and dernier_champion > 0:
             print(f"arret : pas de progres depuis {o.arret} iterations (champion a {dernier_champion})"); break
         if o.reel_ram and it % 500 == 0:
-            BR.renouveler()
-        xg = BJ.lot(o.lot, gen).to(appareil); r = BR.lot(o.lot, gen).to(appareil)
+            ch = BR.renouveler()
+            if AP is not None and ch:
+                AP.mettre_a_jour(BR, ch)
+        xg = BJ.lot(o.lot, gen).to(appareil)
+        if AP is None:
+            r = BR.lot(o.lot, gen).to(appareil)
         x = xg[:, :3]
         if o.variations > 0:
             x = varier(x, gen, o.variations)
+        if AP is not None:
+            r = AP.lot(BR, x, gen).to(appareil)
         if o.guide:
             g = xg[:, 3:] * (torch.rand(xg.shape[0], 1, 1, 1, device=appareil) > 0.1).float()   # 10 % sans G-buffer (vue sans copie)
             y = G(torch.cat([x, g], 1))

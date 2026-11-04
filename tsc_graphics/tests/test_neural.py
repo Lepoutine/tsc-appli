@@ -155,6 +155,21 @@ def test_dino_identique_a_timm_et_lecteur_safetensors():
         assert (t.forward_features(x) - m.norm(b)).abs().max() < 1e-4
 
 
+def test_appariement_tire_un_reel_semblable():
+    import random as rd
+    import juge_vision as jv
+    import entrainer as E
+    torch.manual_seed(0)
+    J = jv.JugeVision()
+    B = E.Banque.__new__(E.Banque); B.t = 64
+    rouge = torch.zeros(3, 128, 128); rouge[0] = 0.9
+    bleu = torch.zeros(3, 128, 128); bleu[2] = 0.9
+    B.im = [(rouge * 255).to(torch.uint8), (bleu * 255).to(torch.uint8)]
+    A = jv.Appariement(J, B, 64, "cpu", k=2)
+    r = A.lot(B, rouge[None, :, :64, :64].repeat(3, 1, 1, 1), rd.Random(1))
+    assert r.shape == (3, 3, 64, 64) and (r[:, 0].mean() > r[:, 2].mean())
+
+
 if __name__ == "__main__":
     for n, fn in list(globals().items()):
         if n.startswith("test_"):
