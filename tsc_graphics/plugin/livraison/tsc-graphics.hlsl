@@ -675,7 +675,8 @@ float4 ps_ldr(VSO i) : SV_Target {
 			float3 nb = neural_ldr(i.uv, srgb_dec3(eb));
 			nn = srgb_dec3(saturate(srgb_enc3(nb) + (e0 - eb)));
 		}
-		if (fini3(nn)) c = lerp(c0, nn, saturate(p21.w));
+		// libre11 = 1 : la correction du reseau (nn - image brute, en sRGB) s'AJOUTE a la chaine ldr ci-dessus au lieu de la remplacer
+		if (fini3(nn)) c = p23.z > 0.5 ? srgb_dec3(saturate(srgb_enc3(saturate(c)) + saturate(p21.w) * (srgb_enc3(nn) - srgb_enc3(c0)))) : lerp(c0, nn, saturate(p21.w));
 	}
 	// 0.9.3 : tramage d'1/255 avant le retour en 8 bits : supprime les marches de couleur dans les degrades (plafond, ciel)
 	{
