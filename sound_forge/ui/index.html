@@ -29,7 +29,9 @@
   <div class="col">
    <div class="card">
     <h3>Mes sons</h3>
-    <label class="drop" id="drop" tabindex="0"><b>Importer des sons</b>Glisse tes fichiers ici ou clique (WAV, OGG, MP3, FLAC)<input type="file" id="fic" accept=".wav,.ogg,.mp3,.flac,audio/*" multiple hidden></label>
+    <label class="b red packbt" for="ficDossier" title="Choisis le dossier TSC_Sound_Forge de ton Bureau : Forge range chaque son à sa place grâce à forge_pack.json">Importer tous mes sons (dossier TSC_Sound_Forge)</label><input type="file" id="ficDossier" webkitdirectory directory multiple hidden>
+    <label class="drop" id="drop" tabindex="0"><b>Importer des sons ou une vidéo</b>Glisse tes fichiers ici ou clique (WAV, OGG, MP3, FLAC, MP4)<input type="file" id="fic" accept=".wav,.ogg,.mp3,.flac,.m4a,.mp4,.mov,.webm,.json,audio/*,video/*" multiple hidden></label>
+    <div class="mut" id="importEtat" hidden style="font-size:12px;margin-top:6px"></div>
     <div class="lib" id="lib"></div>
     <div class="libre"><b>Sons libres de droit</b><span class="mut">Prends seulement du CC0 ou du CC-BY. Le non commercial (NC) est refusé, parce que TSC est vendu.</span>
      <a class="b" href="https://freesound.org/search/?q=truck+engine&amp;f=license:%22Creative+Commons+0%22" target="_blank" rel="noopener">Freesound (CC0)</a>
@@ -50,7 +52,9 @@
      <button class="tb" type="button" id="bStop" title="Arrêter"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg></button>
      <button class="tb" type="button" id="bBoucle" title="Écouter en boucle"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4V8H7a3 3 0 0 0-3 3v1H2v-1a5 5 0 0 1 5-5h10zM7 21l-4-4 4-4v3h10a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7z"/></svg></button>
      <button class="tb" type="button" id="bAvant" title="Comparer avec le son brut">Avant / après</button>
+     <button class="tb" type="button" id="bExtrait" title="Copie le passage entre les bords rouges dans une nouvelle couche (l'original reste entier)">Extraire le passage</button>
      <button class="tb" type="button" id="bSuppr" title="Retirer la couche du projet">Retirer</button>
+     <select id="filtreRole" class="tb" title="Afficher seulement une famille de sons" aria-label="Famille de sons"><option value="">Tous les sons</option><option value="moteur">Moteur (simulateur)</option><option value="effet">Effets (gaz, claquements, air)</option><option value="reference">Références à découper</option><option value="autre">Autres (rôle à choisir)</option></select>
      <span class="tc" id="tc">00:00.000</span>
     </div>
     <div id="pistes"></div>
@@ -60,6 +64,7 @@
     <h3>Couche choisie<span class="sp"></span><span class="mut" id="edNom" style="font:500 12px var(--fb);letter-spacing:0;text-transform:none"></span></h3>
     <div class="ed" id="ed">
      <div class="wv" id="wv"><canvas id="wvc"></canvas><span class="hint">Tire les bords rouges pour couper, la zone or est la boucle</span></div>
+     <div class="qual" id="qual"></div>
      <div class="grid2">
       <div class="ctl"><span>Rôle</span><select id="eRole"></select></div>
       <div class="ctl"><span>Régime</span><input type="range" id="eRpm" min="400" max="2600" step="50"><output id="oRpm"></output></div>
@@ -82,6 +87,11 @@
      </div>
     </div>
     <div class="vide" id="edVide">Importe un son puis clique dessus pour le régler.</div>
+   </div>
+
+   <div class="card">
+    <h3>Pupitre d'effets<span class="sp"></span><span class="mut" style="font:500 12px var(--fb);letter-spacing:0;text-transform:none">touches 1 à 9, par-dessus le moteur</span></h3>
+    <div class="pads" id="pads"></div>
    </div>
 
    <div class="card">

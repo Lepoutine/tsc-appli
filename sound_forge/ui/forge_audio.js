@@ -15,6 +15,16 @@
     clapet_off: { nom: 'Fermeture du clapet', court: 'Clapet −',  boucle: false, rpm: 0,    sim: false },
     demarrage:  { nom: 'Démarrage', court: 'Démarrage',             boucle: false, rpm: 0,    sim: false },
     arret:      { nom: 'Arrêt', court: 'Arrêt',                 boucle: false, rpm: 0,    sim: false },
+    /* effets ponctuels joués par-dessus le moteur (pupitre d'effets). jeu = où le son ira dans ETS2 */
+    coup_gaz:   { nom: 'Coup de gaz (vrai enregistrement)', court: 'Coup de gaz', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'référence pour les couches en charge' },
+    claquement: { nom: 'Claquements (pétarades)', court: 'Claquements', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'engine/exhaust, au lever de pied' },
+    frein_moteur: { nom: 'Frein moteur', court: 'Frein moteur', boucle: true, rpm: 0, sim: false, effet: true, jeu: 'engine/engine_brake' },
+    boite_air:  { nom: 'Pschitt de boîte (passage de rapport)', court: 'Pschitt boîte', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'air_gear (passage de rapport)' },
+    air_purge:  { nom: 'Purge / décompression', court: 'Purge', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'air_cutoff' },
+    frein_air:  { nom: 'Frein pneumatique', court: 'Frein air', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'air_brake' },
+    frein_parc: { nom: 'Frein de parc', court: 'Frein de parc', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'park_brake on / off' },
+    suspension: { nom: 'Suspension pneumatique', court: 'Suspension', boucle: false, rpm: 0, sim: false, effet: true, jeu: 'lift_axle / mise à niveau' },
+    reference:  { nom: 'Vidéo complète (référence à découper)', court: 'Référence', boucle: false, rpm: 0, sim: false, jeu: 'à découper en couches' },
     autre:      { nom: 'Autre (non utilisé)', court: 'Autre',   boucle: false, rpm: 0,    sim: false }
   };
 
@@ -232,6 +242,41 @@
       v.setUint8(o, s & 255); v.setUint8(o + 1, (s >> 8) & 255); v.setUint8(o + 2, (s >> 16) & 255); o += 3;
     }
     return new Blob([ab], { type: 'audio/wav' });
+  };
+
+  /* Contrôle qualité d'une couche (mêmes seuils que l'Audio Lab : crête -1 dB, écrêtage 0,01 %, raccord 1,5 dB sur 200 ms).
+     Ce sont des mesures : elles ne remplacent pas l'écoute. */
+  SF.qualite = function (buf, debut, fin, boucle) {
+    const sr = buf.sampleRate, i0 = Math.max(0, Math.floor(debut * sr)), i1 = Math.min(buf.length, Math.ceil(fin * sr));
+    let pk = 0, ec = 0, sq = 0, n = 0;
+    const db = v => 20 * Math.log10(Math.max(v, 1e-9));
+    const eff = (a, b) => { let q = 0, k = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = a; i < b; i++) { q += d[i] * d[i]; k++; } } return Math.sqrt(q / Math.max(1, k)); };
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = i0; i < i1; i++) { const v = Math.abs(d[i]); if (v > pk) pk = v; if (v >= 0.999) ec++; sq += d[i] * d[i]; n++; }
+    }
+    const r = { crete: db(pk), rms: db(Math.sqrt(sq / Math.max(1, n))), ecretage: 100 * ec / Math.max(1, n), raccord: null, alertes: [] };
+    if (r.crete > -1) r.alertes.push('crête au-dessus de −1 dB : risque de saturation dans le jeu');
+    if (r.ecretage > 0.01) r.alertes.push('écrêtage mesuré (' + r.ecretage.toFixed(2) + ' % des points)');
+    const w = Math.floor(0.2 * sr);
+    if (boucle && i1 - i0 > 3 * w) {
+      r.raccord = Math.abs(db(eff(i1 - w, i1)) - db(eff(i0, i0 + w)));
+      if (r.raccord > 1.5) r.alertes.push('la boucle saute de ' + r.raccord.toFixed(1) + ' dB au raccord : déplace un bord');
+    }
+    return r;
+  };
+
+  /* Copie d'un passage [debut, fin] dans un nouveau tampon (pour « Extraire en nouvelle couche »). */
+  SF.extrait = function (buf, debut, fin) {
+    const sr = buf.sampleRate, i0 = Math.max(0, Math.floor(debut * sr)), i1 = Math.min(buf.length, Math.ceil(fin * sr));
+    const out = SF.ctx().createBuffer(buf.numberOfChannels, Math.max(1, i1 - i0), sr);
+    const f = Math.min(Math.floor(0.01 * sr), Math.floor((i1 - i0) / 4)); // fondus de 10 ms : pas de clic
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const a = buf.getChannelData(c), o = out.getChannelData(c);
+      for (let i = 0; i < i1 - i0; i++) o[i] = a[i0 + i];
+      for (let i = 0; i < f; i++) { const g = i / f; o[i] *= g; o[o.length - 1 - i] *= g; }
+    }
+    return out;
   };
 
   window.SF = SF;

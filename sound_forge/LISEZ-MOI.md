@@ -28,5 +28,14 @@ Options : `-SansCache`, `-Echantillons scania.r_2016,volvo.fh_2021`, `-Sortie <d
 
 Pas encore fait : bouton « Analyser mon ETS2 » relié au service de la tablette, projet FMOD (phase 3), vrai build (phase 4), mod ETS2 (phase 5).
 
+## Tous les sons dans Forge (04/11/2026)
+
+- **Importer tous mes sons** : choisis le dossier `TSC_Sound_Forge` du Bureau. Le fichier `forge_pack.json` (fait par `intelligence/experts/son/pack_forge.py`) donne à chaque son son rôle, son régime et une note. Réimporter ne crée pas de doublons.
+- Vidéos (MP4) et sons longs acceptés : tire les bords rouges puis **Extraire le passage** crée une nouvelle couche, l'original reste entier.
+- Nouveaux rôles : coup de gaz, claquements, frein moteur, pschitt de boîte, purge, frein pneumatique, frein de parc, suspension, référence.
+- **Pupitre d'effets** : un bouton par effet (touches 1 à 9), joué par-dessus le simulateur.
+- **Contrôles** de la couche choisie : crête, niveau moyen, écrêtage, raccord de boucle (mêmes seuils que l'Audio Lab). Ce sont des mesures, l'écoute tranche.
+- Filtre des pistes par famille (moteur, effets, références, autres).
+
 ## TSC Clapet
 Le clapet d'échappement sur touche (V seule) est intégré au simulateur, avec les rôles `clapet`, `clapet_on` et `clapet_off`. La recette et les règles sont dans `connaissances/fmod/06_tsc_clapet.md`. Le plugin en jeu et le partage multijoueur viendront après la validation du son par Mendy.

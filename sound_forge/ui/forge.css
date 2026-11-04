@@ -129,3 +129,19 @@ select{cursor:pointer}
 .libre>b{width:100%;font-size:12.5px}.libre>span{width:100%;margin-bottom:2px}
 .libre .b{padding:6px 10px;font-size:12px;text-decoration:none}
 .it small.lic{color:var(--warn)}
+
+/* import du pack, contrôles qualité, pupitre d'effets */
+.packbt{display:block;width:100%;margin-bottom:8px;white-space:normal}
+.qual{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 4px}
+.qual .q{font-size:11.5px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);background:var(--p2);color:#cfd1d6}
+.qual .q.ko{border-color:var(--bad);color:var(--bad)}
+.qual .q.jeu{border-color:var(--gold);color:var(--gold)}
+.qual .qn,.qual .qa{flex-basis:100%;font-size:12px}
+.qual .qa{color:var(--warn)}
+.pads{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+.pad{all:unset;box-sizing:border-box;cursor:pointer;padding:9px 10px;border-radius:10px;border:1px solid var(--line);border-left-width:4px;background:var(--p2)}
+.pad:hover{background:#1d2027}.pad:active{transform:translateY(1px)}
+.pad:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.pad b{display:block;font-size:12.5px}.pad small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pistes{max-height:52vh;overflow:auto}
+#filtreRole{width:auto;padding:0 8px;background:var(--p2)}
