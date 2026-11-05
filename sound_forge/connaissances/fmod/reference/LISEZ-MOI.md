@@ -1,1 +1,0 @@
-`fmod_studio_2.03_api.json` est la liste des fonctions de l'API de script de FMOD Studio 2.03 (signature, paramètres, description), générée depuis la référence officielle par le projet fmod-studio-mcp (https://github.com/EYamanS/fmod-studio-mcp), sous licence MIT (voir LICENSE_fmod-studio-mcp_MIT.txt). Copiée telle quelle le 2026-11-03.

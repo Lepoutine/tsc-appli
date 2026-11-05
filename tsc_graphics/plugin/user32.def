@@ -1,8 +1,0 @@
-LIBRARY user32.dll
-EXPORTS
-GetAsyncKeyState
-RegisterClassExA
-UnregisterClassA
-CreateWindowExA
-DestroyWindow
-DefWindowProcA

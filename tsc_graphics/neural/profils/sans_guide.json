@@ -1,8 +1,0 @@
-{
-  "jeu": "generique (image seule)",
-  "moteur": "tout jeu : seule l'image finale 8 bits est lue",
-  "verifie": "mode image seule, deja entraine dans 10 % des lots",
-  "profondeur": null,
-  "guide": null,
-  "vues": {"multi_ecrans": 1}
-}

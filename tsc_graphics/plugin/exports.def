@@ -1,4 +1,0 @@
-LIBRARY tsc-graphics.dll
-EXPORTS
-scs_telemetry_init
-scs_telemetry_shutdown
