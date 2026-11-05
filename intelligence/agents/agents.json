@@ -1,0 +1,679 @@
+{
+ "nom": "TSC Intelligence : fiches des 10 experts",
+ "maj": "2026-11-03",
+ "regle": "Chaque outil cite existe deja (audit du 03/11/2026). Rien n'est reconstruit. Un niveau n'est donne que s'il est prouve (echelle du registre maitre, 0 a 6).",
+ "lieux": {
+  "depot": "ce depot GitHub Lepoutine/tsc-appli",
+  "code": "code de l'appli (bundle project-files/code_tsc/TSC_code_2026-11-03c.bundle, version 2.14.54)",
+  "projet": "dossier partage du projet (/mnt/project-files)",
+  "pc": "PC Shadow de Mendy (C:\\Users\\Shadow\\Documents\\TSC Driver\\...)"
+ },
+ "agents": [
+  {
+   "id": "graphics",
+   "nom": "IA Pro Photoréalisme",
+   "specialite": "rendu DX11 d'ETS2, shaders HLSL, reflets, ombres, eclairage, photorealisme temps reel",
+   "niveau": 3,
+   "preuve_niveau": "plugin tsc-graphics 0.1 a 0.14 construit et pose dans TSCF_Lab, audit du pipeline prouve (G-buffer, Z inverse, cout SSR 1,1-2,0 ms) ; rendu final pas encore valide en jeu par Mendy ; sources : branche claude/project-thread-a76ees, plugin 0.14 commit 414d468 (meteo 0.14 pas encore posee)",
+   "outils": [
+    {
+     "nom": "plugin tsc-graphics (dll + hlsl + ini)",
+     "lieu": "projet",
+     "chemin": "tsc_graphics/plugin_0.14"
+    },
+    {
+     "nom": "audit du pipeline de rendu",
+     "lieu": "projet",
+     "chemin": "tsc_graphics/audit_pipeline/SYNTHESE_AUDIT.md"
+    },
+    {
+     "nom": "mesure du rendu jeu / reel",
+     "lieu": "projet",
+     "chemin": "tsc_graphics/Mesurer_Rendu.ps1"
+    },
+    {
+     "nom": "statistiques d'image",
+     "lieu": "projet",
+     "chemin": "tsc_graphics/Statistiques_Rendu.ps1"
+    },
+    {
+     "nom": "mesures de reference",
+     "lieu": "projet",
+     "chemin": "tsc_graphics/mesures_reel.json"
+    },
+    {
+     "nom": "labo video",
+     "lieu": "projet",
+     "chemin": "tsc_graphics/labo_video"
+    },
+    {
+     "nom": "shaders ReShade TSC (ancienne voie)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/reshade/Shaders/TSC_Photoreal.fx"
+    },
+    {
+     "nom": "plugin ecran D3D11 (sources)",
+     "lieu": "code",
+     "chemin": "plugin_src/ecran/tsc_ecran.cpp"
+    }
+   ],
+   "connaissances": [
+    "audit_pipeline_161"
+   ],
+   "manque": [
+    "fiches DX11/HLSL officielles sourcees",
+    "jeu de captures de reference fixe pour comparer chaque version",
+    "sources du socle tscf_probe 0.2 a 0.9h (introuvables sur le Shadow)"
+   ],
+   "demande_avant": "examiner le pipeline (audit) avant de promettre un effet",
+   "fil": "TSC Performance Lab et TSC Graphics",
+   "apprentissage": {
+    "regles": "Outils admin\\tsc_graphics\\tsc_ia\\regles_tsc_ia.json (PC)",
+    "boucle": "TSC-IA textures (numpy) sur le PC",
+    "donnees": "images reelles, 1 sur 10 = juge",
+    "etat": "adoptee 03/11 : +2,618 dB sur 47 images jamais vues (fil Graphics)"
+   }
+  },
+  {
+   "id": "textures",
+   "nom": "TSC Textures Expert",
+   "specialite": "textures, materiaux, UV, normal maps, DDS/BC, skins de remorques et tracteurs",
+   "niveau": 3,
+   "preuve_niveau": "lot IA textures HD (Real-ESRGAN + grain + detecteur d'hallucination + encodeur BC maison PSNR 36,4 dB) en cours ; skins Spartan construits par scripts ; pas encore de validation en jeu du lot ; textures HD en memoire 0.13.1 ; TSC Textures IA GPU commit 31e7a60 (testee a blanc seulement) ; TSC-IA numpy v1 entrainee sur le Shadow",
+   "outils": [
+    {
+     "nom": "TSC Textures IA (entrainement, application, boucle)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\tsc_graphics\\ia_textures"
+    },
+    {
+     "nom": "methode skin Spartan sans erreur",
+     "lieu": "memoire",
+     "chemin": "tsc-methode-skin-spartan"
+    },
+    {
+     "nom": "plans vierges pour maquettes",
+     "lieu": "code",
+     "chemin": "tests_pilote/plans/plan_vierge.py"
+    },
+    {
+     "nom": "lecture des archives SCS (HashFS v2)",
+     "lieu": "code",
+     "chemin": "tests_pilote/hashfs/hashfs2.py"
+    },
+    {
+     "nom": "kit de templates a peindre",
+     "lieu": "code",
+     "chemin": "tests_pilote/kit/build_kit.py"
+    },
+    {
+     "nom": "pieces MDT en TSC",
+     "lieu": "code",
+     "chemin": "tests_pilote/mdt/mdt_spartan.py"
+    },
+    {
+     "nom": "bibliotheque libre CC0 (textures, HDRI)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\soundforge\\bibliotheque_libre"
+    }
+   ],
+   "connaissances": [
+    "outils_libres"
+   ],
+   "manque": [
+    "fiches materiaux (route, beton, metal, peinture) sourcees",
+    "jeu de test fixe de textures avant/apres",
+    "regle UV ecrite et verifiee automatiquement"
+   ],
+   "demande_avant": "lire les UV et le .mat du modele du jeu avant de peindre",
+   "fil": "TSC Performance Lab et TSC Graphics",
+   "apprentissage": {
+    "regles": "Outils admin\\tsc_graphics\\tsc_ia\\regles_tsc_ia.json (PC)",
+    "boucle": "TSC-IA textures (numpy) sur le PC",
+    "donnees": "images reelles, 1 sur 10 = juge",
+    "etat": "adoptee 03/11 : +2,618 dB sur 47 images jamais vues (fil Graphics)"
+   }
+  },
+  {
+   "id": "performance",
+   "nom": "TSC Performance Expert",
+   "specialite": "CPU/GPU, frametimes, VRAM, Windows, Shadow PC, jeux moddes",
+   "niveau": 4,
+   "preuve_niveau": "TSC Performance Lab : 42/42 tests passes sur le Shadow (24/10), diagnostic 106/106 mods reconnus ; mode zones dans la tablette",
+   "outils": [
+    {
+     "nom": "TSC Performance Lab",
+     "lieu": "depot",
+     "chemin": "perf_lab/app/TSC_Performance_Lab.ps1"
+    },
+    {
+     "nom": "moteur Perf Lab",
+     "lieu": "depot",
+     "chemin": "perf_lab/app/PerfLab.Core.psm1"
+    },
+    {
+     "nom": "diagnostic sans interface",
+     "lieu": "depot",
+     "chemin": "perf_lab/app/Diagnostic_Sans_Interface.ps1"
+    },
+    {
+     "nom": "diagnostic PC principal",
+     "lieu": "depot",
+     "chemin": "perf_lab/Diagnostic_PC_principal.ps1"
+    },
+    {
+     "nom": "tests Perf Lab",
+     "lieu": "depot",
+     "chemin": "perf_lab/tests/Test-PerfLab.ps1"
+    },
+    {
+     "nom": "zones chargees (tablette)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/perf_lab/PerfLab.Zones.psm1"
+    },
+    {
+     "nom": "ecran Optimisation (tablette)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/opti.js"
+    },
+    {
+     "nom": "comparateur avant/apres PresentMon (verdict prouve ou non)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/performance/frametime.py"
+    }
+   ],
+   "connaissances": [
+    "perf_shadow_constats",
+    "presentmon",
+    "vram_budget_dxgi"
+   ],
+   "manque": [
+    "mesure frametime fiable derriere ReShade (PresentMon ne voit pas la vraie chaine)",
+    "mesure du budget VRAM reel sur le Shadow (QueryVideoMemoryInfo depuis le module DX11)",
+    "comparateur avant/apres a essayer sur de vraies captures PresentMon du Shadow (teste seulement sur captures simulees)"
+   ],
+   "demande_avant": "mesurer (diagnostic + journal) avant de proposer une optimisation",
+   "fil": "TSC Performance Lab et TSC Graphics"
+  },
+  {
+   "id": "mods",
+   "nom": "TSC Mod Engineering Expert",
+   "specialite": "archives SCS, SII/SUI, modeles, materiaux, compatibilite MDT, versions, ordre de chargement",
+   "niveau": 4,
+   "preuve_niveau": "mods construits par scripts et vus en jeu (betaillere 1.5, cuir 1.3.x, MDT TSCF v2 valide 30/10) ; erreurs console du 31/10 corrigees ; ordre des mods auto (2.14.35)",
+   "outils": [
+    {
+     "nom": "ecran Mods TSC (install, empreinte, ancienne version)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/modstsc.js"
+    },
+    {
+     "nom": "ecran Console (erreurs du jeu)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/console.js"
+    },
+    {
+     "nom": "lecture des archives SCS (HashFS v2, CityHash)",
+     "lieu": "code",
+     "chemin": "tests_pilote/hashfs/hashfs2.py"
+    },
+    {
+     "nom": "inventaire des skins MDT",
+     "lieu": "code",
+     "chemin": "tests_pilote/mdt/inventaire_mdt.py"
+    },
+    {
+     "nom": "constructeurs de mods (betaillere, benne, citerne, cuir...)",
+     "lieu": "code",
+     "chemin": "tests_pilote"
+    },
+    {
+     "nom": "catalogue des mods",
+     "lieu": "projet",
+     "chemin": "publication_mods"
+    },
+    {
+     "nom": "registre des creations (licences)",
+     "lieu": "depot",
+     "chemin": "registre/registre_creations.json"
+    },
+    {
+     "nom": "verificateur de mods TSC (PC)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\outils_tsc\\Verifier_Mods_TSC.ps1"
+    },
+    {
+     "nom": "lecteur SCS C# (PC)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\outils_tsc\\Scs.cs"
+    },
+    {
+     "nom": "extractor.exe SCS officiel + extractions base_vehicle (19 Go)",
+     "lieu": "pc",
+     "chemin": "Documents\\TSC Driver\\base_vehicle_extrait"
+    }
+   ],
+   "connaissances": [
+    "regle_noms_sii_11",
+    "regles_mods_mendy",
+    "formats_scs"
+   ],
+   "manque": [
+    "analyseur automatique de game.log (erreurs -> mod -> fichier)",
+    "fiches SII/SUI/.mat/.tobj officielles sourcees",
+    "etendre Verifier_Mods_TSC.ps1 (PC) au controle complet avant livraison, sans creer un 2e verificateur"
+   ],
+   "demande_avant": "lire game.log et ouvrir les archives soi-meme avant de demander ou est un fichier",
+   "fil": "Reprise App, Site HUB et MOD"
+  },
+  {
+   "id": "son",
+   "nom": "TSC Sound Engineering Expert",
+   "specialite": "acoustique et traitement audio : mesure des sons, boucles, couches moteur, EQ/dynamique, interieur/exterieur, sons pneus et mecaniques (le 'quoi entendre')",
+   "niveau": 2,
+   "preuve_niveau": "generateur Forge et DSP du clapet codes ; mesures acoustiques prevues mais pas encore faites ; rien d'ecoute en jeu",
+   "outils": [
+    {
+     "nom": "mesure et comparaison de sons moteur (diagnostic en clair)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/mesure_son.py"
+    },
+    {
+     "nom": "methode son truck ultime",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/METHODE_SON_TRUCK.md"
+    },
+    {
+     "nom": "generateur de sons",
+     "lieu": "depot",
+     "chemin": "sound_forge/ui/forge_gen.js"
+    },
+    {
+     "nom": "analyse des sons ETS2",
+     "lieu": "depot",
+     "chemin": "sound_forge/analyse/Analyser_ETS2.ps1"
+    },
+    {
+     "nom": "simulateur regime/charge et effets (Forge)",
+     "lieu": "depot",
+     "chemin": "sound_forge/ui/forge_audio.js"
+    },
+    {
+     "nom": "clapet d'echappement (DSP)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/echap_dsp.js"
+    },
+    {
+     "nom": "360 sons de Mendy ranges + INDEX",
+     "lieu": "pc",
+     "chemin": "Bureau\\TSC_Sound_Forge\\Mes_sons"
+    },
+    {
+     "nom": "projet V8 de Mendy (FMOD 2.03, script, build)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\soundforge\\projets\\tsc_v8_mendy"
+    },
+    {
+     "nom": "juge PANNs Cnn14 gele (NumPy, local)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/juge_panns.py"
+    },
+    {
+     "nom": "TSC-IA Son (tetes realisme + etat, boucles guidees par le juge)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/son/ia_son.py"
+    }
+   ],
+   "connaissances": [
+    "scs_sons_camion",
+    "exemple_peterbilt",
+    "guide_metier",
+    "tsc_clapet",
+    "filtrage_cabine",
+    "ecoute_ia_audio",
+    "juge_panns",
+    "bibliotheque_commons_son"
+   ],
+   "manque": [
+    "passer mesure_son.py sur les 360 sons et les extraits v2 (outil fait, pas encore lance sur le PC)",
+    "module d'isolation : soustraction spectrale du bruit + detection et classement des evenements (numpy) ; separation par reseau (Demucs, MIT) seulement si torch est installe sur le Shadow, accord de Mendy",
+    "detection automatique des points de boucle",
+    "test d'ecoute en jeu d'un son TSC",
+    "choix G/J de Mendy dans Forge a verser dans la tete realisme ; camions modernes absents des sources libres",
+    "juge de realisme sans le meme camion : 72 % des fenetres vraies et 85 % des syntheses bien classees (05/11), R580 ralenti A et retour au ralenti juges faux ; trop peu d'exemples refuses (12 fichiers) : les choix G/J de Mendy sont le prochain apport"
+   ],
+   "demande_avant": "mesurer le son (spectre, niveaux, regimes) avant de proposer un reglage",
+   "fil": "Créer TSC Sound Forge pour ETS2",
+   "priorite": "1re tache : son truck ultime V8 Scania R/S 2016 (demande de Mendy 03/11 19:13)",
+   "capacites_demandees": [
+    "capturer l'audio d'une video de reference (capture lancee par Mendy sur son PC, jamais de telechargement YouTube par Claude)",
+    "isoler les vraies sources et retirer les parasites (vent, voix, musique, autres vehicules)",
+    "reconnaitre et decouper par evenement : echappement/moteur, purge de bouteille d'air, frein moteur/decompression, passages de rapport, clapet",
+    "garder pour chaque extrait ses attributs mesures (regime, charge supposee, niveau, duree, points de boucle)"
+   ],
+   "references_mendy": [
+    "https://www.youtube.com/watch?v=QunyWALxgps",
+    "https://www.youtube.com/shorts/6xRFmNbw41I",
+    "https://www.youtube.com/shorts/fp4gjHvMHAQ",
+    "https://www.youtube.com/shorts/5Q38tZjko3w",
+    "https://www.youtube.com/shorts/Pa0LP_l2OjA",
+    "https://www.youtube.com/shorts/TuGp0_gxJZM",
+    "https://www.youtube.com/shorts/Y3HHvN-h8nc",
+    "https://www.youtube.com/shorts/tLxCs8VVJKM",
+    "https://www.youtube.com/shorts/lk9rRn_1YUM"
+   ],
+   "apprentissage": "TSC-IA Son : tetes sur empreintes PANNs gelees, regles communes (boucle.py), donnees project-files/tsc_intelligence/expert_son/ia_son"
+  },
+  {
+   "id": "forge",
+   "nom": "TSC FMOD Sound Engineering / Sound Forge Expert",
+   "specialite": "chaine de production FMOD : projet FMOD -> banques -> GUID reels -> .soundref/.sii/.sui -> mod .scs installable, export sur le Bureau",
+   "niveau": 3,
+   "preuve_niveau": "base FMOD sourcee (API 2.03, procedure SCS, Peterbilt 579), fmodstudiocl 2.03.15 releve, template SCS 1.43 sur le PC, analyseur ETS2 0.4 ; aucune banque TSC encore compilee ni ecoutee en jeu",
+   "outils": [
+    {
+     "nom": "Sound Forge (interface)",
+     "lieu": "depot",
+     "chemin": "sound_forge/ui/forge.js"
+    },
+    {
+     "nom": "analyseur ETS2 commun (Steam, jeu, mods, FMOD, archives) en lecture seule",
+     "lieu": "depot",
+     "chemin": "sound_forge/analyse/Analyser_ETS2.ps1"
+    },
+    {
+     "nom": "lecteur d'archives C# de l'analyseur",
+     "lieu": "depot",
+     "chemin": "sound_forge/analyse/SoundForge.Analyse.cs"
+    },
+    {
+     "nom": "base de connaissances FMOD",
+     "lieu": "depot",
+     "chemin": "sound_forge/connaissances/index.json"
+    },
+    {
+     "nom": "releve du jeu 1.61 (bus, evenements, 12 banques)",
+     "lieu": "pc",
+     "chemin": "Outils admin\\soundforge\\base_savoir\\donnees\\fmod_ets2_1.61.json"
+    },
+    {
+     "nom": "template FMOD SCS 1.43 + exemple Peterbilt",
+     "lieu": "pc",
+     "chemin": "Outils admin\\soundforge\\exemples_scs"
+    },
+    {
+     "nom": "FMOD Studio 2.03 (fmodstudiocl -build -export-guids)",
+     "lieu": "pc",
+     "chemin": "C:\\Program Files\\FMOD SoundSystem"
+    }
+   ],
+   "connaissances": [
+    "fmod_scripting",
+    "fmod_api_liste",
+    "scs_mod_son",
+    "recette_moteur",
+    "structure_jeu_161",
+    "scs_sons_camion",
+    "fmodstudiocl"
+   ],
+   "manque": [
+    "pilotage fmodstudiocl de bout en bout (build + export GUID) teste sur le PC",
+    "generateur .soundref/.sui a partir des GUID reels",
+    "controle automatique du mod audio avant de le declarer utilisable",
+    "dossier projet complet sur le Bureau + rapport de tests"
+   ],
+   "demande_avant": "lancer l'analyseur ETS2 et lire le releve du jeu avant de demander ou sont banques et camions ; jamais de GUID ni de .bank inventes",
+   "fil": "Créer TSC Sound Forge pour ETS2",
+   "apprentissage": {
+    "regles": "intelligence/apprentissage/regles.json",
+    "boucle": "sound_forge/ui/forge_ia.js",
+    "donnees": "choix de Mendy dans Forge (role, je garde / je jette), traits mesures du son",
+    "etat": "teste dans Chromium le 04/11 sur 60 choix simules ; pas encore de vrais choix de Mendy"
+   }
+  },
+  {
+   "id": "conduite",
+   "nom": "TSC Driving Intelligence Expert",
+   "specialite": "telemetrie SCS SDK, Pilote de tete, navigation, tachygraphe, coach de conduite",
+   "niveau": 5,
+   "preuve_niveau": "Pilote de tete utilise en jeu depuis le 16/10 (5 203 decisions journalisees), plugin telemetrie maison, routes apprises, tachygraphe ; Memoire TSC envoyee au service le 02/11",
+   "outils": [
+    {
+     "nom": "Pilote de tete",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/Pilote_Tete_TSC.ps1"
+    },
+    {
+     "nom": "plugin telemetrie (sources)",
+     "lieu": "code",
+     "chemin": "plugin_src/tsc_telemetrie.cpp"
+    },
+    {
+     "nom": "SDK SCS (en-tetes officiels)",
+     "lieu": "code",
+     "chemin": "plugin_src/sdk/include/scssdk_telemetry.h"
+    },
+    {
+     "nom": "routes apprises",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/routes_apprises.js"
+    },
+    {
+     "nom": "tachygraphe",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/tacho.js"
+    },
+    {
+     "nom": "memoire des decisions (envoi au service)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/memoire.js"
+    },
+    {
+     "nom": "traces de reference (scenarios)",
+     "lieu": "code",
+     "chemin": "traces.json"
+    },
+    {
+     "nom": "carte des routes",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/carte/roads.json"
+    },
+    {
+     "nom": "controleur 561/2006 (pauses, conduite journaliere, repos 24 h)",
+     "lieu": "depot",
+     "chemin": "intelligence/experts/conduite/regles_561.py"
+    }
+   ],
+   "connaissances": [
+    "sdk_telemetrie_scs",
+    "reglement_561_2006",
+    "limites_api_telemetrie",
+    "tachygraphe_165_2014"
+   ],
+   "manque": [
+    "tests rejoues automatiquement sur traces.json a chaque version",
+    "analyse des memoires recues des joueurs",
+    "comparer tacho.js au controleur 561/2006 sur les memes traces (code du pilote sur le PC) ; semaine et repos hebdomadaire pas encore controles"
+   ],
+   "demande_avant": "lire pilote_decisions.log et les memoires recues avant de changer un reglage",
+   "fil": "Reprise App, Site HUB et MOD"
+  },
+  {
+   "id": "logiciel",
+   "nom": "TSC Software Engineering Expert",
+   "specialite": "PowerShell/WebView2, C++ plugins, Go lanceur, JS tablette, worker Cloudflare, appli telephone",
+   "niveau": 5,
+   "preuve_niveau": "appli 2.14.54 construite et publiee par Mendy, lanceur Go, plugins C++ compiles (mingw), worker en service",
+   "outils": [
+    {
+     "nom": "construction du lanceur",
+     "lieu": "code",
+     "chemin": "lanceur/build.sh"
+    },
+    {
+     "nom": "construction des plugins",
+     "lieu": "code",
+     "chemin": "plugin_src/construire.sh"
+    },
+    {
+     "nom": "test du plugin hors jeu",
+     "lieu": "code",
+     "chemin": "plugin_src/test/test.cpp"
+    },
+    {
+     "nom": "tablette (PowerShell)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/Tablette.ps1"
+    },
+    {
+     "nom": "service TSC (worker Cloudflare)",
+     "lieu": "code",
+     "chemin": "serveur_acces/worker.js"
+    },
+    {
+     "nom": "appli telephone",
+     "lieu": "code",
+     "chemin": "serveur_acces/tel.html"
+    },
+    {
+     "nom": "copies du code",
+     "lieu": "projet",
+     "chemin": "code_tsc"
+    }
+   ],
+   "connaissances": [
+    "build_cloud",
+    "webview2_runtime",
+    "cloudflare_workers_limites"
+   ],
+   "manque": [
+    "sources dans un depot versionne (aujourd'hui des bundles)",
+    "suite de tests unique lancee avant chaque version",
+    "verification ETS2 nouvelle version (SDK, plugins)"
+   ],
+   "demande_avant": "partir du dernier bundle et de VERSION.txt, ne jamais retirer une fonction existante",
+   "fil": "Reprise App, Site HUB et MOD"
+  },
+  {
+   "id": "qualite",
+   "nom": "TSC Knowledge & Quality Expert",
+   "specialite": "documentation, memoire, controle des livraisons, licences, verification des autres experts",
+   "niveau": 3,
+   "preuve_niveau": "registre maitre + registre des creations avec verificateur (generer.py --verifier), memoire du projet tenue a chaque session ; pas encore de controle automatique des livraisons",
+   "outils": [
+    {
+     "nom": "registre maitre (maturite des produits)",
+     "lieu": "depot",
+     "chemin": "registre/REGISTRE_MAITRE.md"
+    },
+    {
+     "nom": "verificateur du registre",
+     "lieu": "depot",
+     "chemin": "registre/generer.py"
+    },
+    {
+     "nom": "outil TSC Intelligence (memoire, recherche, verification)",
+     "lieu": "depot",
+     "chemin": "intelligence/outils/tsc_ia.py"
+    },
+    {
+     "nom": "feuille de route",
+     "lieu": "memoire",
+     "chemin": "tsc-feuille-route"
+    },
+    {
+     "nom": "regles permanentes de reprise (CLAUDE.md, REGLES_DEVELOPPEMENT, directives)",
+     "lieu": "pc",
+     "chemin": "Documents\\TSC Driver\\Reprise_Code\\CLAUDE.md"
+    },
+    {
+     "nom": "inventaire de l'ecosysteme du 03/11",
+     "lieu": "pc",
+     "chemin": "Outils admin\\inventaire_ecosysteme_2026-11-03.md"
+    }
+   ],
+   "connaissances": [
+    "echelle_maturite",
+    "regles_mods_mendy",
+    "livraison_mod",
+    "formats_scs"
+   ],
+   "manque": [
+    "liste de controle de livraison par type (mod, appli, plugin)",
+    "detection des erreurs deja corrigees qui reviennent"
+   ],
+   "demande_avant": "verifier la memoire commune et la liste des erreurs deja corrigees",
+   "fil": "Structurer l'écosystème TSC en IA expertes"
+  },
+  {
+   "id": "atelier",
+   "nom": "TSC Atelier Spartan / Blender Expert",
+   "specialite": "3D pour ETS2/ATS : meshes, UV, materiaux, baking, LOD, origines, accessoires, SCS Blender Tools, exports",
+   "niveau": 3,
+   "preuve_niveau": "Spartan Studio (Three.js) avec vrais modeles SCS convertis (Scania R 2016 + 33 accessoires, citerne) dans l'appli depuis 2.14.30 ; lecteur PMG/PMD en Python ; Blender 3.6.23 + SCS Blender Tools 2.4.1 installes ; Blender pas encore pilote par script",
+   "outils": [
+    {
+     "nom": "Spartan Studio (atelier 3D de livrees)",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/studio/index.html"
+    },
+    {
+     "nom": "projection de livree sur le modele",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/studio/js/projection.js"
+    },
+    {
+     "nom": "liste des vehicules / modeles",
+     "lieu": "code",
+     "chemin": "Tete_Pilote_TSC/ui/studio/modeles/modeles.json"
+    },
+    {
+     "nom": "lecteur de modeles SCS (pmg/pmd)",
+     "lieu": "code",
+     "chemin": "tests_pilote/cuir"
+    },
+    {
+     "nom": "copie de l'atelier et modeles .glb",
+     "lieu": "pc",
+     "chemin": "Outils admin\\Spartan_Studio"
+    },
+    {
+     "nom": "Blender 3.6.23 + SCS Blender Tools 2.4.1",
+     "lieu": "pc",
+     "chemin": "Blender 3.6"
+    }
+   ],
+   "connaissances": [
+    "scs_blender_tools",
+    "conversion_skins",
+    "outils_libres",
+    "blender_ligne_commande"
+   ],
+   "manque": [
+    "pilotage de Blender en arriere-plan (blender -b -P) teste",
+    "fiches API Python Blender 3.6 et formats PMG/PMD/PMA sourcees",
+    "controles automatiques UV / echelle / origine / nombre de triangles",
+    "export SCS -> mod par le moteur de TSC Mod Engineering (pas de second moteur)"
+   ],
+   "demande_avant": "ouvrir le modele du jeu (pmg, .mat, UV) dans une copie de travail avant de modifier",
+   "fil": "Créer l'atelier Spartan Studio et l'admin des accès",
+   "apprentissage": {
+    "regles": "intelligence/apprentissage/regles.json",
+    "boucle": "intelligence/apprentissage/boucle.py",
+    "donnees": "choix de Mendy dans Spartan Studio (a definir avec le fil de l'atelier)",
+    "etat": "regles et boucle pretes et testees ; pas encore branchees dans Spartan Studio"
+   }
+  }
+ ],
+ "centrale": {
+  "nom": "Intelligence centrale TSC",
+  "role": "recoit la demande, relit la memoire commune, choisit les experts, enchaine les transferts, fait verifier par Qualite, presente un seul livrable a Mendy",
+  "partages": {
+   "analyse ETS2 (dossiers, mods, archives)": "sound_forge/analyse (detenu par mods, reutilise par forge, atelier, textures)",
+   "construction et controle des .scs": "mods",
+   "textures et materiaux": "textures",
+   "mesure de cout": "performance",
+   "validation": "qualite"
+  }
+ }
+}

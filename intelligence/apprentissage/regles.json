@@ -1,0 +1,23 @@
+{
+ "format": "tsc_regles_apprentissage",
+ "version": 1,
+ "date": "2026-11-04",
+ "origine": "règles de la TSC-IA de l'IA Pro Photoréalisme (Graphics, 03/11/2026), étendues à toutes les IA TSC à la demande de Mendy le 04/11/2026",
+ "regles": [
+  "On apprend sur des données réelles ou sur les choix de Mendy, jamais sur des résultats inventés.",
+  "Un juge fixe : 1 exemple sur 10, tiré une fois pour toutes d'après son identifiant, ne sert jamais à apprendre.",
+  "Une nouvelle version n'est adoptée que si elle fait au moins aussi bien que l'ancienne sur le même juge, pour chaque critère ; sinon elle est refusée et l'ancienne reste.",
+  "Pas de nouvelle version sans nouvel exemple.",
+  "Chaque version est sauvegardée avec ses scores ; retour à la précédente en un geste.",
+  "Chaque décision (adoptée, refusée, retour arrière) est écrite dans un journal daté.",
+  "Les données restent sur le PC de Mendy ou dans le dépôt privé : rien n'est envoyé à un tiers.",
+  "L'IA propose, Mendy tranche : aucune proposition n'est appliquée sans son geste.",
+  "Jamais « opérationnel » sans test : un score n'est annoncé que mesuré sur le juge."
+ ],
+ "parametres": { "juge_1_sur": 10, "juge_minimum": 3, "exemples_minimum": 8, "versions_gardees": 20 },
+ "appliquee_par": {
+  "graphics": "Outils admin\\tsc_graphics\\tsc_ia (regles_tsc_ia.json) sur le PC",
+  "forge": "sound_forge/ui/forge_ia.js (tri à l'oreille dans Sound Forge)",
+  "atelier": "à brancher dans Spartan Studio avec intelligence/apprentissage/boucle.py ou son équivalent JS"
+ }
+}
