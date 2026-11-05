@@ -133,6 +133,18 @@ def classer(dossier, f):
     return "reference", rpm, "couche ou son moteur (" + quoi + ")" + (" a %d tr/min" % rpm if rpm else "") + " : change son role pour l'essayer"
 
 
+def boucles_ia_son(cat):
+    import csv
+    out = []
+    for x in csv.DictReader(open(cat, encoding="utf-8-sig"), delimiter=";"):
+        note = ("boucle coupée par l'IA son dans %s (%s-%s s), coupe seule · régime mesuré %s tr/min (à confirmer) · "
+                "raccord %s dB · réalisme %s · état proposé : %s") % (x["video"], x["debut_s"], x["fin_s"], x["regime_mesure_trmin"],
+                                                                   x["saut_raccord_db"], x["realisme"], x["etat_propose"])
+        out.append(entree("expert_son/boucles_ia_son/" + x["fichier"], "reference", int(x["regime_mesure_trmin"]), note,
+                          nom="IA son · " + x["fichier"][:-4], boucle=True, source="vidéo de référence, passage réel"))
+    return out
+
+
 def construire(racine):
     S = []
     seg = "expert_son/segments_reels"
@@ -145,6 +157,9 @@ def construire(racine):
         S.append(entree("expert_son/apercu_v8/" + f, "reference", 0, note + " · candidat ralenti"))
     for f in wavs(racine, "expert_son/videos_completes"):
         S.append(entree("expert_son/videos_completes/" + f, "reference", 0, "son complet de la vidéo : choisis un passage puis « Extraire le passage »"))
+    cat = os.path.join(racine, "expert_son", "boucles_ia_son", "catalogue.csv")
+    if os.path.isfile(cat):  # boucles coupées dans les vidéos par la TSC-IA Son (juge PANNs), sans aucun traitement
+        S += boucles_ia_son(cat)
     for chem in mes_sons(racine):
         dossier, f = chem.split("/")[1], chem.split("/")[-1]
         r, rpm, note = classer(dossier, f)

@@ -1,17 +1,11 @@
 {
- "genere": "2026-11-04T17:36",
+ "genere": "2026-11-04T22:38",
  "lacunes": [
   {
    "agent": "atelier",
    "priorite": 1,
    "type": "aucun examen",
    "quoi": "examen d'entrée à construire (épreuves PC : Blender -b -P : UV, échelle, origine d'un modèle SCS)"
-  },
-  {
-   "agent": "forge",
-   "priorite": 1,
-   "type": "épreuve ratée",
-   "quoi": "forge_ia_js : obtenu adoptée True, rôle 0.8888888888888888, garder/jeter 0.8888888888888888, attendu version adoptée, >= 90 % sur le juge"
   },
   {
    "agent": "graphics",
@@ -270,6 +264,18 @@
    "priorite": 2,
    "type": "outil ou capacité manquante",
    "quoi": "test d'ecoute en jeu d'un son TSC"
+  },
+  {
+   "agent": "son",
+   "priorite": 2,
+   "type": "outil ou capacité manquante",
+   "quoi": "choix G/J de Mendy dans Forge a verser dans la tete realisme ; camions modernes absents des sources libres"
+  },
+  {
+   "agent": "son",
+   "priorite": 2,
+   "type": "outil ou capacité manquante",
+   "quoi": "juge de realisme sans le meme camion : 72 % des fenetres vraies et 85 % des syntheses bien classees (05/11), R580 ralenti A et retour au ralenti juges faux ; trop peu d'exemples refuses (12 fichiers) : les choix G/J de Mendy sont le prochain apport"
   },
   {
    "agent": "son",

@@ -8,13 +8,13 @@ Grille de certification (objectifs, pas niveaux atteints) : Connaissances métie
 |---|---|---|---|---|---|---|---|
 | IA Pro Photoréalisme | non mesuré d'ici | non mesuré | — | 1 (verifie_partiel 1) | 8 | 4 | oui |
 | TSC Textures Expert | non mesuré d'ici | non mesuré | — | 1 (verifie_partiel 1) | 7 | 4 | oui |
-| TSC Performance Expert | partiel : 45 % de la grille mesurée, épreuves PC à passer | 100/100 (45 %) | 100/100 | 3 (verifie 3) | 8 | 3 | non |
+| TSC Performance Expert | non mesuré d'ici | 100/100 (45 %) | 100/100 | 3 (verifie 3) | 8 | 3 | non |
 | TSC Mod Engineering Expert | non mesuré d'ici | non mesuré | — | 3 (verifie 3) | 10 | 6 | non |
-| TSC Sound Engineering Expert | opérationnel (mesuré) | 100/100 (80 %) | 95/100 | 6 (concu 1, verifie 4, verifie_partiel 1) | 8 | 17 | non |
-| TSC FMOD Sound Engineering / Sound Forge Expert | partiel : 20 % de la grille mesurée, épreuves PC à passer | 90/100 (20 %) | 80/100 | 7 (a_verifier 1, verifie 5, verifie_partiel 1) | 7 | 7 | oui |
-| TSC Driving Intelligence Expert | partiel : 45 % de la grille mesurée, épreuves PC à passer | 100/100 (45 %) | 100/100 | 4 (verifie 1, verifie_partiel 3) | 9 | 2 | non |
-| TSC Software Engineering Expert | partiel : 25 % de la grille mesurée | 100/100 (25 %) | 100/100 | 3 (verifie 3) | 7 | 2 | non |
-| TSC Knowledge & Quality Expert | partiel : 50 % de la grille mesurée | 100/100 (50 %) | 100/100 | 4 (concu 1, verifie 3) | 6 | 2 | non |
+| TSC Sound Engineering Expert | opérationnel (mesuré) | 97/100 (80 %) | 95/100 | 8 (concu 1, verifie 6, verifie_partiel 1) | 10 | 21 | oui |
+| TSC FMOD Sound Engineering / Sound Forge Expert | non mesuré d'ici | 100/100 (20 %) | 80/100 | 7 (a_verifier 1, verifie 5, verifie_partiel 1) | 7 | 7 | oui |
+| TSC Driving Intelligence Expert | non mesuré d'ici | 100/100 (45 %) | 100/100 | 4 (verifie 1, verifie_partiel 3) | 9 | 2 | non |
+| TSC Software Engineering Expert | non mesuré d'ici | 100/100 (25 %) | 100/100 | 3 (verifie 3) | 7 | 2 | non |
+| TSC Knowledge & Quality Expert | non mesuré d'ici | 100/100 (50 %) | 100/100 | 4 (concu 1, verifie 3) | 6 | 2 | non |
 | TSC Atelier Spartan / Blender Expert | non mesuré d'ici | non mesuré | — | 4 (verifie 2, verifie_partiel 2) | 6 | 1 | oui |
 
 ## Épreuves par IA
@@ -25,31 +25,30 @@ Grille de certification (objectifs, pas niveaux atteints) : Connaissances métie
 **TSC Textures Expert** : aucune épreuve automatique d'ici
   Épreuves à passer sur le PC : TSC-IA textures : gain en dB sur images réelles jamais vues
 
-**TSC Performance Expert** : OK perf_csv (5/5 sur les derniers passages); OK perf_avant_apres (5/5 sur les derniers passages)
+**TSC Performance Expert** : aucune épreuve automatique d'ici
   Épreuves à passer sur le PC : Test-PerfLab.ps1 + diagnostic avant/après
 
 **TSC Mod Engineering Expert** : aucune épreuve automatique d'ici
   Épreuves à passer sur le PC : game.log réel -> mod et fichier fautifs ; contrôle .scs
 
-**TSC Sound Engineering Expert** : OK son_lufs (10/10 sur les derniers passages); OK son_crete_vraie (10/10 sur les derniers passages); OK son_regime (9/10 sur les derniers passages); OK son_regime_bas (10/10 sur les derniers passages); OK son_regime_reel (10/10 sur les derniers passages); OK son_innovation_regime (9/10 sur les derniers passages); OK son_raccord (10/10 sur les derniers passages); OK son_cycle (10/10 sur les derniers passages)
+**TSC Sound Engineering Expert** : OK son_lufs (10/10 sur les derniers passages); OK son_crete_vraie (10/10 sur les derniers passages); OK son_regime (8/10 sur les derniers passages); OK son_regime_bas (10/10 sur les derniers passages); OK son_regime_reel (10/10 sur les derniers passages); OK son_innovation_regime (10/10 sur les derniers passages); OK son_raccord (10/10 sur les derniers passages); OK son_cycle (10/10 sur les derniers passages); OK son_juge_reel (8/10 sur les derniers passages); OK son_innovation_boucle (10/10 sur les derniers passages)
 
-**TSC FMOD Sound Engineering / Sound Forge Expert** : OK forge_roles (10/10 sur les derniers passages); ÉCHEC forge_ia_js (7/10 sur les derniers passages)
+**TSC FMOD Sound Engineering / Sound Forge Expert** : aucune épreuve automatique d'ici
   Épreuves à passer sur le PC : build fmodstudiocl de l'exemple Peterbilt + GUID
 
-**TSC Driving Intelligence Expert** : OK conduite_cas_texte (5/5 sur les derniers passages); OK conduite_infraction (5/5 sur les derniers passages)
+**TSC Driving Intelligence Expert** : aucune épreuve automatique d'ici
   Épreuves à passer sur le PC : rejouer traces.json sur le Pilote de tête
 
-**TSC Software Engineering Expert** : OK logiciel_tests (10/10 sur les derniers passages); OK logiciel_js (10/10 sur les derniers passages)
+**TSC Software Engineering Expert** : aucune épreuve automatique d'ici
 
-**TSC Knowledge & Quality Expert** : OK qualite_base (10/10 sur les derniers passages); OK qualite_mutation (10/10 sur les derniers passages); OK qualite_boucle (10/10 sur les derniers passages)
+**TSC Knowledge & Quality Expert** : aucune épreuve automatique d'ici
 
 **TSC Atelier Spartan / Blender Expert** : aucune épreuve automatique d'ici
   Épreuves à passer sur le PC : Blender -b -P : UV, échelle, origine d'un modèle SCS
 
-## Lacunes, par priorité (69)
+## Lacunes, par priorité (70)
 
 - P1 · atelier · aucun examen : examen d'entrée à construire (épreuves PC : Blender -b -P : UV, échelle, origine d'un modèle SCS)
-- P1 · forge · épreuve ratée : forge_ia_js : obtenu adoptée True, rôle 0.8888888888888888, garder/jeter 0.8888888888888888, attendu version adoptée, >= 90 % sur le juge
 - P1 · graphics · base de connaissances trop mince : 1 fiche(s) : compléter avec la documentation officielle et les sources libres du domaine
 - P1 · graphics · aucun examen : examen d'entrée à construire (épreuves PC : écart jeu/réel d'une version du plugin sur le jeu de captures fixe)
 - P1 · mods · aucun examen : examen d'entrée à construire (épreuves PC : game.log réel -> mod et fichier fautifs ; contrôle .scs)
@@ -93,6 +92,8 @@ Grille de certification (objectifs, pas niveaux atteints) : Connaissances métie
 - P2 · son · outil ou capacité manquante : module d'isolation : soustraction spectrale du bruit + detection et classement des evenements (numpy) ; separation par reseau (Demucs, MIT) seulement si torch est installe sur le Shadow, accord de Mendy
 - P2 · son · outil ou capacité manquante : detection automatique des points de boucle
 - P2 · son · outil ou capacité manquante : test d'ecoute en jeu d'un son TSC
+- P2 · son · outil ou capacité manquante : choix G/J de Mendy dans Forge a verser dans la tete realisme ; camions modernes absents des sources libres
+- P2 · son · outil ou capacité manquante : juge de realisme sans le meme camion : 72 % des fenetres vraies et 85 % des syntheses bien classees (05/11), R580 ralenti A et retour au ralenti juges faux ; trop peu d'exemples refuses (12 fichiers) : les choix G/J de Mendy sont le prochain apport
 - P2 · son · fiche à vérifier : guide_metier (verifie_partiel) : Guide de métier Sound Forge
 - P2 · son · fiche à vérifier : tsc_clapet (concu) : TSC Clapet : clapet d'échappement sur touche
 - P2 · textures · outil ou capacité manquante : fiches materiaux (route, beton, metal, peinture) sourcees

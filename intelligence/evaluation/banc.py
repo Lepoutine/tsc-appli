@@ -208,6 +208,66 @@ def son_cycle(rng):
 
 
 # ---------------------------------------------------------------- forge (expert 10)
+# ---------------------------------------------------------------- juge PANNs (choix de Mendy du 04/11/2026 21:47)
+def _panns():
+    import ia_son
+    if not os.path.isfile(ia_son.POIDS):
+        return None, None
+    import juge_panns
+    return ia_son, juge_panns.charger(ia_son.POIDS, verifier_md5=False)
+
+
+@epreuve("son", 3, "juge PANNs gelé : reconnaître un vrai enregistrement d'une synthèse refusée, sur un extrait jamais vu", "diagnostic")
+def son_juge_reel(rng):
+    I, mod = _panns()
+    if mod is None:
+        return None, "poids PANNs absents", "-"
+    import juge_panns as Jp
+    sons = I.empreintes(I.sons_connus(), mod)
+    vrais = [s for s in sons if s["reel"] == 1 and s["cle"].startswith("segments_reels")]
+    faux = [s for s in sons if s["reel"] == 0]
+    res = []
+    for s in (vrais[int(rng.integers(len(vrais)))], faux[int(rng.integers(len(faux)))]):
+        x, sr = Jp.lire_wav(s["chemin"])
+        L = int(rng.uniform(4.0, 6.0) * sr)
+        d = int(rng.integers(0, max(1, len(x) - L)))
+        E = Jp.empreinte(mod, x[d:d + L], sr)[0]
+        # appris sans ce son ni AUCUN son du même camion (les segments sont tirés des vidéos complètes : sinon
+        # le juge reconnaîtrait l'enregistrement au lieu de juger le réalisme)
+        tete = s["cle"].split("/")[-1].split("_")[1] if s["reel"] else None
+        m = I.entrainer([t for t in sons if t["cle"] != s["cle"] and not (tete and tete in t["cle"])])
+        sc = I.realisme(m, E)
+        res.append((s["cle"], s["reel"], sc))
+    ok = all((sc > 0) == bool(y) for _, y, sc in res)
+    return ok, "; ".join("%s %+.3f" % (k.split("/")[-1], sc) for k, _, sc in res), "vrai > 0, synthèse < 0"
+
+
+@epreuve("son", 3, "innovation mesurée : boucle guidée par le juge contre l'ancienne boucle, sur un vrai passage stable", "innovation")
+def son_innovation_boucle(rng):
+    I, mod = _panns()
+    if mod is None:
+        return None, "poids PANNs absents", "-"
+    import juge_panns as Jp
+    import boucle_reelle as Br
+    stables = ["01_164L_ralenti_stable.wav", "03_R580_ralenti_stable_A.wav", "04_R580_ralenti_stable_B.wav",
+               "06_R580_regime_haut_stable.wav", "09_R620_roulage_en_charge_stable.wav", "11_R620_charge_forte.wav"]
+    f = stables[int(rng.integers(len(stables)))]
+    x, sr = Jp.lire_wav(os.path.join(I.PF, "segments_reels", f))
+    x = x - x.mean()
+    cyc = Br.cycle_moteur(x, sr)
+    r = I.meilleure_boucle(x, sr, mod, cyc, essais=8, rng=rng)
+    E0 = Jp.empreinte(mod, x, sr)[0]
+    def mesure(c):
+        n = int(0.2 * sr)
+        db = lambda s: 10 * np.log10(np.mean(s.astype(float) ** 2) + 1e-12)
+        rep = np.tile(c, int(np.ceil(max(len(x), 4 * sr) / len(c))) + 1)[:max(len(x), 4 * sr)]
+        return abs(db(c[-n:]) - db(c[:n])), Jp.distance(Jp.empreinte(mod, rep, sr)[0], E0)
+    so, do = mesure(Br.boucle(x, sr, duree_cible=r["fin_s"] - r["debut_s"])[0])
+    sn, dn = mesure(x[int(r["debut_s"] * sr):int(r["fin_s"] * sr)])
+    ok = sn <= 1.5 and dn <= do + 0.005
+    return ok, "%s : ancienne %.2f dB / juge %.3f, guidée %.2f dB / juge %.3f" % (f, so, do, sn, dn), "guidée : raccord <= 1,5 dB et juge au moins aussi bon"
+
+
 @epreuve("forge", 1, "ranger des sons jamais vus par leur nom (pack Forge)", "autonomie")
 def forge_roles(rng):
     import pack_forge as pf
