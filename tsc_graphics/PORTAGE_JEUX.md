@@ -3,6 +3,11 @@
 Objectif Mendy (04/11/2026) : a terme, TSC Neural sur tous les jeux compatibles. Un jeu n'est dit « compatible » qu'apres mesure
 (juge v3 + garde-fous + cout GPU), comme ETS2. Jamais sur un jeu multijoueur dont l'anti-triche l'interdit, aucun contournement.
 
+## Coeur / adaptateur dans le code (v0.9, 05/11/2026)
+- Coeur commun : `neural/` (caracteristiques, modele, entrainer, juge_vision, exporter).
+- Adaptateur par jeu : `neural/profils/<jeu>.json` (profondeur, guide, vues). `ets2.json` = valeurs mesurees ; `sans_guide.json` = image seule, tout jeu.
+- Choix du jeu : variable d'environnement `TSC_PROFIL` (defaut ets2). Un nouveau jeu = un nouveau profil, jamais une copie du coeur.
+
 ## Commun (reutilisable tel quel)
 - `neural/` : reseau par pixel, caracteristiques, entrainement (juge PatchGAN + juge vision DINOv2), export HLSL, gardes de champion.
   Le reseau ne voit que l'image finale 8 bits (+ guide optionnel) : rien de propre a ETS2.

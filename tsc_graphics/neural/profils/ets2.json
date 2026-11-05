@@ -1,0 +1,8 @@
+{
+  "jeu": "Euro Truck Simulator 2",
+  "moteur": "Prism3D (SCS), DirectX 11",
+  "verifie": "ETS2 1.61, mesures TSCF_Lab 03-04/11/2026",
+  "profondeur": {"z_inverse": true, "proche": 0.2, "plage_min": 0.01, "plage_max": 0.9, "decalage_z": -0.000194},
+  "guide": {"albedo": "gbuffer_cible_2", "ciel": "profondeur <= 1e-7", "cabine": "profondeur > plage_max"},
+  "vues": {"multi_ecrans": 3, "ordre_hdr": "G,D,C", "ldr_hdr": [0, 2, 1]}
+}

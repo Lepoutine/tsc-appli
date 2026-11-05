@@ -12,7 +12,23 @@ N_ENTREES = 3 + 3 * len(RAYONS) + 1
 # v0.7 (plugin 0.18) : TSC Neural guide par le jeu. 6 canaux de plus par pixel, IDENTIQUES a neural_ldr du HLSL :
 # albedo du G-buffer encode sRGB (3), distance log2(1+m)/10 bornee 0-1 (ciel 1, cabine 0), masque ciel, masque cabine.
 N_GUIDE = 6
-PROCHE, PLAGE_MIN, PLAGE_MAX, DECALAGE_Z = 0.2, 0.01, 0.9, -0.000194   # cles proche, plage_min, plage_max, decalage_z de l'ini
+# v0.9 : coeur commun / adaptateur par jeu. Les constantes de profondeur viennent du profil du jeu (neural/profils/<jeu>.json,
+# memes cles que l'ini du plugin). Profil par defaut : ets2 ; autre jeu : variable d'environnement TSC_PROFIL.
+import json
+import os
+
+DOSSIER_PROFILS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profils")
+
+
+def charger_profil(nom=None):
+    nom = nom or os.environ.get("TSC_PROFIL", "ets2")
+    with open(os.path.join(DOSSIER_PROFILS, nom + ".json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+PROFIL = charger_profil()
+_P = PROFIL.get("profondeur") or {"proche": 0.2, "plage_min": 0.01, "plage_max": 0.9, "decalage_z": 0.0}
+PROCHE, PLAGE_MIN, PLAGE_MAX, DECALAGE_Z = _P["proche"], _P["plage_min"], _P["plage_max"], _P["decalage_z"]
 
 
 def srgb_enc(x):

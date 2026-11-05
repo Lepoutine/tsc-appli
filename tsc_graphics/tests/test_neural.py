@@ -170,6 +170,17 @@ def test_appariement_tire_un_reel_semblable():
     assert r.shape == (3, 3, 64, 64) and (r[:, 0].mean() > r[:, 2].mean())
 
 
+def test_profils_jeux_coeur_commun():
+    """v0.9 : le coeur lit les constantes du jeu dans neural/profils ; ets2 = valeurs mesurees de l'ini, sans_guide = image seule."""
+    import caracteristiques as c
+    e = c.charger_profil("ets2")["profondeur"]
+    assert (e["proche"], e["plage_min"], e["plage_max"], e["decalage_z"]) == (0.2, 0.01, 0.9, -0.000194)
+    assert c.charger_profil("sans_guide")["guide"] is None
+    for f in os.listdir(c.DOSSIER_PROFILS):
+        p = c.charger_profil(f[:-5])
+        assert {"jeu", "moteur", "verifie", "profondeur", "guide", "vues"} <= set(p)
+
+
 if __name__ == "__main__":
     for n, fn in list(globals().items()):
         if n.startswith("test_"):
