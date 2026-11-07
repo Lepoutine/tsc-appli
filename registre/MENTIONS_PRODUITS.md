@@ -9,8 +9,13 @@ Contact pour tous les produits : Discord Truck So Clean France, https://discord.
 
 À utiliser seulement pour ce que TSCF a réellement créé :
 
-> Création originale Truck So Clean France (TSCF). Conception et réalisation : Poutine / TSCF. Tous droits réservés,
-> sous réserve des licences et droits des composants tiers identifiés ci-dessous.
+> Création originale Truck So Clean France (TSCF). Conception et réalisation : Poutine / TSCF. © 2026 Truck So Clean
+> France (TSCF). Tous droits réservés, sous réserve des licences et droits des composants tiers identifiés ci-dessous.
+> TSC Driver Ecosystem™ — marque déposée.
+
+Marque : « TSC Driver Ecosystem » est une marque déposée à l'INPI le 07/11/2026 (demande n° 5318020, classes 9, 41
+et 42). Écrire « TSC Driver Ecosystem™ » ou « TSC Driver Ecosystem — marque déposée ». Le symbole ® est interdit tant
+que l'INPI n'a pas enregistré la marque.
 
 Pour un mod qui modifie un modèle tiers, on remplace la première phrase par :
 
