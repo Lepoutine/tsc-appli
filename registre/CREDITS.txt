@@ -1,37 +1,47 @@
-CRÉDITS ET COMPOSANTS TIERS - TRUCK SO CLEAN FRANCE (TSCF)
+CRÉDITS - TRUCK SO CLEAN FRANCE (TSCF)
 Registre 1.0 du 2026-10-24
 
-Les composants ci-dessous restent la propriété de leurs auteurs, sous leur propre licence.
+Le copyright TSCF ne porte que sur les créations TSCF de la première liste.
 
-- Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png : Captures d'Euro Truck Simulator 2 © SCS Software.
+1. CRÉATIONS TSCF
+
 - Bande-son de la vidéo bêta TSC Driver : Musique originale TSCF.
-- Bibliothèques de construction : numpy, scipy, Pillow, goversioninfo, Go : Lanceur compilé avec Go © The Go Authors (BSD).
-- CityHash64 1.0.3 (réimplémentation Python, tests_pilote/hashfs/cityhash.py) : CityHash © 2011 Google, Inc., licence MIT.
+- CityHash64 1.0.3 (réimplémentation Python, tests_pilote/hashfs/cityhash.py) : Portage Python par TSCF. Algorithme CityHash © 2011 Google, Inc., licence MIT.
 - Code de l'Appli TSC (lanceur Go, scripts PowerShell, tablette HTML/JS, overlays, pilote de tête, tachygraphe, tickets) : © 2026 Truck So Clean France. Conception et réalisation : Poutine / TSCF.
+- Livrées Lion noir et TSCF Spartan (lion couronné, rayures rouges, or, slogan) : Livrée © Truck So Clean France. Conception : Poutine / TSCF.
 - Livrées, fresques, liserés, cuir capitonné, broderies, noms de chauffeurs, points de feux, kit templates : Création Truck So Clean France. Conception et réalisation : Poutine / TSCF.
 - Logo Truck So Clean France (logo_tsc.png, m_icon.png, TSC_App.ico, logo_tsc_officiel.svg, logo 2025) : Logo © Truck So Clean France.
+- Modèle 3D de citerne AkirixDesign3D (acheté par Poutine) : Modèle 3D : AkirixDesign3D. Peintures, noms et points de feux © Truck So Clean France (Poutine).
+- Musique d'intro « TSC Run in My Way » (ui/intro_tsc.mp3) : Musique « TSC Run in My Way » © Truck So Clean France.
+- Outils de modding TSCF (scs_model.py, pmg.py, dds.py, hashfs2.py, générateurs de mods) : Outils TSCF.
+- Presets TSC pour TM MasterGrade (reshade/tm/) : Utilise TM MasterGrade d'Izuan Bakar (à télécharger chez l'auteur).
+- Shaders ReShade TSC_Photoreal.fx et TSC_Realisme.fx + presets « Rendu TSC » : Shaders TSC Photoreal et TSC Réalisme © Truck So Clean France.
+- Sons de portière (porte_ouvre.mp3, porte_ferme.mp3) : Sons synthétisés par TSCF.
+- TSC Performance Lab (scripts de diagnostic PowerShell) : © 2026 Truck So Clean France.
+- tsc-commandes.dll (plugin d'entrée SCS SDK) : Construit sur le SCS SDK © 2016 SCS Software (MIT).
+- Visuels d'accueil de la tablette : hero.mp4, hero.jpg, camion.jpg (livrée « Spartan / Le 300 ») : Visuels © Truck So Clean France.
+- Échappement V8, turbo et air comprimé (echap.js, echap_dsp.js, echap_worklet.js) : Son moteur synthétisé par TSCF.
+
+2. COMPOSANTS DE TIERS (ce ne sont pas des créations TSCF ; ils restent la propriété de leurs auteurs,
+   sous leur propre licence)
+
+- Aperçus de la tablette : gps_*.jpg, rs_*.jpg, logo_tablette.png : Captures d'Euro Truck Simulator 2 © SCS Software.
+- Bibliothèques de construction : numpy, scipy, Pillow, goversioninfo, Go : Lanceur compilé avec Go © The Go Authors (BSD).
+- Données de carte roads.json / junctions.json (« Grand Utopia ») : Données de carte d'après Grand Utopia de MyGodness (le pilote de tête qui les lit est une création TSCF).
 - MDT Ekeri Full Trailer Addon (pare-chocs, bavettes) : Pièces : MDT (à installer à part).
 - Microsoft WebView2 (Core, WinForms, Loader) : Microsoft WebView2 © Microsoft Corporation.
 - Mods GPS TSC (7 .scs : carbone, nuit, rouge, carte, couleurs) : Basé sur Euro Truck Simulator 2 © SCS Software. Habillage TSCF.
-- Modèle de citerne AkirixDesign3D (base Gaming ModdinG) : Modèle : AkirixDesign3D, base Gaming ModdinG. Peintures : Poutine / TSCF.
-- Modèle de passagère (mod afro.scs) : Modèle : SergioSomf (à confirmer). Écusson : TSCF.
+- Modèle de passagère (mod afro.scs, gratuit) : Modèle de passagère : auteur inconnu (modèle libre de droits).
 - Modèles, matériaux et textures SCS Software modifiés (bétaillère scs_livestock et coffres, intérieur Scania R/S 2016, défs benne scs_dumper, kit Wielton) : Modèles d'origine © SCS Software. Scania, Volvo, Wielton : marques de leurs propriétaires. TSCF n'est affilié à aucun d'eux.
-- Musique d'intro « TSC Run in My Way » (ui/intro_tsc.mp3) : Composition originale TSCF (à confirmer).
 - OpenTrack, cloudflared, ReShade, PresentMon 2.6.0 : OpenTrack, cloudflared (Cloudflare), ReShade (crosire), PresentMon (Intel) appartiennent à leurs auteurs.
-- Outils de modding TSCF (scs_model.py, pmg.py, dds.py, hashfs2.py, générateurs de mods) : Outils TSCF.
 - Photo du Mont-Saint-Michel au coucher de soleil : Photo : Burcin Sahin (Pexels).
 - Police DejaVu Sans : Police DejaVu Sans (licence Bitstream Vera).
 - Police Great Vibes : Police Great Vibes © Robert Leuschke (TypeSETit), SIL Open Font License 1.1.
 - Polices Montserrat, Inter, Kaushan Script (tablette) : Polices Montserrat, Inter et Kaushan Script, SIL Open Font License 1.1.
-- Presets TSC pour TM MasterGrade (reshade/tm/) : Utilise TM MasterGrade d'Izuan Bakar (à télécharger chez l'auteur).
 - QR Code Generator for JavaScript (ui/qrcode.js) : Générateur de QR code © 2009 Kazuhiko Arase, licence MIT.
 - SCS SDK (télémétrie et entrées) : SCS SDK © 2016 SCS Software, licence MIT.
 - scs-telemetry.dll : Plugin de télémétrie d'après scs-sdk-plugin © 2014 Hans, licence MIT.
 - Services en ligne : Discord, Trucky, TruckersMP, YouTube, Twitch, Spotify : Discord, Trucky, TruckersMP, YouTube, Twitch et Spotify sont des marques de leurs propriétaires. TSCF n'y est pas affilié.
-- Shaders ReShade TSC_Photoreal.fx et TSC_Realisme.fx + presets « Rendu TSC » : Shaders TSC © Truck So Clean France.
-- Sons de portière (porte_ouvre.mp3, porte_ferme.mp3) : Sons synthétisés par TSCF.
+- Templates de peinture MDT (Scania S open mod, Volvo Aero, FlatCab, Custom Ekeri 3.4, Trux Pack...) : Gabarits et pièces : MDT (à installer à part).
 - TM MasterGrade (TM_MasterGrade.fx) : TM MasterGrade © Izuan Bakar.
 - TM Real Walk (TMRealWalk.dll) : TM Real Walk est le travail d'Izuan Bakar (TM Modding, izuanbakar.gumroad.com).
-- TSC Performance Lab (scripts de diagnostic PowerShell) : © 2026 Truck So Clean France.
-- tsc-commandes.dll (plugin d'entrée SCS SDK) : Construit sur le SCS SDK © 2016 SCS Software (MIT).
-- Échappement V8, turbo et air comprimé (echap.js, echap_dsp.js, echap_worklet.js) : Son moteur synthétisé par TSCF.
