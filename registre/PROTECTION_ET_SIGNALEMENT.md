@@ -23,6 +23,7 @@ s'en servir face à un tiers. Il ne garantit aucun résultat.
 | Historique des versions | Oui (git, `anciennes_versions/`) | Continuer ; noter chaque version dans le registre |
 | Archives des sources | Bundles git sur le PC + fichiers du projet | Garder une 2e copie hors du PC (dépôt privé ou disque externe) |
 | Preuve de date de création | Commits git datés | Option : enveloppe Soleau (INPI, numérique) ou dépôt chez un huissier pour les créations importantes |
+| Marque « TSC Driver Ecosystem » | Déposée à l'INPI le 07/11/2026 (demande n° 5318020, classes 9, 41, 42) | Mention « TSC Driver Ecosystem™ — marque déposée » partout ; ® seulement après enregistrement |
 | Marque « Truck So Clean France » / logo TSC | Non déposée | Option : dépôt de marque INPI (classes à choisir avec un conseil) |
 | Empreintes des fichiers publiés | Oui (sha256 dans `catalogue_mods.json` et `update.json`) | Garder ces empreintes : elles prouvent quel fichier a été publié et quand |
 | Secrets hors des fichiers distribués | Non (webhook Discord dans l'exe) | Régénérer le webhook, passer par le HUB |
